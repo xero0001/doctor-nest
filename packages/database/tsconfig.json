@@ -1,0 +1,7 @@
+{
+  "extends": "@doctornest/typescript-config/base.json",
+  "compilerOptions": {
+    "baseUrl": "."
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -43,6 +43,35 @@ body {
   font-family: "Pretendard", "Apple SD Gothic Neo", ui-sans-serif, system-ui, sans-serif;
 }
 
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+* {
+  scrollbar-color: #d9deea transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #d9deea;
+  border-radius: 999px;
+}
+
 ::selection {
   background: #dce4ff;
   color: #243eb4;

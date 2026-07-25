@@ -596,25 +596,40 @@ export default function HomePage() {
         </div>
       </section>
 
-      <footer className="border-t border-border bg-white">
-        <div className="page-shell flex flex-col gap-7 py-10 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+      <footer className="border-t border-border bg-[#f7f8fb]">
+        <div className="page-shell py-10 sm:py-12">
+          <div className="flex flex-col gap-6 border-b border-border pb-7 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2.5 font-bold tracking-[-0.03em]">
               <BrandMark />
               닥터네스트
             </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              병원의 유입부터 재방문까지, 하나의 성장팀
-            </p>
+            <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-muted-foreground">
+              <a href="#funnel" className="hover:text-foreground">
+                서비스 소개
+              </a>
+              <a href="/service/chatting" className="hover:text-foreground">
+                도입 문의
+              </a>
+              <a href="mailto:doctornest.ai@gmail.com" className="hover:text-foreground">
+                이메일 문의
+              </a>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-5 text-xs text-muted-foreground">
-            <a href="#funnel" className="hover:text-foreground">
-              서비스 소개
-            </a>
-            <a href="/service/chatting" className="hover:text-foreground">
-              도입 문의
-            </a>
-            <span>© 2026 DoctorNest</span>
+
+          <div className="pt-7 text-xs leading-6 text-muted-foreground">
+            <p>
+              <span className="font-semibold text-foreground/70">주식회사 알오아이글로벌</span>
+              <span className="mx-2 text-border">|</span>
+              대표 김록원
+              <span className="mx-2 text-border">|</span>
+              사업자등록번호 163-81-02782
+            </p>
+            <address className="not-italic">
+              서울특별시 강남구 학동로 342, 8층 821호 (논현동, 에스케이 허브블루)
+            </address>
+            <p className="mt-3 text-[11px] text-muted-foreground/75">
+              © 2026 DoctorNest. All rights reserved.
+            </p>
           </div>
         </div>
       </footer>

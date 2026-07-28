@@ -480,10 +480,23 @@ export function ChattingClient({
     message: string;
   } | null>(null);
   const [coachRetryToken, setCoachRetryToken] = useState(0);
+  const [copiedChartNumber, setCopiedChartNumber] = useState<string | null>(
+    null,
+  );
   const detailRequestId = useRef(0);
   const coachRequestId = useRef(0);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const chartNumberCopyTimeoutRef = useRef<number | null>(null);
   const importantRequestIds = useRef(new Set<string>());
+
+  useEffect(
+    () => () => {
+      if (chartNumberCopyTimeoutRef.current) {
+        window.clearTimeout(chartNumberCopyTimeoutRef.current);
+      }
+    },
+    [],
+  );
 
   const visibleRooms = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -909,6 +922,26 @@ export function ChattingClient({
     window.requestAnimationFrame(() => composerRef.current?.focus());
   }
 
+  async function copyChartNumber() {
+    if (!currentRoom) return;
+
+    try {
+      await navigator.clipboard.writeText(currentRoom.customer.chartNumber);
+      setCopiedChartNumber(currentRoom.customer.chartNumber);
+
+      if (chartNumberCopyTimeoutRef.current) {
+        window.clearTimeout(chartNumberCopyTimeoutRef.current);
+      }
+
+      chartNumberCopyTimeoutRef.current = window.setTimeout(() => {
+        setCopiedChartNumber(null);
+        chartNumberCopyTimeoutRef.current = null;
+      }, 1_500);
+    } catch {
+      setDetailError("차트번호를 복사하지 못했습니다.");
+    }
+  }
+
   async function sendMessage() {
     const message = draft.trim();
     if (!message || !currentRoom || isSending) return;
@@ -1210,9 +1243,16 @@ export function ChattingClient({
                 <h2 className="truncate text-base font-bold tracking-[-0.03em]">
                   {currentRoom.customer.name}
                 </h2>
-                <span className="shrink-0 font-mono text-xs font-medium text-[#9aa0af]">
-                  #{currentRoom.customer.chartNumber}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => void copyChartNumber()}
+                  aria-label={`차트번호 ${currentRoom.customer.chartNumber} 복사`}
+                  className="shrink-0 rounded-md border border-[#d9deea] bg-white px-2 py-1 font-mono text-xs font-medium text-[#737b8f] transition-colors hover:border-[#bfc7d8] hover:bg-[#f8f9fc]"
+                >
+                  {copiedChartNumber === currentRoom.customer.chartNumber
+                    ? "복사되었습니다"
+                    : currentRoom.customer.chartNumber}
+                </button>
                 {currentRoom.customer.tags.includes("VIP") ? (
                   <span className="rounded-full bg-[#fff3c5] px-2 py-0.5 text-[8px] font-bold text-[#a97500]">
                     VIP
@@ -1506,12 +1546,21 @@ export function ChattingClient({
         <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-[#e8eaf1] bg-white px-4">
           <div>
             <p className="text-xs font-semibold text-[#8d94a6]">고객 정보</p>
-            <h2 className="mt-1 text-[14px] font-bold">
-              {currentRoom.customer.name}
-              <span className="ml-1.5 font-mono text-xs font-medium text-[#9aa0af]">
-                #{currentRoom.customer.chartNumber}
-              </span>
-            </h2>
+            <div className="mt-1 flex items-center gap-2">
+              <h2 className="text-[14px] font-bold">
+                {currentRoom.customer.name}
+              </h2>
+              <button
+                type="button"
+                onClick={() => void copyChartNumber()}
+                aria-label={`차트번호 ${currentRoom.customer.chartNumber} 복사`}
+                className="rounded-md border border-[#d9deea] bg-white px-2 py-1 font-mono text-xs font-medium text-[#737b8f] transition-colors hover:border-[#bfc7d8] hover:bg-[#f8f9fc]"
+              >
+                {copiedChartNumber === currentRoom.customer.chartNumber
+                  ? "복사되었습니다"
+                  : currentRoom.customer.chartNumber}
+              </button>
+            </div>
           </div>
           <button
             type="button"

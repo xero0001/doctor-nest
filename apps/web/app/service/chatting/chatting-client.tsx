@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   BadgeCheck,
   BellRing,
@@ -15,6 +15,7 @@ import {
   Clock3,
   Folder,
   Languages,
+  LoaderCircle,
   Mail,
   MessageCircleMore,
   MoreHorizontal,
@@ -175,14 +176,16 @@ export function ChattingClient({
   const [knowledgeTab, setKnowledgeTab] = useState<"원내매뉴얼" | "콘텐츠">(
     "원내매뉴얼",
   );
-  const [localMessages, setLocalMessages] = useState<Record<string, string[]>>(
-    {},
-  );
+  const [rooms, setRooms] = useState(conversations);
+  const [loadingRoomId, setLoadingRoomId] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const detailRequestId = useRef(0);
 
   const visibleRooms = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return conversations.filter((conversation) => {
+    return rooms.filter((conversation) => {
       const latestMessage = conversation.messages.at(-1)?.content ?? "";
       const matchesTab =
         chatTab === "IMPORTANT"
@@ -198,21 +201,94 @@ export function ChattingClient({
 
       return matchesTab && matchesChannel && matchesQuery;
     });
-  }, [chatTab, channelFilter, conversations, query]);
+  }, [chatTab, channelFilter, query, rooms]);
 
   const currentRoom =
-    conversations.find((conversation) => conversation.id === selectedRoomId) ??
-    conversations[0];
+    rooms.find((conversation) => conversation.id === selectedRoomId) ??
+    rooms[0];
 
-  function sendMessage() {
+  async function selectConversation(id: string) {
+    setSelectedRoomId(id);
+    setDetailError("");
+    setLoadingRoomId(id);
+
+    const requestId = ++detailRequestId.current;
+
+    try {
+      const response = await fetch(`/api/conversations/${id}`, {
+        cache: "no-store",
+      });
+      const result = (await response.json()) as {
+        conversation?: ConversationItem;
+        error?: string;
+      };
+
+      if (!response.ok || !result.conversation) {
+        throw new Error(result.error ?? "채팅 내용을 불러오지 못했습니다.");
+      }
+
+      if (requestId !== detailRequestId.current) return;
+
+      setRooms((current) =>
+        current.map((room) => (room.id === id ? result.conversation! : room)),
+      );
+    } catch (error) {
+      if (requestId !== detailRequestId.current) return;
+      setDetailError(
+        error instanceof Error
+          ? error.message
+          : "채팅 내용을 불러오지 못했습니다.",
+      );
+    } finally {
+      if (requestId === detailRequestId.current) {
+        setLoadingRoomId(null);
+      }
+    }
+  }
+
+  async function sendMessage() {
     const message = draft.trim();
-    if (!message || !currentRoom) return;
+    if (!message || !currentRoom || isSending) return;
 
-    setLocalMessages((messages) => ({
-      ...messages,
-      [currentRoom.id]: [...(messages[currentRoom.id] ?? []), message],
-    }));
-    setDraft("");
+    setIsSending(true);
+    setDetailError("");
+
+    try {
+      const response = await fetch(`/api/conversations/${currentRoom.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: message }),
+      });
+      const result = (await response.json()) as {
+        message?: ConversationItem["messages"][number];
+        error?: string;
+      };
+
+      if (!response.ok || !result.message) {
+        throw new Error(result.error ?? "메시지를 저장하지 못했습니다.");
+      }
+
+      setRooms((current) =>
+        current.map((room) =>
+          room.id === currentRoom.id
+            ? {
+                ...room,
+                lastMessageAt: result.message!.sentAt,
+                messages: [...room.messages, result.message!],
+              }
+            : room,
+        ),
+      );
+      setDraft("");
+    } catch (error) {
+      setDetailError(
+        error instanceof Error
+          ? error.message
+          : "메시지를 저장하지 못했습니다.",
+      );
+    } finally {
+      setIsSending(false);
+    }
   }
 
   if (!currentRoom) {
@@ -229,7 +305,6 @@ export function ChattingClient({
   }
 
   const currentMeta = channelMeta[currentRoom.channel];
-  const currentLocalMessages = localMessages[currentRoom.id] ?? [];
 
   return (
     <div className="grid h-full min-w-[1260px] grid-cols-[280px_250px_minmax(420px,1fr)_310px] overflow-x-auto bg-white">
@@ -280,8 +355,8 @@ export function ChattingClient({
           ).map(([tab, label]) => {
             const count =
               tab === "IMPORTANT"
-                ? conversations.filter((room) => room.important).length
-                : conversations.filter((room) => room.status === tab).length;
+                ? rooms.filter((room) => room.important).length
+                : rooms.filter((room) => room.status === tab).length;
 
             return (
               <button
@@ -342,7 +417,7 @@ export function ChattingClient({
               <button
                 type="button"
                 key={room.id}
-                onClick={() => setSelectedRoomId(room.id)}
+                onClick={() => void selectConversation(room.id)}
                 className={`relative w-full border-b border-[#f0f1f5] px-4 py-3.5 text-left transition-colors ${
                   selected ? "bg-[#edf3ff]" : "hover:bg-[#f8f9fc]"
                 }`}
@@ -530,7 +605,7 @@ export function ChattingClient({
         </div>
       </section>
 
-      <section className="flex min-w-0 flex-col bg-[#f2f5fb]">
+      <section className="relative flex min-w-0 flex-col bg-[#f2f5fb]">
         <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-[#e5e8f0] bg-white px-5">
           <div className="flex min-w-0 items-center gap-3">
             <ChannelBadge channel={currentRoom.channel} large />
@@ -591,6 +666,22 @@ export function ChattingClient({
           </span>
         </div>
 
+        {loadingRoomId === currentRoom.id ? (
+          <div className="absolute left-1/2 top-[118px] z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#dce2f4] bg-white px-3 py-2 text-[9px] font-semibold text-[#66708a] shadow-lg">
+            <LoaderCircle className="size-3.5 animate-spin text-[#3157f6]" />
+            DB에서 최신 채팅을 불러오는 중
+          </div>
+        ) : null}
+
+        {detailError ? (
+          <div
+            role="alert"
+            className="absolute left-1/2 top-[118px] z-20 -translate-x-1/2 rounded-full bg-[#fff0f2] px-3 py-2 text-[9px] font-semibold text-[#d8465b] shadow-lg"
+          >
+            {detailError}
+          </div>
+        ) : null}
+
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
           <div className="mx-auto mb-6 w-fit rounded-full bg-[#e4e8f1] px-3 py-1 text-[9px] font-medium text-[#7f8698]">
             {formatDate(
@@ -619,7 +710,7 @@ export function ChattingClient({
                 >
                   <div className={`max-w-[72%] ${inbound ? "" : "text-right"}`}>
                     {inbound ? (
-                      <p className="mb-1 pl-1 text-[9px] font-semibold text-[#757c8e]">
+                      <p className="mb-1.5 pl-1 text-xs font-bold text-[#596176]">
                         {currentRoom.customer.name}
                       </p>
                     ) : null}
@@ -649,22 +740,6 @@ export function ChattingClient({
                 </div>
               );
             })}
-
-            {currentLocalMessages.map((message, index) => (
-              <div
-                key={`${currentRoom.id}-${index}`}
-                className="mb-5 flex justify-end"
-              >
-                <div className="max-w-[72%]">
-                  <div className="rounded-2xl rounded-br-[5px] bg-gradient-to-br from-[#3157f6] to-[#6657e9] px-4 py-3 text-[11px] leading-[1.65] text-white shadow-sm">
-                    {message}
-                  </div>
-                  <p className="mt-1 text-right text-[8px] text-[#a0a6b4]">
-                    방금 전
-                  </p>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
 
@@ -691,7 +766,7 @@ export function ChattingClient({
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
-                    sendMessage();
+                    void sendMessage();
                   }
                 }}
                 rows={2}
@@ -717,11 +792,16 @@ export function ChattingClient({
                 </div>
                 <button
                   type="button"
-                  onClick={sendMessage}
-                  disabled={!draft.trim()}
+                  onClick={() => void sendMessage()}
+                  disabled={!draft.trim() || isSending}
                   className="flex h-7 items-center gap-1 rounded-lg bg-[#3157f6] px-3 text-[10px] font-bold text-white disabled:bg-[#d9dde6]"
                 >
-                  전송 <Send className="size-3" />
+                  {isSending ? (
+                    <LoaderCircle className="size-3 animate-spin" />
+                  ) : (
+                    <Send className="size-3" />
+                  )}
+                  전송
                 </button>
               </div>
             </div>

@@ -596,7 +596,7 @@ export function ChattingClient({
   const currentMeta = channelMeta[currentRoom.channel];
 
   return (
-    <div className="grid h-full max-h-full min-h-0 min-w-[1450px] grid-cols-[360px_360px_minmax(420px,1fr)_310px] overflow-x-auto overflow-y-hidden bg-white">
+    <div className="grid h-full max-h-full min-h-0 min-w-[1500px] grid-cols-[360px_360px_minmax(420px,1fr)_360px] overflow-x-auto overflow-y-hidden bg-white">
       <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-r border-[#e7eaf1] bg-white">
         <header className="h-[72px] shrink-0 border-b border-[#e8eaf1] px-4 pt-4">
           <div className="flex items-start justify-between">
@@ -641,16 +641,21 @@ export function ChattingClient({
         </div>
 
         <div className="border-b border-[#eceef4] px-3 py-2.5">
-          <label className="flex h-8 items-center gap-2 rounded-lg border border-[#e2e5ed] px-2.5 text-[10px] font-medium text-[#747b8e]">
+          <label className="relative flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-[#e2e5ed] px-2.5 text-xs font-medium text-[#747b8e] focus-within:border-[#7187f6] focus-within:ring-3 focus-within:ring-[#3157f6]/10">
             <span
-              className={`size-2 rounded-full ${channelFilter === "ALL" ? "bg-[#3157f6]" : channelMeta[channelFilter].dotClass}`}
+              className={`pointer-events-none size-2 rounded-full ${channelFilter === "ALL" ? "bg-[#3157f6]" : channelMeta[channelFilter].dotClass}`}
             />
+            <span className="pointer-events-none min-w-0 flex-1 truncate">
+              {channelFilter === "ALL"
+                ? "모든 채널"
+                : channelMeta[channelFilter].label}
+            </span>
             <select
               value={channelFilter}
               onChange={(event) =>
                 setChannelFilter(event.target.value as ChatChannel | "ALL")
               }
-              className="min-w-0 flex-1 appearance-none bg-transparent outline-none"
+              className="absolute inset-0 z-10 h-full w-full cursor-pointer appearance-none opacity-0"
               aria-label="채널 필터"
             >
               <option value="ALL">모든 채널</option>
@@ -660,7 +665,7 @@ export function ChattingClient({
                 </option>
               ))}
             </select>
-            <ChevronDown className="size-3" />
+            <ChevronDown className="pointer-events-none size-3.5" />
           </label>
         </div>
 
@@ -1133,10 +1138,10 @@ export function ChattingClient({
       <aside className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-l border-[#e8eaf1] bg-[#fafbfe]">
         <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-[#e8eaf1] bg-white px-4">
           <div>
-            <p className="text-[9px] font-semibold text-[#8d94a6]">고객 정보</p>
+            <p className="text-xs font-semibold text-[#8d94a6]">고객 정보</p>
             <h2 className="mt-1 text-[14px] font-bold">
               {currentRoom.customer.name}
-              <span className="ml-1.5 font-mono text-[9px] font-medium text-[#9aa0af]">
+              <span className="ml-1.5 font-mono text-xs font-medium text-[#9aa0af]">
                 #{currentRoom.customer.chartNumber}
               </span>
             </h2>
@@ -1160,7 +1165,7 @@ export function ChattingClient({
                 <p className="text-[13px] font-bold">
                   {currentRoom.customer.name}
                 </p>
-                <p className="mt-1 text-[9px] text-[#8d94a6]">
+                <p className="mt-1 text-xs text-[#8d94a6]">
                   {currentRoom.customer.gender ?? "미등록"} ·{" "}
                   {formatBirthDate(currentRoom.customer.birthDate)}
                 </p>
@@ -1168,15 +1173,15 @@ export function ChattingClient({
             </div>
 
             <div className="mt-4 space-y-2.5">
-              <div className="flex items-center gap-2 text-[10px] text-[#697084]">
+              <div className="flex items-center gap-2 text-xs text-[#697084]">
                 <Phone className="size-3.5 text-[#9ca2b3]" />
                 {currentRoom.customer.phone ?? "전화번호 미등록"}
               </div>
-              <div className="flex items-center gap-2 text-[10px] text-[#697084]">
+              <div className="flex items-center gap-2 text-xs text-[#697084]">
                 <Mail className="size-3.5 text-[#9ca2b3]" />
                 {currentRoom.customer.email ?? "이메일 미등록"}
               </div>
-              <div className="flex items-center gap-2 text-[10px] text-[#697084]">
+              <div className="flex items-center gap-2 text-xs text-[#697084]">
                 <MessageCircleMore className="size-3.5 text-[#9ca2b3]" />
                 <span className="shrink-0">연결 채널</span>
                 <span className="flex min-w-0 flex-wrap gap-1">
@@ -1187,7 +1192,7 @@ export function ChattingClient({
                         patientChannel.displayName ??
                         channelMeta[patientChannel.channel].label
                       }
-                      className={`flex size-5 items-center justify-center rounded-md text-[7px] font-black ${channelMeta[patientChannel.channel].badgeClass}`}
+                      className={`flex size-6 items-center justify-center rounded-md text-xs font-black ${channelMeta[patientChannel.channel].badgeClass}`}
                     >
                       {channelMeta[patientChannel.channel].compactLabel}
                     </span>
@@ -1201,11 +1206,11 @@ export function ChattingClient({
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CalendarDays className="size-4 text-[#3157f6]" />
-                <h3 className="text-[11px] font-bold">예약 내역</h3>
+                <h3 className="text-xs font-bold">예약 내역</h3>
               </div>
               <button
                 type="button"
-                className="text-[9px] font-semibold text-[#3157f6]"
+                className="text-xs font-semibold text-[#3157f6]"
               >
                 예약 추가
               </button>
@@ -1239,17 +1244,17 @@ export function ChattingClient({
                       </span>
                       <div className="min-w-0 flex-1">
                         <p
-                          className={`truncate text-[9.5px] font-bold ${active ? "text-[#344fc5]" : "text-[#62697c]"}`}
+                          className={`truncate text-xs font-bold ${active ? "text-[#344fc5]" : "text-[#62697c]"}`}
                         >
                           {formatDate(appointment.scheduledAt)}
                         </p>
-                        <p className="mt-0.5 text-[8.5px] text-[#969cac]">
+                        <p className="mt-0.5 text-xs text-[#969cac]">
                           {appointment.doctorName} ·{" "}
                           {appointment.treatment ?? "상담"}
                         </p>
                       </div>
                       {active ? (
-                        <span className="rounded-full bg-[#e6ecff] px-1.5 py-0.5 text-[8px] font-bold text-[#3157f6]">
+                        <span className="rounded-full bg-[#e6ecff] px-1.5 py-0.5 text-xs font-bold text-[#3157f6]">
                           예정
                         </span>
                       ) : null}
@@ -1258,7 +1263,7 @@ export function ChattingClient({
                 })}
               </div>
             ) : (
-              <div className="rounded-xl border border-dashed border-[#dfe3ec] px-3 py-4 text-center text-[9px] text-[#9298aa]">
+              <div className="rounded-xl border border-dashed border-[#dfe3ec] px-3 py-4 text-center text-xs text-[#9298aa]">
                 등록된 예약이 없습니다.
               </div>
             )}
@@ -1267,9 +1272,9 @@ export function ChattingClient({
           <section className="border-b border-[#e5e8ef] p-4">
             <div className="mb-3 flex items-center gap-2">
               <UserRound className="size-4 text-[#6657e9]" />
-              <h3 className="text-[11px] font-bold">상담 메모</h3>
+              <h3 className="text-xs font-bold">상담 메모</h3>
             </div>
-            <p className="rounded-xl border border-[#e1e5ed] bg-white p-3 text-[10px] leading-[1.65] text-[#62697c]">
+            <p className="rounded-xl border border-[#e1e5ed] bg-white p-3 text-xs leading-[1.65] text-[#62697c]">
               {currentRoom.customer.notes ?? "등록된 고객 메모가 없습니다."}
             </p>
           </section>
@@ -1279,19 +1284,19 @@ export function ChattingClient({
               <span className="flex size-6 items-center justify-center rounded-lg bg-[#edf1ff]">
                 <Sparkles className="size-3.5" />
               </span>
-              <p className="text-[10px] font-bold">AI 상담 코치</p>
+              <p className="text-xs font-bold">AI 상담 코치</p>
             </div>
             <div className="rounded-xl border border-[#e0e4ed] bg-white p-3.5 shadow-[0_4px_14px_rgba(42,54,102,0.04)]">
               <div className="mb-3 flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-[9px] font-semibold text-[#747b8f]">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-[#747b8f]">
                   <Bot className="size-3.5 text-[#6657e9]" /> 상담 요약
                 </span>
-                <span className="rounded-full bg-[#eef8f3] px-2 py-1 text-[8px] font-bold text-[#1d9b60]">
+                <span className="rounded-full bg-[#eef8f3] px-2 py-1 text-xs font-bold text-[#1d9b60]">
                   <BadgeCheck className="mr-1 inline size-2.5" />
                   분석 완료
                 </span>
               </div>
-              <p className="text-[10px] leading-[1.65] text-[#5a6175]">
+              <p className="text-xs leading-[1.65] text-[#5a6175]">
                 고객이 {currentRoom.customer.tags.at(-1) ?? "시술"} 상담과 예약
                 가능 시간을 문의했습니다. 고객 언어에 맞춰 일정 선택지를 안내해
                 주세요.
@@ -1303,7 +1308,7 @@ export function ChattingClient({
                     "문의 주신 내용을 확인했습니다. 예약 가능한 시간을 확인해 바로 안내드리겠습니다.",
                   )
                 }
-                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#edf2ff] py-2 text-[9px] font-bold text-[#3157f6]"
+                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#edf2ff] py-2 text-xs font-bold text-[#3157f6]"
               >
                 <WandSparkles className="size-3" /> 답변에 사용
               </button>
@@ -1312,7 +1317,7 @@ export function ChattingClient({
         </div>
 
         <div className="border-t border-[#e3e6ee] bg-white px-4 py-3">
-          <div className="flex items-center justify-between text-[9px] text-[#8e95a7]">
+          <div className="flex items-center justify-between text-xs text-[#8e95a7]">
             <span className="flex items-center gap-1.5">
               <Clock3 className="size-3" /> 최근 정보 업데이트
             </span>

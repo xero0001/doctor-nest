@@ -16,6 +16,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
+import { authClient } from "@/lib/auth-client";
+
 const navigation = [
   {
     label: "알림",
@@ -68,7 +70,7 @@ export function ServiceShell({ user, children }: ServiceShellProps) {
   const router = useRouter();
 
   async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await authClient.signOut();
     router.replace("/login");
     router.refresh();
   }

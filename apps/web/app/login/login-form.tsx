@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+import { authClient } from "@/lib/auth-client";
+
 export function LoginForm({ returnTo }: { returnTo: string }) {
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -25,15 +27,13 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+      const { error: signInError } = await authClient.signIn.username({
+        username,
+        password,
       });
-      const result = (await response.json()) as { error?: string };
 
-      if (!response.ok) {
-        setError(result.error ?? "로그인에 실패했습니다.");
+      if (signInError) {
+        setError("아이디 또는 비밀번호를 확인해 주세요.");
         return;
       }
 

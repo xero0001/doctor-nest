@@ -1,4 +1,5 @@
-import { MessageCircleMore, ShieldCheck, Stethoscope } from "lucide-react";
+import { MessageCircleMore, ShieldCheck } from "lucide-react";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth";
@@ -26,11 +27,15 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <div className="absolute -right-24 -top-24 size-96 rounded-full bg-[#7057ee]/25 blur-3xl" />
         <div className="absolute -bottom-28 left-14 size-80 rounded-full bg-[#eb78c6]/20 blur-3xl" />
 
-        <div className="relative flex items-center gap-3 text-lg font-bold">
-          <span className="flex size-10 items-center justify-center rounded-[13px] bg-gradient-to-br from-[#3157f6] via-[#6657e9] to-[#e879bf]">
-            <Stethoscope className="size-5" />
-          </span>
-          닥터네스트
+        <div className="relative">
+          <Image
+            src="/images/doctornest-logo-dark.png"
+            alt="닥터네스트"
+            width={1490}
+            height={400}
+            className="h-11 w-auto"
+            priority
+          />
         </div>
 
         <div className="relative max-w-xl">
@@ -57,11 +62,15 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
       <section className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-[410px]">
-          <div className="mb-10 flex items-center gap-2.5 font-bold lg:hidden">
-            <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#3157f6] to-[#7057ee] text-white">
-              <Stethoscope className="size-[18px]" />
-            </span>
-            닥터네스트
+          <div className="mb-10 lg:hidden">
+            <Image
+              src="/images/doctornest-logo-header-opaque.png"
+              alt="닥터네스트"
+              width={1490}
+              height={400}
+              className="h-10 w-auto"
+              priority
+            />
           </div>
           <p className="text-xs font-bold tracking-[0.12em] text-[#3157f6]">
             WELCOME BACK

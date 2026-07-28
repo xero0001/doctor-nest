@@ -74,20 +74,8 @@ a {
   z-index: 50;
   top: 0;
   border-bottom: 1px solid rgb(226 231 245 / 0.75);
-  background: rgb(251 252 255 / 0.86);
+  background: #ffffff;
   backdrop-filter: blur(18px);
-}
-
-.brand-mark {
-  display: flex;
-  width: 36px;
-  height: 36px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--primary), var(--indigo) 55%, var(--pink));
-  color: white;
-  box-shadow: 0 8px 24px rgb(74 91 226 / 0.24);
 }
 
 .nav-link {

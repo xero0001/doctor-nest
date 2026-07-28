@@ -14,7 +14,6 @@ import {
   Search,
   Sparkles,
   Star,
-  Stethoscope,
   Target,
   Users,
   WandSparkles
@@ -112,22 +111,20 @@ const faqs = [
   }
 ];
 
-function BrandMark() {
-  return (
-    <span className="brand-mark" aria-hidden="true">
-      <Stethoscope className="size-[18px]" />
-    </span>
-  );
-}
-
 export default function HomePage() {
   return (
     <main className="overflow-hidden bg-background">
       <header className="site-header">
         <nav className="page-shell flex h-[72px] items-center justify-between" aria-label="주요 메뉴">
-          <a href="#top" className="flex items-center gap-2.5 text-lg font-bold tracking-[-0.04em]">
-            <BrandMark />
-            닥터네스트
+          <a href="#top" aria-label="닥터네스트 홈" className="flex items-center">
+            <Image
+              src="/images/doctornest-logo-header-opaque.png"
+              alt="닥터네스트"
+              width={1490}
+              height={400}
+              className="h-9 w-auto sm:h-10"
+              priority
+            />
           </a>
           <div className="hidden items-center gap-8 text-sm font-medium text-muted-foreground md:flex">
             <a className="nav-link" href="#funnel">
@@ -599,10 +596,15 @@ export default function HomePage() {
       <footer className="border-t border-border bg-[#f7f8fb]">
         <div className="page-shell py-10 sm:py-12">
           <div className="flex flex-col gap-6 border-b border-border pb-7 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2.5 font-bold tracking-[-0.03em]">
-              <BrandMark />
-              닥터네스트
-            </div>
+            <a href="#top" aria-label="닥터네스트 홈" className="flex items-center">
+              <Image
+                src="/images/doctornest-logo-header-opaque.png"
+                alt="닥터네스트"
+                width={1490}
+                height={400}
+                className="h-9 w-auto"
+              />
+            </a>
             <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-muted-foreground">
               <a href="#funnel" className="hover:text-foreground">
                 서비스 소개

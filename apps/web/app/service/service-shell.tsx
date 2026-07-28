@@ -9,10 +9,10 @@ import {
   LogOut,
   MessageCircleMore,
   Settings,
-  Stethoscope,
   UsersRound,
   Workflow,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -79,9 +79,16 @@ export function ServiceShell({ user, children }: ServiceShellProps) {
         <Link
           href="/service/chatting"
           aria-label="닥터네스트 서비스 홈"
-          className="mx-auto mt-4 flex size-10 items-center justify-center rounded-[13px] bg-gradient-to-br from-[#3157f6] via-[#6657e9] to-[#e879bf] text-white shadow-[0_8px_20px_rgba(77,91,210,0.25)]"
+          className="mx-auto mt-3 flex size-12 items-center justify-center"
         >
-          <Stethoscope className="size-[19px]" />
+          <Image
+            src="/images/doctornest-icon.png"
+            alt=""
+            width={44}
+            height={44}
+            className="size-11 object-contain"
+            priority
+          />
         </Link>
 
         <nav

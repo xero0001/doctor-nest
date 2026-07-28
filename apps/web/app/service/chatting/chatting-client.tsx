@@ -388,7 +388,7 @@ export function ChattingClient({
   );
   const selectedManual =
     manualDocuments.find((document) => document.id === selectedManualId) ??
-    manualDocuments[0];
+    null;
   const chatTabs = useMemo(() => {
     let openCount = 0;
     let closedCount = 0;
@@ -764,7 +764,11 @@ export function ChattingClient({
                     openFolderIds={openManualFolderIds}
                     selectedManualId={selectedManual?.id ?? ""}
                     onToggleFolder={toggleManualFolder}
-                    onSelectManual={setSelectedManualId}
+                    onSelectManual={(id) =>
+                      setSelectedManualId((current) =>
+                        current === id ? "" : id,
+                      )
+                    }
                   />
                 ))}
                 {filteredManualFolders.length === 0 ? (
@@ -775,7 +779,7 @@ export function ChattingClient({
               </div>
 
               {selectedManual ? (
-                <article className="px-4 py-4 text-[10.5px] leading-[1.75] text-[#5d6478]">
+                <article className="px-4 py-4 text-sm leading-[1.75] text-[#5d6478]">
                   <div className="mb-3 flex flex-wrap gap-1.5">
                     {selectedManual.tags.map((tag) => (
                       <span
@@ -792,13 +796,18 @@ export function ChattingClient({
                   </div>
                   <ReactMarkdown
                     components={{
+                      h1: ({ children }) => (
+                        <h1 className="mb-3 text-base font-bold text-[#33394d]">
+                          {children}
+                        </h1>
+                      ),
                       h2: ({ children }) => (
-                        <h2 className="mt-5 border-t border-[#eceef3] pt-4 text-[12px] font-bold text-[#33394d] first:mt-0 first:border-t-0 first:pt-0">
+                        <h2 className="mt-5 border-t border-[#eceef3] pt-4 text-base font-bold text-[#33394d] first:mt-0 first:border-t-0 first:pt-0">
                           {children}
                         </h2>
                       ),
                       h3: ({ children }) => (
-                        <h3 className="mt-4 text-[11px] font-bold text-[#41485c]">
+                        <h3 className="mt-4 text-base font-bold text-[#41485c]">
                           {children}
                         </h3>
                       ),

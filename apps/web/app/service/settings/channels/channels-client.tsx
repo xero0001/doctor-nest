@@ -78,7 +78,7 @@ const definitions: Record<ChannelType, ChannelDefinition> = {
     label: "LINE",
     summary:
       "병원 LINE Official Account의 메시지를 Messaging API로 연결합니다.",
-    owner: "병원 명의 Official Account와 Provider",
+    owner: "",
     accountIdLabel: "Official Account Basic ID",
     accountIdPlaceholder: "@648wzhlw",
     badge: "L",
@@ -540,9 +540,11 @@ export function ChannelsClient({
                   <h2 className="text-base font-bold">
                     {selectedDefinition.label} 연동
                   </h2>
-                  <p className="mt-0.5 text-[10px] text-[#8d94a6]">
-                    {selectedDefinition.owner}
-                  </p>
+                  {selectedDefinition.owner ? (
+                    <p className="mt-0.5 text-xs text-[#8d94a6]">
+                      {selectedDefinition.owner}
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <button
@@ -560,16 +562,16 @@ export function ChannelsClient({
               className="min-h-0 flex-1 overflow-y-auto px-6 py-6"
             >
               <section className="rounded-2xl border border-[#e0e5ef] bg-[#fafbfe] p-4">
-                <p className="text-[10px] font-bold text-[#4f576d]">
+                <p className="text-sm font-bold text-[#4f576d]">
                   연동 전에 확인해 주세요
                 </p>
                 <ol className="mt-3 space-y-2.5">
                   {selectedDefinition.steps.map((step, index) => (
                     <li
                       key={step}
-                      className="flex items-center gap-2.5 text-[10px] text-[#72798c]"
+                      className="flex items-center gap-2.5 text-sm text-[#72798c]"
                     >
-                      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[#e9edff] text-[8px] font-bold text-[#3157f6]">
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#e9edff] text-xs font-bold text-[#3157f6]">
                         {index + 1}
                       </span>
                       {step}
@@ -580,7 +582,7 @@ export function ChannelsClient({
 
               <div className="mt-6 space-y-4">
                 <label className="block">
-                  <span className="mb-2 block text-[10px] font-bold text-[#596177]">
+                  <span className="mb-2 block text-sm font-bold text-[#596177]">
                     채널 표시 이름
                   </span>
                   <span className="flex h-11 items-center gap-2 rounded-xl border border-[#dde2ec] px-3 focus-within:border-[#6f83f2] focus-within:ring-3 focus-within:ring-[#3157f6]/10">
@@ -588,14 +590,14 @@ export function ChannelsClient({
                     <input
                       value={displayName}
                       onChange={(event) => setDisplayName(event.target.value)}
-                      className="min-w-0 flex-1 bg-transparent text-xs outline-none"
+                      className="min-w-0 flex-1 bg-transparent text-sm outline-none"
                       placeholder={`${organizationName} ${selectedDefinition.label}`}
                     />
                   </span>
                 </label>
 
                 <label className="block">
-                  <span className="mb-2 block text-[10px] font-bold text-[#596177]">
+                  <span className="mb-2 block text-sm font-bold text-[#596177]">
                     {selectedDefinition.accountIdLabel}
                   </span>
                   <span className="flex h-11 items-center gap-2 rounded-xl border border-[#dde2ec] px-3 focus-within:border-[#6f83f2] focus-within:ring-3 focus-within:ring-[#3157f6]/10">
@@ -605,7 +607,7 @@ export function ChannelsClient({
                       onChange={(event) =>
                         setExternalAccountId(event.target.value)
                       }
-                      className="min-w-0 flex-1 bg-transparent font-mono text-[11px] outline-none"
+                      className="min-w-0 flex-1 bg-transparent font-mono text-sm outline-none"
                       placeholder={selectedDefinition.accountIdPlaceholder}
                     />
                   </span>
@@ -614,10 +616,10 @@ export function ChannelsClient({
                 {selectedChannel === "LINE" ? (
                   <div className="space-y-4 rounded-2xl border border-[#dfe5f0] bg-[#fafbfe] p-4">
                     <div>
-                      <p className="text-[10px] font-bold text-[#4f576d]">
+                      <p className="text-sm font-bold text-[#4f576d]">
                         Messaging API 자격증명
                       </p>
-                      <p className="mt-1 text-[9px] leading-4 text-[#858c9e]">
+                      <p className="mt-1 text-xs leading-5 text-[#858c9e]">
                         LINE Developers Console에서 확인한 값을 입력하세요.
                         {selectedConnection.hasCredentials
                           ? " 현재 자격증명이 등록되어 있으며, 변경할 때만 다시 입력하면 됩니다."
@@ -626,7 +628,7 @@ export function ChannelsClient({
                     </div>
 
                     <label className="block">
-                      <span className="mb-2 block text-[10px] font-bold text-[#596177]">
+                      <span className="mb-2 block text-sm font-bold text-[#596177]">
                         Channel ID
                       </span>
                       <input
@@ -635,7 +637,7 @@ export function ChannelsClient({
                           setLineChannelId(event.target.value)
                         }
                         autoComplete="off"
-                        className="h-11 w-full rounded-xl border border-[#dde2ec] bg-white px-3 font-mono text-[11px] outline-none focus:border-[#6f83f2] focus:ring-3 focus:ring-[#3157f6]/10"
+                        className="h-11 w-full rounded-xl border border-[#dde2ec] bg-white px-3 font-mono text-xs outline-none focus:border-[#6f83f2] focus:ring-3 focus:ring-[#3157f6]/10"
                         placeholder={
                           selectedConnection.hasCredentials
                             ? "등록됨 · 변경할 때만 입력"
@@ -645,7 +647,7 @@ export function ChannelsClient({
                     </label>
 
                     <label className="block">
-                      <span className="mb-2 block text-[10px] font-bold text-[#596177]">
+                      <span className="mb-2 block text-sm font-bold text-[#596177]">
                         Channel secret
                       </span>
                       <input
@@ -655,7 +657,7 @@ export function ChannelsClient({
                           setLineChannelSecret(event.target.value)
                         }
                         autoComplete="new-password"
-                        className="h-11 w-full rounded-xl border border-[#dde2ec] bg-white px-3 font-mono text-[11px] outline-none focus:border-[#6f83f2] focus:ring-3 focus:ring-[#3157f6]/10"
+                        className="h-11 w-full rounded-xl border border-[#dde2ec] bg-white px-3 font-mono text-xs outline-none focus:border-[#6f83f2] focus:ring-3 focus:ring-[#3157f6]/10"
                         placeholder={
                           selectedConnection.hasCredentials
                             ? "등록됨 · 변경할 때만 입력"
@@ -665,7 +667,7 @@ export function ChannelsClient({
                     </label>
 
                     <label className="block">
-                      <span className="mb-2 block text-[10px] font-bold text-[#596177]">
+                      <span className="mb-2 block text-sm font-bold text-[#596177]">
                         Channel access token
                       </span>
                       <textarea
@@ -675,7 +677,7 @@ export function ChannelsClient({
                         }
                         autoComplete="off"
                         rows={3}
-                        className="w-full resize-none rounded-xl border border-[#dde2ec] bg-white px-3 py-3 font-mono text-[10px] outline-none focus:border-[#6f83f2] focus:ring-3 focus:ring-[#3157f6]/10"
+                        className="w-full resize-none rounded-xl border border-[#dde2ec] bg-white px-3 py-3 font-mono text-xs outline-none focus:border-[#6f83f2] focus:ring-3 focus:ring-[#3157f6]/10"
                         placeholder={
                           selectedConnection.hasCredentials
                             ? "등록됨 · 변경할 때만 입력"
@@ -687,11 +689,11 @@ export function ChannelsClient({
                 ) : null}
 
                 <div>
-                  <span className="mb-2 block text-[10px] font-bold text-[#596177]">
+                  <span className="mb-2 block text-sm font-bold text-[#596177]">
                     닥터네스트 웹훅 URL
                   </span>
                   <div className="flex items-center gap-2 rounded-xl border border-[#dde2ec] bg-[#f8f9fc] p-2">
-                    <code className="min-w-0 flex-1 truncate px-1 text-[9px] text-[#697186]">
+                    <code className="min-w-0 flex-1 truncate px-1 text-xs text-[#697186]">
                       {webhookUrl}
                     </code>
                     <button
@@ -700,7 +702,7 @@ export function ChannelsClient({
                         await navigator.clipboard.writeText(webhookUrl);
                         setCopied(true);
                       }}
-                      className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[#dce1eb] bg-white px-2.5 text-[9px] font-bold text-[#59617a]"
+                      className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[#dce1eb] bg-white px-2.5 text-xs font-bold text-[#59617a]"
                     >
                       {copied ? (
                         <Check className="size-3 text-[#1aa464]" />
@@ -710,7 +712,7 @@ export function ChannelsClient({
                       {copied ? "복사됨" : "복사"}
                     </button>
                   </div>
-                  <p className="mt-2 flex items-center gap-1.5 text-[9px] text-[#9298a8]">
+                  <p className="mt-2 flex items-center gap-1.5 text-xs text-[#9298a8]">
                     <Webhook className="size-3" />
                     채널 개발자 콘솔의 이벤트 수신 URL에 입력합니다.
                   </p>
@@ -720,26 +722,11 @@ export function ChannelsClient({
               {error ? (
                 <p
                   role="alert"
-                  className="mt-4 rounded-xl bg-[#fff0f2] px-4 py-3 text-[10px] font-semibold text-[#d8465b]"
+                  className="mt-4 rounded-xl bg-[#fff0f2] px-4 py-3 text-xs font-semibold text-[#d8465b]"
                 >
                   {error}
                 </p>
               ) : null}
-
-              <div className="mt-6 rounded-xl border border-[#e0e5ef] p-4">
-                <div className="flex items-start gap-2.5">
-                  <ShieldCheck className="mt-0.5 size-4 shrink-0 text-[#3157f6]" />
-                  <div>
-                    <p className="text-[10px] font-bold text-[#4f576d]">
-                      보안 자격증명은 별도로 등록됩니다
-                    </p>
-                    <p className="mt-1 text-[9px] leading-4 text-[#858c9e]">
-                      App Secret, Access Token 등의 민감정보는 암호화해 저장하며
-                      저장 후 화면이나 API 응답에 다시 노출하지 않습니다.
-                    </p>
-                  </div>
-                </div>
-              </div>
 
               <div className="mt-6 flex gap-2">
                 {selectedConnection.status !== "DISCONNECTED" ? (
@@ -747,7 +734,7 @@ export function ChannelsClient({
                     type="button"
                     onClick={() => disconnect(selectedChannel)}
                     disabled={isSaving}
-                    className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-[#e0e4ec] px-4 text-[10px] font-bold text-[#7a8194] hover:bg-[#f7f8fb]"
+                    className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-[#e0e4ec] px-4 text-xs font-bold text-[#7a8194] hover:bg-[#f7f8fb]"
                   >
                     <RotateCcw className="size-3.5" /> 연동 해제
                   </button>
@@ -755,7 +742,7 @@ export function ChannelsClient({
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#3157f6] text-[10px] font-bold text-white disabled:opacity-60"
+                  className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#3157f6] text-xs font-bold text-white disabled:opacity-60"
                 >
                   {isSaving ? (
                     <LoaderCircle className="size-3.5 animate-spin" />
@@ -770,7 +757,7 @@ export function ChannelsClient({
                 href={selectedDefinition.guideUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-4 flex items-center justify-center gap-1.5 text-[9px] font-semibold text-[#75809c]"
+                className="mt-4 flex items-center justify-center gap-1.5 text-xs font-semibold text-[#75809c]"
               >
                 {selectedDefinition.label} 공식 연동 가이드
                 <ExternalLink className="size-3" />

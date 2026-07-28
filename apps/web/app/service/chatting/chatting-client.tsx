@@ -595,7 +595,7 @@ export function ChattingClient({
   const currentMeta = channelMeta[currentRoom.channel];
 
   return (
-    <div className="grid h-full max-h-full min-h-0 min-w-[1260px] grid-cols-[280px_250px_minmax(420px,1fr)_310px] overflow-x-auto overflow-y-hidden bg-white">
+    <div className="grid h-full max-h-full min-h-0 min-w-[1310px] grid-cols-[280px_300px_minmax(420px,1fr)_310px] overflow-x-auto overflow-y-hidden bg-white">
       <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-r border-[#e7eaf1] bg-white">
         <header className="h-[72px] shrink-0 border-b border-[#e8eaf1] px-4 pt-4">
           <div className="flex items-start justify-between">

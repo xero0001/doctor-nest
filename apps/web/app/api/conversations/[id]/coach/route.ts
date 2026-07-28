@@ -1,7 +1,11 @@
 import { getDatabase } from "@doctornest/database";
 
-import { generateChatCoachSuggestion } from "@/lib/ai-chat-coach";
+import {
+  generateChatCoachSuggestion,
+  getChatCoachModel,
+} from "@/lib/ai-chat-coach";
 import { getCurrentUser } from "@/lib/auth";
+import { serializeChatCoachGeneration } from "@/lib/chat-coach-generation";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -13,6 +17,24 @@ type KnowledgeDocument = {
   contentMarkdown: string;
   tags: Array<{ tag: { name: string } }>;
 };
+
+const PENDING_GENERATION_TIMEOUT_MS = 2 * 60 * 1_000;
+
+function generationResponse(generation: {
+  id: string;
+  sourceMessageId: string;
+  responseGuide: string | null;
+  answerExample: string | null;
+  model: string;
+  sources: unknown;
+  createdAt: Date;
+}) {
+  return Response.json(serializeChatCoachGeneration(generation), {
+    headers: {
+      "Cache-Control": "no-store",
+    },
+  });
+}
 
 function normalizeForSearch(value: string) {
   return value.toLocaleLowerCase().replace(/[^a-z0-9가-힣]+/g, "");
@@ -153,6 +175,36 @@ export async function POST(_request: Request, { params }: RouteContext) {
     );
   }
 
+  const generationKey = {
+    conversationId_sourceMessageId: {
+      conversationId: id,
+      sourceMessageId: lastCustomerMessage.id,
+    },
+  };
+  const existingGeneration =
+    await database.chatCoachGeneration.findUnique({
+      where: generationKey,
+    });
+
+  if (
+    existingGeneration?.status === "COMPLETED" &&
+    existingGeneration.responseGuide &&
+    existingGeneration.answerExample
+  ) {
+    return generationResponse(existingGeneration);
+  }
+
+  if (
+    existingGeneration?.status === "PENDING" &&
+    Date.now() - existingGeneration.updatedAt.getTime() <
+      PENDING_GENERATION_TIMEOUT_MS
+  ) {
+    return Response.json(
+      { error: "AI 응대 가이드를 생성하고 있습니다." },
+      { status: 409 },
+    );
+  }
+
   const treatmentTags = conversation.patient.tagAssignments.map(
     ({ tag }) => tag.name,
   );
@@ -189,34 +241,109 @@ export async function POST(_request: Request, { params }: RouteContext) {
           ? message.translatedContent || message.content
           : message.content,
     }));
+  const sources = retrievedDocuments.map((document) => ({
+    id: document.id,
+    title: document.title,
+  }));
+  const generationData = {
+    hospitalId: user.hospitalId,
+    conversationId: id,
+    sourceMessageId: lastCustomerMessage.id,
+    requestedById: user.id,
+    model: getChatCoachModel(),
+    status: "PENDING" as const,
+    sourceSnapshot: customerMessage,
+    treatmentTags,
+    knowledgeDocumentIds: retrievedDocuments.map((document) => document.id),
+    sources,
+    responseGuide: null,
+    answerExample: null,
+    inputTokens: null,
+    outputTokens: null,
+    totalTokens: null,
+    errorMessage: null,
+  };
+  let generationId: string;
+
+  if (existingGeneration) {
+    const generation = await database.chatCoachGeneration.update({
+      where: { id: existingGeneration.id },
+      data: generationData,
+      select: { id: true },
+    });
+    generationId = generation.id;
+  } else {
+    try {
+      const generation = await database.chatCoachGeneration.create({
+        data: generationData,
+        select: { id: true },
+      });
+      generationId = generation.id;
+    } catch {
+      const concurrentGeneration =
+        await database.chatCoachGeneration.findUnique({
+          where: generationKey,
+        });
+
+      if (
+        concurrentGeneration?.status === "COMPLETED" &&
+        concurrentGeneration.responseGuide &&
+        concurrentGeneration.answerExample
+      ) {
+        return generationResponse(concurrentGeneration);
+      }
+
+      return Response.json(
+        { error: "AI 응대 가이드를 생성하고 있습니다." },
+        { status: 409 },
+      );
+    }
+  }
 
   try {
-    const suggestion = await generateChatCoachSuggestion({
+    const result = await generateChatCoachSuggestion({
       hospitalId: user.hospitalId,
       treatmentTags,
       conversation: recentConversation,
       lastCustomerMessage: customerMessage,
       knowledgeDocuments,
     });
-
-    return Response.json(
-      {
-        generatedForMessageId: lastCustomerMessage.id,
-        responseGuide: suggestion.responseGuide.trim(),
-        answerExample: suggestion.answerExample.trim(),
-        sources: retrievedDocuments.map((document) => ({
-          id: document.id,
-          title: document.title,
-        })),
-      },
-      {
-        headers: {
-          "Cache-Control": "no-store",
+    const completedGeneration =
+      await database.chatCoachGeneration.update({
+        where: { id: generationId },
+        data: {
+          status: "COMPLETED",
+          model: result.model,
+          responseGuide: result.output.responseGuide.trim(),
+          answerExample: result.output.answerExample.trim(),
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          totalTokens: result.usage.totalTokens,
+          errorMessage: null,
         },
-      },
-    );
+      });
+
+    return generationResponse(completedGeneration);
   } catch (error) {
     console.error("AI 상담 코치 생성에 실패했습니다.", error);
+    await database.chatCoachGeneration
+      .update({
+        where: { id: generationId },
+        data: {
+          status: "FAILED",
+          errorMessage:
+            error instanceof Error
+              ? error.message.slice(0, 1_000)
+              : "알 수 없는 생성 오류",
+        },
+      })
+      .catch((persistenceError) => {
+        console.error(
+          "AI 상담 코치 실패 상태 저장에 실패했습니다.",
+          persistenceError,
+        );
+      });
+
     return Response.json(
       { error: "응대 가이드와 답변 예시를 생성하지 못했습니다." },
       { status: 502 },

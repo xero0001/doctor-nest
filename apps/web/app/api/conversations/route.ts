@@ -43,6 +43,8 @@ export async function GET() {
         channel: conversation.channel,
         status: conversation.status,
         important: conversation.important,
+        autoRespondEnabled: conversation.autoRespondEnabled,
+        autoTranslateEnabled: conversation.autoTranslateEnabled,
         unreadCount: conversation.unreadCount,
         lastMessageAt: conversation.lastMessageAt.toISOString(),
         customer: {
@@ -87,6 +89,7 @@ export async function GET() {
             translatedLanguageName: message.translatedLanguageName,
             sentAt: message.sentAt.toISOString(),
           })),
+        coachSuggestions: [],
       })),
     },
     {

@@ -1,6 +1,7 @@
 import { getDatabase } from "@doctornest/database";
 
 import { requireUser } from "@/lib/auth";
+import { serializeChatCoachGeneration } from "@/lib/chat-coach-generation";
 
 import { ChattingClient } from "./chatting-client";
 import type { ConversationItem, ManualFolderItem } from "./chat-types";
@@ -76,6 +77,11 @@ export default async function ChattingPage() {
         messages: {
           orderBy: { sentAt: "asc" },
         },
+        chatCoachGenerations: {
+          where: { status: "COMPLETED" },
+          orderBy: { createdAt: "desc" },
+          take: 50,
+        },
       },
       orderBy: { lastMessageAt: "desc" },
     }),
@@ -101,6 +107,8 @@ export default async function ChattingPage() {
       channel: conversation.channel,
       status: conversation.status,
       important: conversation.important,
+      autoRespondEnabled: conversation.autoRespondEnabled,
+      autoTranslateEnabled: conversation.autoTranslateEnabled,
       unreadCount: conversation.unreadCount,
       lastMessageAt: conversation.lastMessageAt.toISOString(),
       customer: {
@@ -140,6 +148,9 @@ export default async function ChattingPage() {
         translatedLanguageName: message.translatedLanguageName,
         sentAt: message.sentAt.toISOString(),
       })),
+      coachSuggestions: conversation.chatCoachGenerations.map(
+        serializeChatCoachGeneration,
+      ),
     }),
   );
 

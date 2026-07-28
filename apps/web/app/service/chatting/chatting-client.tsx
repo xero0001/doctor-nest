@@ -470,8 +470,6 @@ export function ChattingClient({
   const [loadingRoomId, setLoadingRoomId] = useState<string | null>(null);
   const [detailError, setDetailError] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [autoRespond, setAutoRespond] = useState(false);
-  const [autoTranslate, setAutoTranslate] = useState(true);
   const [coachSuggestions, setCoachSuggestions] = useState<
     Record<string, ChatCoachSuggestion>
   >({});
@@ -488,6 +486,7 @@ export function ChattingClient({
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const chartNumberCopyTimeoutRef = useRef<number | null>(null);
   const importantRequestIds = useRef(new Set<string>());
+  const conversationSettingRequestIds = useRef(new Map<string, number>());
 
   useEffect(
     () => () => {
@@ -522,6 +521,8 @@ export function ChattingClient({
   const currentRoom =
     rooms.find((conversation) => conversation.id === selectedRoomId) ??
     rooms[0];
+  const autoRespond = currentRoom?.autoRespondEnabled ?? false;
+  const autoTranslate = currentRoom?.autoTranslateEnabled ?? true;
   const normalizedManualQuery = manualQuery.trim().toLowerCase();
   const filteredManualFolders = useMemo(
     () => filterManualFolderTree(manualFolders, normalizedManualQuery),
@@ -544,8 +545,15 @@ export function ChattingClient({
     currentRoom && latestCustomerMessage
       ? `${currentRoom.id}:${latestCustomerMessage.id}`
       : "";
+  const persistedCoachSuggestion =
+    latestCustomerMessage && currentRoom
+      ? currentRoom.coachSuggestions.find(
+          (suggestion) =>
+            suggestion.generatedForMessageId === latestCustomerMessage.id,
+        )
+      : undefined;
   const currentCoachSuggestion = coachSuggestionKey
-    ? coachSuggestions[coachSuggestionKey]
+    ? coachSuggestions[coachSuggestionKey] ?? persistedCoachSuggestion
     : undefined;
   const coachStatus =
     !autoRespond || !coachSuggestionKey
@@ -797,6 +805,23 @@ export function ChattingClient({
           ...current,
           [`${selectedRoomId}:${result.generatedForMessageId}`]: result,
         }));
+        setRooms((current) =>
+          current.map((room) =>
+            room.id === selectedRoomId
+              ? {
+                  ...room,
+                  coachSuggestions: [
+                    result,
+                    ...room.coachSuggestions.filter(
+                      (suggestion) =>
+                        suggestion.generatedForMessageId !==
+                        result.generatedForMessageId,
+                    ),
+                  ],
+                }
+              : room,
+          ),
+        );
         setCoachFailure(null);
       } catch (error) {
         if (abortController.signal.aborted) return;
@@ -920,6 +945,70 @@ export function ChattingClient({
 
     setDraft(currentCoachSuggestion.answerExample);
     window.requestAnimationFrame(() => composerRef.current?.focus());
+  }
+
+  async function updateConversationSetting(
+    setting: "autoRespondEnabled" | "autoTranslateEnabled",
+    enabled: boolean,
+  ) {
+    if (!currentRoom) return;
+
+    const conversationId = currentRoom.id;
+    const requestKey = `${conversationId}:${setting}`;
+    const requestId =
+      (conversationSettingRequestIds.current.get(requestKey) ?? 0) + 1;
+    conversationSettingRequestIds.current.set(requestKey, requestId);
+    setDetailError("");
+    setRooms((current) =>
+      current.map((room) =>
+        room.id === conversationId ? { ...room, [setting]: enabled } : room,
+      ),
+    );
+
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [setting]: enabled }),
+      });
+      const result = (await response.json()) as {
+        conversation?: ConversationItem;
+        error?: string;
+      };
+
+      if (!response.ok || !result.conversation) {
+        throw new Error(result.error ?? "채팅 설정을 저장하지 못했습니다.");
+      }
+
+      if (
+        conversationSettingRequestIds.current.get(requestKey) !== requestId
+      ) {
+        return;
+      }
+
+      setRooms((current) =>
+        current.map((room) =>
+          room.id === conversationId ? result.conversation! : room,
+        ),
+      );
+    } catch (error) {
+      if (
+        conversationSettingRequestIds.current.get(requestKey) !== requestId
+      ) {
+        return;
+      }
+
+      setRooms((current) =>
+        current.map((room) =>
+          room.id === conversationId ? { ...room, [setting]: !enabled } : room,
+        ),
+      );
+      setDetailError(
+        error instanceof Error
+          ? error.message
+          : "채팅 설정을 저장하지 못했습니다.",
+      );
+    }
   }
 
   async function copyChartNumber() {
@@ -1429,7 +1518,10 @@ export function ChattingClient({
                     if (currentCoachSuggestion) {
                       applyCoachAnswer();
                     } else {
-                      setAutoRespond(true);
+                      void updateConversationSetting(
+                        "autoRespondEnabled",
+                        true,
+                      );
                     }
                   }}
                   className="flex shrink-0 items-center gap-1 rounded-md bg-[#eef2ff] px-2 py-1 font-semibold text-[#3157f6]"
@@ -1456,7 +1548,12 @@ export function ChattingClient({
                     role="switch"
                     aria-checked={autoRespond}
                     aria-label="자동 응대"
-                    onClick={() => setAutoRespond((enabled) => !enabled)}
+                    onClick={() =>
+                      void updateConversationSetting(
+                        "autoRespondEnabled",
+                        !autoRespond,
+                      )
+                    }
                     className={`relative h-5 w-9 rounded-full transition-colors ${
                       autoRespond ? "bg-[#3157f6]" : "bg-[#c7ccd8]"
                     }`}
@@ -1477,7 +1574,12 @@ export function ChattingClient({
                     role="switch"
                     aria-checked={autoTranslate}
                     aria-label="자동 번역"
-                    onClick={() => setAutoTranslate((enabled) => !enabled)}
+                    onClick={() =>
+                      void updateConversationSetting(
+                        "autoTranslateEnabled",
+                        !autoTranslate,
+                      )
+                    }
                     className={`relative h-5 w-9 rounded-full transition-colors ${
                       autoTranslate ? "bg-[#3157f6]" : "bg-[#c7ccd8]"
                     }`}

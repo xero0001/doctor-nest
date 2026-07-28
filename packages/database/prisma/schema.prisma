@@ -8,11 +8,11 @@ datasource db {
 }
 
 model Hospital {
-  id                             String              @id @default(cuid())
+  id                             String                @id @default(cuid())
   name                           String
-  slug                           String              @unique
-  translationContextEnabled      Boolean             @default(true)
-  translationContextMessageCount Int                 @default(10)
+  slug                           String                @unique
+  translationContextEnabled      Boolean               @default(true)
+  translationContextMessageCount Int                   @default(10)
   users                          User[]
   authUsers                      AuthUser[]
   channelConnections             ChannelConnection[]
@@ -23,8 +23,9 @@ model Hospital {
   manualFolders                  ManualFolder[]
   manualTags                     ManualTag[]
   manualDocuments                ManualDocument[]
-  createdAt                      DateTime            @default(now())
-  updatedAt                      DateTime            @updatedAt
+  chatCoachGenerations           ChatCoachGeneration[]
+  createdAt                      DateTime              @default(now())
+  updatedAt                      DateTime              @updatedAt
   patientChannels                PatientChannel[]
 
   @@map("Organization")
@@ -245,22 +246,25 @@ enum ConversationStatus {
 }
 
 model Conversation {
-  id               String             @id @default(cuid())
-  hospitalId       String             @map("organizationId")
-  patientId        String             @map("customerId")
-  patientChannelId String?
-  channel          ChatChannel
-  externalThreadId String?
-  status           ConversationStatus @default(OPEN)
-  important        Boolean            @default(false)
-  unreadCount      Int                @default(0)
-  lastMessageAt    DateTime           @default(now())
-  hospital         Hospital           @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  patient          Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  patientChannel   PatientChannel?    @relation(fields: [patientChannelId], references: [id], onDelete: SetNull)
-  messages         Message[]
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  id                   String                @id @default(cuid())
+  hospitalId           String                @map("organizationId")
+  patientId            String                @map("customerId")
+  patientChannelId     String?
+  channel              ChatChannel
+  externalThreadId     String?
+  status               ConversationStatus    @default(OPEN)
+  important            Boolean               @default(false)
+  autoRespondEnabled   Boolean               @default(false)
+  autoTranslateEnabled Boolean               @default(true)
+  unreadCount          Int                   @default(0)
+  lastMessageAt        DateTime              @default(now())
+  hospital             Hospital              @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientChannel       PatientChannel?       @relation(fields: [patientChannelId], references: [id], onDelete: SetNull)
+  messages             Message[]
+  chatCoachGenerations ChatCoachGeneration[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 
   @@unique([hospitalId, channel, externalThreadId])
   @@index([hospitalId, status, lastMessageAt])
@@ -280,22 +284,58 @@ enum MessageSender {
 }
 
 model Message {
-  id                     String           @id @default(cuid())
+  id                     String                @id @default(cuid())
   conversationId         String
   externalMessageId      String?
   direction              MessageDirection
   sender                 MessageSender
   content                String
-  sourceLanguage         String           @default("")
-  sourceLanguageName     String           @default("")
-  translatedContent      String           @default("")
-  translatedLanguage     String           @default("")
-  translatedLanguageName String           @default("")
-  sentAt                 DateTime         @default(now())
-  conversation           Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sourceLanguage         String                @default("")
+  sourceLanguageName     String                @default("")
+  translatedContent      String                @default("")
+  translatedLanguage     String                @default("")
+  translatedLanguageName String                @default("")
+  sentAt                 DateTime              @default(now())
+  conversation           Conversation          @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  chatCoachGenerations   ChatCoachGeneration[]
 
   @@unique([conversationId, externalMessageId])
   @@index([conversationId, sentAt])
+}
+
+enum ChatCoachGenerationStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model ChatCoachGeneration {
+  id                   String                    @id @default(cuid())
+  hospitalId           String
+  conversationId       String
+  sourceMessageId      String
+  requestedById        String?
+  model                String
+  status               ChatCoachGenerationStatus @default(PENDING)
+  sourceSnapshot       String
+  treatmentTags        String[]                  @default([])
+  knowledgeDocumentIds String[]                  @default([])
+  sources              Json?
+  responseGuide        String?
+  answerExample        String?
+  inputTokens          Int?
+  outputTokens         Int?
+  totalTokens          Int?
+  errorMessage         String?
+  hospital             Hospital                  @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  conversation         Conversation              @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sourceMessage        Message                   @relation(fields: [sourceMessageId], references: [id], onDelete: Cascade)
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+
+  @@unique([conversationId, sourceMessageId])
+  @@index([hospitalId, createdAt])
+  @@index([conversationId, createdAt])
 }
 
 enum AppointmentStatus {

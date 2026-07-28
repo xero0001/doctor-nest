@@ -44,6 +44,8 @@ export type ConversationItem = {
   channel: ChatChannel;
   status: "OPEN" | "CLOSED";
   important: boolean;
+  autoRespondEnabled: boolean;
+  autoTranslateEnabled: boolean;
   unreadCount: number;
   lastMessageAt: string;
   customer: {
@@ -66,12 +68,16 @@ export type ConversationItem = {
     appointments: ConversationAppointment[];
   };
   messages: ConversationMessage[];
+  coachSuggestions: ChatCoachSuggestion[];
 };
 
 export type ChatCoachSuggestion = {
+  id: string;
   generatedForMessageId: string;
   responseGuide: string;
   answerExample: string;
+  model: string;
+  generatedAt: string;
   sources: Array<{
     id: string;
     title: string;

@@ -5,6 +5,7 @@ import {
   translateStaffReply,
 } from "@/lib/ai-translation";
 import { getCurrentUser } from "@/lib/auth";
+import { serializeChatCoachGeneration } from "@/lib/chat-coach-generation";
 import { decryptLineCredentials } from "@/lib/channel-credentials";
 import { getTranslationContext } from "@/lib/translation-context";
 
@@ -22,6 +23,8 @@ function serializeConversation(
     channel: conversation.channel,
     status: conversation.status,
     important: conversation.important,
+    autoRespondEnabled: conversation.autoRespondEnabled,
+    autoTranslateEnabled: conversation.autoTranslateEnabled,
     unreadCount: conversation.unreadCount,
     lastMessageAt: conversation.lastMessageAt.toISOString(),
     customer: {
@@ -61,6 +64,9 @@ function serializeConversation(
       translatedLanguageName: message.translatedLanguageName,
       sentAt: message.sentAt.toISOString(),
     })),
+    coachSuggestions: conversation.chatCoachGenerations.map(
+      serializeChatCoachGeneration,
+    ),
   };
 }
 
@@ -87,6 +93,11 @@ function findConversationForHospital(id: string, hospitalId: string) {
       },
       messages: {
         orderBy: { sentAt: "asc" },
+      },
+      chatCoachGenerations: {
+        where: { status: "COMPLETED" },
+        orderBy: { createdAt: "desc" },
+        take: 50,
       },
     },
   });
@@ -129,15 +140,24 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const { id } = await params;
   const body = (await request.json().catch(() => null)) as {
     important?: unknown;
+    autoRespondEnabled?: unknown;
+    autoTranslateEnabled?: unknown;
   } | null;
 
-  if (
-    body &&
-    Object.hasOwn(body, "important") &&
-    typeof body.important !== "boolean"
-  ) {
+  const invalidSetting =
+    (body &&
+      Object.hasOwn(body, "important") &&
+      typeof body.important !== "boolean") ||
+    (body &&
+      Object.hasOwn(body, "autoRespondEnabled") &&
+      typeof body.autoRespondEnabled !== "boolean") ||
+    (body &&
+      Object.hasOwn(body, "autoTranslateEnabled") &&
+      typeof body.autoTranslateEnabled !== "boolean");
+
+  if (invalidSetting) {
     return Response.json(
-      { error: "중요 표시 값이 올바르지 않습니다." },
+      { error: "채팅 설정 값이 올바르지 않습니다." },
       { status: 400 },
     );
   }
@@ -158,12 +178,26 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     );
   }
 
+  const hasConversationSettings =
+    typeof body?.important === "boolean" ||
+    typeof body?.autoRespondEnabled === "boolean" ||
+    typeof body?.autoTranslateEnabled === "boolean";
+
   await database.conversation.update({
     where: { id: existingConversation.id },
-    data:
-      typeof body?.important === "boolean"
-        ? { important: body.important }
-        : { unreadCount: 0 },
+    data: hasConversationSettings
+      ? {
+          ...(typeof body?.important === "boolean"
+            ? { important: body.important }
+            : {}),
+          ...(typeof body?.autoRespondEnabled === "boolean"
+            ? { autoRespondEnabled: body.autoRespondEnabled }
+            : {}),
+          ...(typeof body?.autoTranslateEnabled === "boolean"
+            ? { autoTranslateEnabled: body.autoTranslateEnabled }
+            : {}),
+        }
+      : { unreadCount: 0 },
   });
 
   const conversation = await findConversationForHospital(

@@ -246,7 +246,7 @@ function ManualDocumentContent({ document }: { document: ManualDocumentItem }) {
             </h1>
           ),
           h2: ({ children }) => (
-            <h2 className="mt-5 border-t border-[#eceef3] pt-4 text-base font-bold text-[#33394d] first:mt-0 first:border-t-0 first:pt-0">
+            <h2 className="mt-5 text-base font-bold text-[#33394d] first:mt-0">
               {children}
             </h2>
           ),

@@ -1,0 +1,910 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import {
+  BadgeCheck,
+  BellRing,
+  BookOpenText,
+  Bot,
+  Bookmark,
+  CalendarDays,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  CircleUserRound,
+  Clock3,
+  Folder,
+  Languages,
+  Mail,
+  MessageCircleMore,
+  MoreHorizontal,
+  Paperclip,
+  Phone,
+  Search,
+  Send,
+  Settings2,
+  Smile,
+  Sparkles,
+  Star,
+  UserRound,
+  WandSparkles,
+} from "lucide-react";
+
+import type { ChatChannel, ConversationItem } from "./chat-types";
+
+type ChatTab = "OPEN" | "CLOSED" | "IMPORTANT";
+
+const channelMeta: Record<
+  ChatChannel,
+  {
+    label: string;
+    compactLabel: string;
+    badge: string;
+    badgeClass: string;
+    dotClass: string;
+  }
+> = {
+  KAKAO: {
+    label: "카카오",
+    compactLabel: "K",
+    badge: "K",
+    badgeClass: "bg-[#fee500] text-[#252525]",
+    dotClass: "bg-[#fee500]",
+  },
+  LINE: {
+    label: "LINE",
+    compactLabel: "L",
+    badge: "L",
+    badgeClass: "bg-[#06c755] text-white",
+    dotClass: "bg-[#06c755]",
+  },
+  NAVER_TALK: {
+    label: "네이버 톡톡",
+    compactLabel: "N",
+    badge: "N",
+    badgeClass: "bg-[#03c75a] text-white",
+    dotClass: "bg-[#03c75a]",
+  },
+  WECHAT: {
+    label: "WeChat",
+    compactLabel: "微",
+    badge: "微",
+    badgeClass: "bg-[#07c160] text-white",
+    dotClass: "bg-[#07c160]",
+  },
+  WHATSAPP: {
+    label: "WhatsApp",
+    compactLabel: "W",
+    badge: "W",
+    badgeClass: "bg-[#25d366] text-white",
+    dotClass: "bg-[#25d366]",
+  },
+  INSTAGRAM: {
+    label: "Instagram",
+    compactLabel: "IG",
+    badge: "IG",
+    badgeClass:
+      "bg-gradient-to-br from-[#833ab4] via-[#fd1d1d] to-[#fcb045] text-white",
+    dotClass: "bg-[#d946ef]",
+  },
+};
+
+const languageLabels: Record<string, string> = {
+  ko: "한국어",
+  en: "English",
+  ja: "日本語",
+  zh: "中文",
+};
+
+const knowledgeGroups = [
+  { label: "피부", count: 12 },
+  { label: "레이저 시술", count: 8 },
+  { label: "필러 · 보톡스", count: 6 },
+];
+
+function formatListTime(value: string) {
+  return new Intl.DateTimeFormat("ko-KR", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date(value));
+}
+
+function formatMessageTime(value: string) {
+  return new Intl.DateTimeFormat("ko-KR", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date(value));
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  }).format(new Date(value));
+}
+
+function formatBirthDate(value: string | null) {
+  if (!value) return "미등록";
+  return new Intl.DateTimeFormat("ko-KR").format(new Date(value));
+}
+
+function ChannelBadge({
+  channel,
+  large = false,
+}: {
+  channel: ChatChannel;
+  large?: boolean;
+}) {
+  const meta = channelMeta[channel];
+
+  return (
+    <span
+      className={`flex shrink-0 items-center justify-center font-extrabold shadow-sm ${meta.badgeClass} ${
+        large
+          ? "size-9 rounded-xl text-xs"
+          : "size-[22px] rounded-[7px] text-[10px]"
+      }`}
+      aria-label={meta.label}
+      title={meta.label}
+    >
+      {meta.badge}
+    </span>
+  );
+}
+
+export function ChattingClient({
+  conversations,
+  organizationName,
+}: {
+  conversations: ConversationItem[];
+  organizationName: string;
+}) {
+  const [chatTab, setChatTab] = useState<ChatTab>("OPEN");
+  const [selectedRoomId, setSelectedRoomId] = useState(
+    conversations[0]?.id ?? "",
+  );
+  const [query, setQuery] = useState("");
+  const [channelFilter, setChannelFilter] = useState<ChatChannel | "ALL">(
+    "ALL",
+  );
+  const [draft, setDraft] = useState("");
+  const [knowledgeTab, setKnowledgeTab] = useState<"원내매뉴얼" | "콘텐츠">(
+    "원내매뉴얼",
+  );
+  const [localMessages, setLocalMessages] = useState<Record<string, string[]>>(
+    {},
+  );
+
+  const visibleRooms = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return conversations.filter((conversation) => {
+      const latestMessage = conversation.messages.at(-1)?.content ?? "";
+      const matchesTab =
+        chatTab === "IMPORTANT"
+          ? conversation.important
+          : conversation.status === chatTab;
+      const matchesChannel =
+        channelFilter === "ALL" || conversation.channel === channelFilter;
+      const matchesQuery =
+        !normalizedQuery ||
+        `${conversation.customer.name} ${conversation.customer.phone ?? ""} ${latestMessage}`
+          .toLowerCase()
+          .includes(normalizedQuery);
+
+      return matchesTab && matchesChannel && matchesQuery;
+    });
+  }, [chatTab, channelFilter, conversations, query]);
+
+  const currentRoom =
+    conversations.find((conversation) => conversation.id === selectedRoomId) ??
+    conversations[0];
+
+  function sendMessage() {
+    const message = draft.trim();
+    if (!message || !currentRoom) return;
+
+    setLocalMessages((messages) => ({
+      ...messages,
+      [currentRoom.id]: [...(messages[currentRoom.id] ?? []), message],
+    }));
+    setDraft("");
+  }
+
+  if (!currentRoom) {
+    return (
+      <div className="flex h-full items-center justify-center bg-white">
+        <div className="text-center text-[#8b92a5]">
+          <MessageCircleMore className="mx-auto mb-3 size-8" />
+          <p className="text-sm font-semibold">
+            아직 연결된 고객 대화가 없습니다.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const currentMeta = channelMeta[currentRoom.channel];
+  const currentLocalMessages = localMessages[currentRoom.id] ?? [];
+
+  return (
+    <div className="grid h-full min-w-[1260px] grid-cols-[280px_250px_minmax(420px,1fr)_310px] overflow-x-auto bg-white">
+      <section className="flex min-w-0 flex-col border-r border-[#e7eaf1] bg-white">
+        <header className="border-b border-[#e8eaf1] px-4 pb-4 pt-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-[10px] font-semibold text-[#9298aa]">
+                {organizationName}
+              </p>
+              <div className="mt-1 flex items-center gap-2">
+                <h1 className="text-base font-bold tracking-[-0.03em]">
+                  고객채팅
+                </h1>
+                <span className="flex items-center gap-1 rounded-full bg-[#eef2ff] px-2 py-1 text-[9px] font-bold text-[#3157f6]">
+                  <span className="size-1.5 rounded-full bg-[#3157f6]" />
+                  통합 상담
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              aria-label="채팅 설정"
+              className="flex size-8 items-center justify-center rounded-lg border border-[#e1e5ed] text-[#848b9e] hover:bg-[#f7f8fb]"
+            >
+              <Settings2 className="size-4" />
+            </button>
+          </div>
+
+          <label className="mt-4 flex h-9 items-center gap-2 rounded-xl border border-[#e1e5ed] bg-[#f9fafc] px-3 text-[#949bad] focus-within:border-[#7187f6] focus-within:bg-white focus-within:ring-3 focus-within:ring-[#3157f6]/10">
+            <Search className="size-3.5" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="고객명, 전화번호, 메시지 검색"
+              className="min-w-0 flex-1 bg-transparent text-[11px] text-[#30364b] outline-none placeholder:text-[#aab0bf]"
+            />
+          </label>
+        </header>
+
+        <div className="grid grid-cols-3 border-b border-[#e8eaf1] px-3">
+          {(
+            [
+              ["OPEN", "진행 중"],
+              ["CLOSED", "완료"],
+              ["IMPORTANT", "중요"],
+            ] as const
+          ).map(([tab, label]) => {
+            const count =
+              tab === "IMPORTANT"
+                ? conversations.filter((room) => room.important).length
+                : conversations.filter((room) => room.status === tab).length;
+
+            return (
+              <button
+                type="button"
+                key={tab}
+                onClick={() => setChatTab(tab)}
+                className={`relative flex h-11 items-center justify-center gap-1.5 text-xs font-semibold ${
+                  chatTab === tab ? "text-[#252a3e]" : "text-[#9ca1b1]"
+                }`}
+              >
+                {label}
+                <span
+                  className={
+                    chatTab === tab ? "text-[#3157f6]" : "text-[#adb2bf]"
+                  }
+                >
+                  {count}
+                </span>
+                {chatTab === tab ? (
+                  <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-[#3157f6]" />
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="border-b border-[#eceef4] px-3 py-2.5">
+          <label className="flex h-8 items-center gap-2 rounded-lg border border-[#e2e5ed] px-2.5 text-[10px] font-medium text-[#747b8e]">
+            <span
+              className={`size-2 rounded-full ${channelFilter === "ALL" ? "bg-[#3157f6]" : channelMeta[channelFilter].dotClass}`}
+            />
+            <select
+              value={channelFilter}
+              onChange={(event) =>
+                setChannelFilter(event.target.value as ChatChannel | "ALL")
+              }
+              className="min-w-0 flex-1 appearance-none bg-transparent outline-none"
+              aria-label="채널 필터"
+            >
+              <option value="ALL">모든 채널</option>
+              {(Object.keys(channelMeta) as ChatChannel[]).map((channel) => (
+                <option key={channel} value={channel}>
+                  {channelMeta[channel].label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="size-3" />
+          </label>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {visibleRooms.map((room) => {
+            const latestMessage =
+              room.messages.at(-1)?.content ?? "새로운 대화";
+            const selected = currentRoom.id === room.id;
+
+            return (
+              <button
+                type="button"
+                key={room.id}
+                onClick={() => setSelectedRoomId(room.id)}
+                className={`relative w-full border-b border-[#f0f1f5] px-4 py-3.5 text-left transition-colors ${
+                  selected ? "bg-[#edf3ff]" : "hover:bg-[#f8f9fc]"
+                }`}
+              >
+                {selected ? (
+                  <span className="absolute inset-y-0 left-0 w-[3px] bg-[#3157f6]" />
+                ) : null}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <ChannelBadge channel={room.channel} />
+                    <span className="truncate text-xs font-bold text-[#2f3449]">
+                      {room.customer.name}
+                    </span>
+                    {room.unreadCount > 0 ? (
+                      <span className="flex min-w-4 items-center justify-center rounded-full bg-[#f04f68] px-1 text-[9px] font-bold text-white">
+                        {room.unreadCount}
+                      </span>
+                    ) : null}
+                  </div>
+                  <Star
+                    className={`size-3.5 shrink-0 ${
+                      room.important
+                        ? "fill-[#ffcf34] text-[#ffbe19]"
+                        : "text-[#d2d5de]"
+                    }`}
+                  />
+                </div>
+                <div className="mt-2 flex items-end justify-between gap-3 pl-[30px]">
+                  <p className="min-w-0 truncate text-[10.5px] text-[#767d91]">
+                    {latestMessage}
+                  </p>
+                  <span className="shrink-0 text-[9px] text-[#a8adba]">
+                    {formatListTime(room.lastMessageAt)}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+
+          {visibleRooms.length === 0 ? (
+            <div className="flex h-44 flex-col items-center justify-center text-[#a1a7b6]">
+              <MessageCircleMore className="mb-2 size-6" />
+              <p className="text-xs">조건에 맞는 채팅이 없습니다.</p>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="border-t border-[#e8eaf1] bg-[#fafbfe] px-4 py-3">
+          <div className="flex items-center justify-between text-[10px] text-[#7d8497]">
+            <span>연결 채널 6개</span>
+            <div className="flex -space-x-1">
+              {(Object.keys(channelMeta) as ChatChannel[]).map((channel) => (
+                <span
+                  key={channel}
+                  title={channelMeta[channel].label}
+                  className={`flex size-5 items-center justify-center rounded-full border-2 border-white text-[7px] font-black ${channelMeta[channel].badgeClass}`}
+                >
+                  {channelMeta[channel].compactLabel}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="flex min-w-0 flex-col border-r border-[#e8eaf1] bg-white">
+        <header className="flex h-[72px] shrink-0 items-center border-b border-[#e8eaf1] px-4">
+          <BookOpenText className="mr-2 size-[17px] text-[#6657e9]" />
+          <h2 className="text-[14px] font-bold">상담 백과사전</h2>
+        </header>
+
+        <div className="grid grid-cols-2 border-b border-[#e8eaf1] px-3">
+          {(["원내매뉴얼", "콘텐츠"] as const).map((tab) => (
+            <button
+              type="button"
+              key={tab}
+              onClick={() => setKnowledgeTab(tab)}
+              className={`relative h-11 text-xs font-semibold ${
+                knowledgeTab === tab ? "text-[#2c3146]" : "text-[#9da2b2]"
+              }`}
+            >
+              {tab}
+              {knowledgeTab === tab ? (
+                <span className="absolute inset-x-4 bottom-0 h-[2px] rounded-full bg-[#6657e9]" />
+              ) : null}
+            </button>
+          ))}
+        </div>
+
+        <div className="border-b border-[#edf0f5] p-3">
+          <label className="flex h-8 items-center gap-2 rounded-lg border border-[#e2e5ed] px-3 text-[#9ba1b1] focus-within:border-[#8676ef]">
+            <Search className="size-3.5" />
+            <input
+              placeholder="태그명으로 검색"
+              className="min-w-0 flex-1 bg-transparent text-[11px] outline-none placeholder:text-[#aeb3c0]"
+            />
+          </label>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="border-b border-[#e8eaf1] py-2">
+            {knowledgeGroups.map((group, index) => (
+              <button
+                type="button"
+                key={group.label}
+                className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-[11px] font-semibold ${
+                  index === 1
+                    ? "bg-[#f0ebff] text-[#6657e9]"
+                    : "text-[#51586d] hover:bg-[#f8f9fc]"
+                }`}
+              >
+                <ChevronRight
+                  className={`size-3 ${index === 1 ? "rotate-90" : ""}`}
+                />
+                {index === 1 ? (
+                  <Bookmark className="size-3.5 fill-[#8066ec] text-[#8066ec]" />
+                ) : (
+                  <Folder className="size-3.5 text-[#8d93a5]" />
+                )}
+                <span className="flex-1">{group.label}</span>
+                <span className="text-[9px] font-medium text-[#a0a5b3]">
+                  {group.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <article className="space-y-4 px-4 py-4 text-[10.5px] leading-[1.65] text-[#5d6478]">
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <span className="rounded-md bg-[#eee9ff] px-2 py-1 text-[9px] font-bold text-[#6657e9]">
+                  레이저
+                </span>
+                <h3 className="text-[12px] font-bold text-[#33394d]">
+                  피코토닝 시술 안내
+                </h3>
+              </div>
+              <p>
+                피코토닝은 짧은 시간에 높은 에너지를 전달해 색소를 잘게 분해하는
+                레이저 시술입니다. 기미, 잡티, 피부톤 개선에 도움을 줄 수
+                있습니다.
+              </p>
+            </div>
+            <div className="border-t border-[#eceef3] pt-4">
+              <h4 className="mb-2 text-[11px] font-bold text-[#3d4357]">
+                시술 효과
+              </h4>
+              <ul className="space-y-1 pl-3">
+                <li>• 피부톤과 칙칙함 개선</li>
+                <li>• 기미, 잡티 등 색소 병변 완화</li>
+                <li>• 피부결과 모공 개선에 도움</li>
+              </ul>
+            </div>
+            <div className="border-t border-[#eceef3] pt-4">
+              <h4 className="mb-2 text-[11px] font-bold text-[#3d4357]">
+                시술 방법
+              </h4>
+              <p>클렌징 → 마취 크림 → 레이저 시술 → 진정 관리</p>
+              <p className="mt-2 text-[#878d9e]">
+                ※ 시술 시간은 피부 상태에 따라 달라질 수 있습니다.
+              </p>
+            </div>
+            <div className="border-t border-[#eceef3] pt-4">
+              <h4 className="mb-2 text-[11px] font-bold text-[#3d4357]">
+                시술 후 주의사항
+              </h4>
+              <ul className="space-y-1 pl-3">
+                <li>• 자외선 차단제를 꼼꼼히 발라주세요.</li>
+                <li>• 당일 사우나와 격한 운동은 피해주세요.</li>
+              </ul>
+            </div>
+            <div className="border-t border-[#eceef3] pt-4">
+              <h4 className="mb-2 text-[11px] font-bold text-[#3d4357]">
+                자주 묻는 질문
+              </h4>
+              <p className="font-semibold text-[#474e62]">
+                Q. 시술 직후 세안이 가능한가요?
+              </p>
+              <p className="mt-1">
+                A. 미온수로 가볍게 세안하실 수 있으며 자극적인 제품은 피해
+                주세요.
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section className="flex min-w-0 flex-col bg-[#f2f5fb]">
+        <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-[#e5e8f0] bg-white px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <ChannelBadge channel={currentRoom.channel} large />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="truncate text-[14px] font-bold">
+                  {currentRoom.customer.name}
+                </h2>
+                {currentRoom.customer.tags.includes("VIP") ? (
+                  <span className="rounded-full bg-[#fff3c5] px-2 py-0.5 text-[8px] font-bold text-[#a97500]">
+                    VIP
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-0.5 text-[9.5px] text-[#9298a8]">
+                {currentMeta.label} ·{" "}
+                {currentRoom.customer.phone ?? "연락처 미등록"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="hidden items-center gap-1.5 rounded-full bg-[#edf8f2] px-2.5 py-1.5 text-[9px] font-bold text-[#1c9a5f] sm:flex">
+              <span className="size-1.5 rounded-full bg-[#1fb46b]" />
+              AI 자동응대
+            </span>
+            <button
+              type="button"
+              aria-label="고객에게 전화하기"
+              className="flex size-8 items-center justify-center rounded-lg border border-[#e1e5ed] bg-white text-[#657087] hover:text-[#3157f6]"
+            >
+              <Phone className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              aria-label="채팅 더보기"
+              className="flex size-8 items-center justify-center rounded-lg border border-[#e1e5ed] bg-white text-[#657087]"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+          </div>
+        </header>
+
+        <div className="flex items-center justify-between border-b border-[#e5e8f0] bg-white px-5 py-2">
+          <div className="flex items-center gap-1.5">
+            {currentRoom.customer.tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-md bg-[#edf1ff] px-2 py-1 text-[9px] font-bold text-[#3157f6]"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+          <span className="flex items-center gap-1 text-[9px] text-[#858c9e]">
+            <Languages className="size-3" />
+            {languageLabels[currentRoom.customer.language] ??
+              currentRoom.customer.language}
+          </span>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+          <div className="mx-auto mb-6 w-fit rounded-full bg-[#e4e8f1] px-3 py-1 text-[9px] font-medium text-[#7f8698]">
+            {formatDate(
+              currentRoom.messages[0]?.sentAt ?? currentRoom.lastMessageAt,
+            )}
+          </div>
+
+          <div className="mx-auto max-w-[720px]">
+            {currentRoom.messages.map((message) => {
+              const inbound = message.direction === "INBOUND";
+
+              if (message.sender === "SYSTEM") {
+                return (
+                  <div key={message.id} className="my-4 flex justify-center">
+                    <span className="rounded-full bg-[#e7edff] px-3 py-1.5 text-[9px] font-semibold text-[#4765dc]">
+                      {message.content}
+                    </span>
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={message.id}
+                  className={`mb-5 flex ${inbound ? "justify-start" : "justify-end"}`}
+                >
+                  <div className={`max-w-[72%] ${inbound ? "" : "text-right"}`}>
+                    {inbound ? (
+                      <p className="mb-1 pl-1 text-[9px] font-semibold text-[#757c8e]">
+                        {currentRoom.customer.name}
+                      </p>
+                    ) : null}
+                    {message.sender === "AI" ? (
+                      <p className="mb-1 flex items-center justify-end gap-1 text-[8px] font-semibold text-[#6657e9]">
+                        <Sparkles className="size-2.5" /> AI 답변
+                      </p>
+                    ) : null}
+                    <div
+                      className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-left text-[11px] leading-[1.65] shadow-sm ${
+                        inbound
+                          ? "rounded-tl-[5px] border border-[#dfe3ec] bg-white text-[#454b5e]"
+                          : "rounded-br-[5px] bg-gradient-to-br from-[#3157f6] to-[#6657e9] text-white"
+                      }`}
+                    >
+                      {message.content}
+                    </div>
+                    <p
+                      className={`mt-1 text-[8px] text-[#a0a6b4] ${inbound ? "text-left" : "text-right"}`}
+                    >
+                      {formatMessageTime(message.sentAt)}
+                      {!inbound ? (
+                        <Check className="ml-1 inline size-2.5 text-[#3157f6]" />
+                      ) : null}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+
+            {currentLocalMessages.map((message, index) => (
+              <div
+                key={`${currentRoom.id}-${index}`}
+                className="mb-5 flex justify-end"
+              >
+                <div className="max-w-[72%]">
+                  <div className="rounded-2xl rounded-br-[5px] bg-gradient-to-br from-[#3157f6] to-[#6657e9] px-4 py-3 text-[11px] leading-[1.65] text-white shadow-sm">
+                    {message}
+                  </div>
+                  <p className="mt-1 text-right text-[8px] text-[#a0a6b4]">
+                    방금 전
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="shrink-0 border-t border-[#dfe3ec] bg-white p-3">
+          <div className="mx-auto max-w-[740px]">
+            <div className="mb-2 flex items-center gap-2 text-[9px] text-[#858c9e]">
+              <button
+                type="button"
+                onClick={() =>
+                  setDraft(
+                    "문의 주신 내용을 확인했습니다. 예약 가능한 시간을 확인해 바로 안내드리겠습니다.",
+                  )
+                }
+                className="flex items-center gap-1 rounded-md bg-[#eef2ff] px-2 py-1 font-semibold text-[#3157f6]"
+              >
+                <WandSparkles className="size-3" /> AI 답변 제안
+              </button>
+              <span>고객 언어에 맞춰 자동 번역됩니다.</span>
+            </div>
+            <div className="rounded-xl border border-[#dfe3ec] bg-white p-2 focus-within:border-[#7187f6] focus-within:ring-2 focus-within:ring-[#3157f6]/10">
+              <textarea
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                rows={2}
+                placeholder={`${currentMeta.label}로 메시지를 입력해 주세요.`}
+                className="w-full resize-none bg-transparent px-1 text-[11px] leading-5 text-[#33394e] outline-none placeholder:text-[#adb2bf]"
+              />
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center gap-1 text-[#9198aa]">
+                  <button
+                    type="button"
+                    aria-label="파일 첨부"
+                    className="rounded-md p-1.5 hover:bg-[#f1f3f8]"
+                  >
+                    <Paperclip className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="이모지"
+                    className="rounded-md p-1.5 hover:bg-[#f1f3f8]"
+                  >
+                    <Smile className="size-3.5" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={sendMessage}
+                  disabled={!draft.trim()}
+                  className="flex h-7 items-center gap-1 rounded-lg bg-[#3157f6] px-3 text-[10px] font-bold text-white disabled:bg-[#d9dde6]"
+                >
+                  전송 <Send className="size-3" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside className="flex min-w-0 flex-col border-l border-[#e8eaf1] bg-[#fafbfe]">
+        <header className="flex h-[72px] items-center justify-between border-b border-[#e8eaf1] bg-white px-4">
+          <div>
+            <p className="text-[9px] font-semibold text-[#8d94a6]">고객 정보</p>
+            <h2 className="mt-1 text-[13px] font-bold">
+              {currentRoom.customer.name}
+              <span className="ml-1.5 font-mono text-[9px] font-medium text-[#9aa0af]">
+                #
+                {currentRoom.customer.externalRef ??
+                  currentRoom.customer.id.slice(-6)}
+              </span>
+            </h2>
+          </div>
+          <button
+            type="button"
+            aria-label="고객 정보 더보기"
+            className="rounded-lg border border-[#e1e5ed] p-2 text-[#80879a]"
+          >
+            <MoreHorizontal className="size-4" />
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <section className="border-b border-[#e5e8ef] bg-white p-4">
+            <div className="flex items-center gap-3">
+              <span className="flex size-11 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#3157f6]">
+                <CircleUserRound className="size-6" />
+              </span>
+              <div>
+                <p className="text-xs font-bold">{currentRoom.customer.name}</p>
+                <p className="mt-1 text-[9px] text-[#8d94a6]">
+                  {currentRoom.customer.gender ?? "미등록"} ·{" "}
+                  {formatBirthDate(currentRoom.customer.birthDate)}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2.5">
+              <div className="flex items-center gap-2 text-[10px] text-[#697084]">
+                <Phone className="size-3.5 text-[#9ca2b3]" />
+                {currentRoom.customer.phone ?? "전화번호 미등록"}
+              </div>
+              <div className="flex items-center gap-2 text-[10px] text-[#697084]">
+                <Mail className="size-3.5 text-[#9ca2b3]" />
+                {currentRoom.customer.email ?? "이메일 미등록"}
+              </div>
+              <div className="flex items-center gap-2 text-[10px] text-[#697084]">
+                <MessageCircleMore className="size-3.5 text-[#9ca2b3]" />
+                최초 유입: {currentMeta.label}
+              </div>
+            </div>
+          </section>
+
+          <section className="border-b border-[#e5e8ef] bg-white p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="size-4 text-[#3157f6]" />
+                <h3 className="text-[11px] font-bold">예약 내역</h3>
+              </div>
+              <button
+                type="button"
+                className="text-[9px] font-semibold text-[#3157f6]"
+              >
+                예약 추가
+              </button>
+            </div>
+
+            {currentRoom.customer.appointments.length > 0 ? (
+              <div className="space-y-2">
+                {currentRoom.customer.appointments.map((appointment) => {
+                  const active = appointment.status === "SCHEDULED";
+                  return (
+                    <div
+                      key={appointment.id}
+                      className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 ${
+                        active
+                          ? "border-[#cfd8ff] bg-[#f4f6ff]"
+                          : "border-[#e4e7ee] bg-white"
+                      }`}
+                    >
+                      <span
+                        className={`flex size-7 shrink-0 items-center justify-center rounded-lg ${
+                          active
+                            ? "bg-[#3157f6] text-white"
+                            : "bg-[#f0f2f6] text-[#9da3b1]"
+                        }`}
+                      >
+                        {active ? (
+                          <BellRing className="size-3.5" />
+                        ) : (
+                          <CalendarDays className="size-3.5" />
+                        )}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className={`truncate text-[9.5px] font-bold ${active ? "text-[#344fc5]" : "text-[#62697c]"}`}
+                        >
+                          {formatDate(appointment.scheduledAt)}
+                        </p>
+                        <p className="mt-0.5 text-[8.5px] text-[#969cac]">
+                          {appointment.doctorName} ·{" "}
+                          {appointment.treatment ?? "상담"}
+                        </p>
+                      </div>
+                      {active ? (
+                        <span className="rounded-full bg-[#e6ecff] px-1.5 py-0.5 text-[8px] font-bold text-[#3157f6]">
+                          예정
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-[#dfe3ec] px-3 py-4 text-center text-[9px] text-[#9298aa]">
+                등록된 예약이 없습니다.
+              </div>
+            )}
+          </section>
+
+          <section className="border-b border-[#e5e8ef] p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <UserRound className="size-4 text-[#6657e9]" />
+              <h3 className="text-[11px] font-bold">상담 메모</h3>
+            </div>
+            <p className="rounded-xl border border-[#e1e5ed] bg-white p-3 text-[10px] leading-[1.65] text-[#62697c]">
+              {currentRoom.customer.notes ?? "등록된 고객 메모가 없습니다."}
+            </p>
+          </section>
+
+          <section className="p-4">
+            <div className="mb-3 flex items-center gap-2 text-[#3157f6]">
+              <span className="flex size-6 items-center justify-center rounded-lg bg-[#edf1ff]">
+                <Sparkles className="size-3.5" />
+              </span>
+              <p className="text-[10px] font-bold">AI 상담 코치</p>
+            </div>
+            <div className="rounded-xl border border-[#e0e4ed] bg-white p-3.5 shadow-[0_4px_14px_rgba(42,54,102,0.04)]">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[9px] font-semibold text-[#747b8f]">
+                  <Bot className="size-3.5 text-[#6657e9]" /> 상담 요약
+                </span>
+                <span className="rounded-full bg-[#eef8f3] px-2 py-1 text-[8px] font-bold text-[#1d9b60]">
+                  <BadgeCheck className="mr-1 inline size-2.5" />
+                  분석 완료
+                </span>
+              </div>
+              <p className="text-[10px] leading-[1.65] text-[#5a6175]">
+                고객이 {currentRoom.customer.tags.at(-1) ?? "시술"} 상담과 예약
+                가능 시간을 문의했습니다. 고객 언어에 맞춰 일정 선택지를 안내해
+                주세요.
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  setDraft(
+                    "문의 주신 내용을 확인했습니다. 예약 가능한 시간을 확인해 바로 안내드리겠습니다.",
+                  )
+                }
+                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#edf2ff] py-2 text-[9px] font-bold text-[#3157f6]"
+              >
+                <WandSparkles className="size-3" /> 답변에 사용
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <div className="border-t border-[#e3e6ee] bg-white px-4 py-3">
+          <div className="flex items-center justify-between text-[9px] text-[#8e95a7]">
+            <span className="flex items-center gap-1.5">
+              <Clock3 className="size-3" /> 최근 정보 업데이트
+            </span>
+            <span>방금 전</span>
+          </div>
+        </div>
+      </aside>
+    </div>
+  );
+}

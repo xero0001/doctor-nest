@@ -8,9 +8,180 @@ datasource db {
 }
 
 model Organization {
+  id                 String              @id @default(cuid())
+  name               String
+  slug               String              @unique
+  users              User[]
+  channelConnections ChannelConnection[]
+  customers          Customer[]
+  conversations      Conversation[]
+  appointments       Appointment[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  AGENT
+}
+
+model User {
+  id             String       @id @default(cuid())
+  organizationId String
+  username       String       @unique
+  passwordHash   String
+  name           String
+  role           UserRole     @default(AGENT)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessions       Session[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+}
+
+model Session {
   id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+enum ChatChannel {
+  KAKAO
+  LINE
+  NAVER_TALK
+  WECHAT
+  WHATSAPP
+  INSTAGRAM
+}
+
+enum ChannelStatus {
+  DISCONNECTED
+  CONFIGURING
+  CONNECTED
+  ERROR
+}
+
+model ChannelConnection {
+  id                   String        @id @default(cuid())
+  organizationId       String
+  channel              ChatChannel
+  status               ChannelStatus @default(DISCONNECTED)
+  displayName          String?
+  externalAccountId    String?
+  credentialsEncrypted String?
+  webhookToken         String        @default(cuid())
+  connectedAt          DateTime?
+  organization         Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@unique([organizationId, channel])
+  @@index([organizationId, status])
+}
+
+model Customer {
+  id             String         @id @default(cuid())
+  organizationId String
+  externalRef    String?
+  name           String
+  phone          String?
+  email          String?
+  gender         String?
+  birthDate      DateTime?
+  language       String         @default("ko")
+  notes          String?
+  tags           String[]
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversations  Conversation[]
+  appointments   Appointment[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@unique([organizationId, externalRef])
+  @@index([organizationId, name])
+  @@index([organizationId, phone])
+}
+
+enum ConversationStatus {
+  OPEN
+  CLOSED
+}
+
+model Conversation {
+  id               String             @id @default(cuid())
+  organizationId   String
+  customerId       String
+  channel          ChatChannel
+  externalThreadId String?
+  status           ConversationStatus @default(OPEN)
+  important        Boolean            @default(false)
+  unreadCount      Int                @default(0)
+  lastMessageAt    DateTime           @default(now())
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer         Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  messages         Message[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@unique([organizationId, channel, externalThreadId])
+  @@index([organizationId, status, lastMessageAt])
+  @@index([customerId])
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageSender {
+  CUSTOMER
+  STAFF
+  AI
+  SYSTEM
+}
+
+model Message {
+  id                String           @id @default(cuid())
+  conversationId    String
+  externalMessageId String?
+  direction         MessageDirection
+  sender            MessageSender
+  content           String
+  sentAt            DateTime         @default(now())
+  conversation      Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, externalMessageId])
+  @@index([conversationId, sentAt])
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+model Appointment {
+  id             String            @id @default(cuid())
+  organizationId String
+  customerId     String
+  scheduledAt    DateTime
+  doctorName     String
+  treatment      String?
+  status         AppointmentStatus @default(SCHEDULED)
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer       Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([organizationId, scheduledAt])
+  @@index([customerId, scheduledAt])
 }

@@ -17,10 +17,6 @@ export default async function ChannelSettingsPage() {
     <ChannelsClient
       organizationName={user.hospital.name}
       appUrl={process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}
-      lineEnvironmentConfigured={{
-        channelId: Boolean(process.env.LINE_TEST_CHANNEL_ID),
-        channelSecret: Boolean(process.env.LINE_TEST_CHANNEL_SECRET),
-      }}
       connections={connections.map((connection) => ({
         channel: connection.channel,
         status: connection.status,

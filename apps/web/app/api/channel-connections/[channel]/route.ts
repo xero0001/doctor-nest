@@ -3,7 +3,6 @@ import { getDatabase } from "@doctornest/database";
 import { getCurrentUser } from "@/lib/auth";
 import {
   encryptChannelCredentials,
-  resolveLineCredentials,
   type LineCredentials,
 } from "@/lib/channel-credentials";
 
@@ -85,19 +84,10 @@ export async function POST(request: Request, { params }: RouteContext) {
   let credentialsEncrypted: string | undefined;
 
   if (channel === "LINE" && body?.lineCredentials) {
-    const environmentCredentials = resolveLineCredentials({
-      credentialsEncrypted: null,
-      externalAccountId,
-    });
-    const channelId =
-      body.lineCredentials.channelId?.trim() ||
-      environmentCredentials.channelId;
-    const channelSecret =
-      body.lineCredentials.channelSecret?.trim() ||
-      environmentCredentials.channelSecret;
+    const channelId = body.lineCredentials.channelId?.trim();
+    const channelSecret = body.lineCredentials.channelSecret?.trim();
     const channelAccessToken =
-      body.lineCredentials.channelAccessToken?.trim() ||
-      environmentCredentials.channelAccessToken;
+      body.lineCredentials.channelAccessToken?.trim();
 
     if (!channelId || !channelSecret || !channelAccessToken) {
       return Response.json(

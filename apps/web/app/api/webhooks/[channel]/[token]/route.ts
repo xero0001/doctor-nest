@@ -2,7 +2,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 
 import { getDatabase } from "@doctornest/database";
 
-import { resolveLineCredentials } from "@/lib/channel-credentials";
+import { decryptLineCredentials } from "@/lib/channel-credentials";
 
 const supportedChannels = [
   "KAKAO",
@@ -56,7 +56,6 @@ type WebhookConnection = {
   id: string;
   hospitalId: string;
   credentialsEncrypted: string | null;
-  externalAccountId: string | null;
 };
 
 function isSupportedChannel(channel: string): channel is SupportedChannel {
@@ -346,7 +345,6 @@ export async function POST(request: Request, { params }: RouteContext) {
       id: true,
       hospitalId: true,
       credentialsEncrypted: true,
-      externalAccountId: true,
     },
   });
 
@@ -357,19 +355,19 @@ export async function POST(request: Request, { params }: RouteContext) {
   const rawBody = await request.text();
 
   if (channel === "LINE") {
-    let credentials;
-    try {
-      credentials = resolveLineCredentials(connection);
-    } catch {
+    if (!connection.credentialsEncrypted) {
       return Response.json(
-        { error: "LINE 자격증명을 읽지 못했습니다." },
+        { error: "LINE 자격증명이 등록되지 않았습니다." },
         { status: 503 },
       );
     }
 
-    if (!credentials.channelSecret) {
+    let credentials;
+    try {
+      credentials = decryptLineCredentials(connection.credentialsEncrypted);
+    } catch {
       return Response.json(
-        { error: "LINE Channel secret이 등록되지 않았습니다." },
+        { error: "LINE 자격증명을 읽지 못했습니다." },
         { status: 503 },
       );
     }
@@ -400,7 +398,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
       const customerName = await getLineDisplayName(
         lineEvent.source.userId,
-        credentials.channelAccessToken ?? "",
+        credentials.channelAccessToken,
       );
       results.push(
         await persistInboundEvent(connection, channel, {
@@ -420,8 +418,8 @@ export async function POST(request: Request, { params }: RouteContext) {
     await getDatabase().channelConnection.update({
       where: { id: connection.id },
       data: {
-        status: credentials.channelAccessToken ? "CONNECTED" : "CONFIGURING",
-        connectedAt: credentials.channelAccessToken ? new Date() : null,
+        status: "CONNECTED",
+        connectedAt: new Date(),
       },
     });
 

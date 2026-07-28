@@ -177,15 +177,10 @@ export function ChannelsClient({
   connections: initialConnections,
   organizationName,
   appUrl,
-  lineEnvironmentConfigured,
 }: {
   connections: Connection[];
   organizationName: string;
   appUrl: string;
-  lineEnvironmentConfigured: {
-    channelId: boolean;
-    channelSecret: boolean;
-  };
 }) {
   const [connections, setConnections] = useState(initialConnections);
   const [selectedChannel, setSelectedChannel] = useState<ChannelType | null>(
@@ -644,8 +639,6 @@ export function ChannelsClient({
                         placeholder={
                           selectedConnection.hasCredentials
                             ? "등록됨 · 변경할 때만 입력"
-                            : lineEnvironmentConfigured.channelId
-                              ? "Vercel 환경변수에 등록됨"
                             : "1234567890"
                         }
                       />
@@ -666,8 +659,6 @@ export function ChannelsClient({
                         placeholder={
                           selectedConnection.hasCredentials
                             ? "등록됨 · 변경할 때만 입력"
-                            : lineEnvironmentConfigured.channelSecret
-                              ? "Vercel 환경변수에 등록됨"
                             : "Channel secret"
                         }
                       />

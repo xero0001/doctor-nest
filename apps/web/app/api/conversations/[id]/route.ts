@@ -1,7 +1,7 @@
 import { getDatabase } from "@doctornest/database";
 
 import { getCurrentUser } from "@/lib/auth";
-import { resolveLineCredentials } from "@/lib/channel-credentials";
+import { decryptLineCredentials } from "@/lib/channel-credentials";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -218,11 +218,13 @@ export async function POST(request: Request, { params }: RouteContext) {
       },
       select: {
         credentialsEncrypted: true,
-        externalAccountId: true,
       },
     });
 
-    if (!connection || !conversation.patientChannel?.externalCustomerId) {
+    if (
+      !connection?.credentialsEncrypted ||
+      !conversation.patientChannel?.externalCustomerId
+    ) {
       return Response.json(
         { error: "LINE Messaging API 연동을 먼저 완료해 주세요." },
         { status: 409 },
@@ -231,14 +233,9 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     let accessToken: string;
     try {
-      const credentials = resolveLineCredentials(connection);
-      if (!credentials.channelAccessToken) {
-        return Response.json(
-          { error: "LINE Channel access token을 먼저 등록해 주세요." },
-          { status: 409 },
-        );
-      }
-      accessToken = credentials.channelAccessToken;
+      accessToken = decryptLineCredentials(
+        connection.credentialsEncrypted,
+      ).channelAccessToken;
     } catch {
       return Response.json(
         { error: "LINE 자격증명을 읽지 못했습니다." },

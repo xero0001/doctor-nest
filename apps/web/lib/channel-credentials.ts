@@ -11,11 +11,6 @@ export type LineCredentials = {
   channelAccessToken: string;
 };
 
-export type StoredChannelCredentials = {
-  credentialsEncrypted: string | null;
-  externalAccountId: string | null;
-};
-
 const credentialVersion = "v1";
 
 function getCredentialKey() {
@@ -89,29 +84,5 @@ export function decryptLineCredentials(value: string): LineCredentials {
     channelId: parsed.channelId,
     channelSecret: parsed.channelSecret,
     channelAccessToken: parsed.channelAccessToken,
-  };
-}
-
-export function resolveLineCredentials({
-  credentialsEncrypted,
-  externalAccountId,
-}: StoredChannelCredentials): Partial<LineCredentials> {
-  const storedCredentials: Partial<LineCredentials> = credentialsEncrypted
-    ? decryptLineCredentials(credentialsEncrypted)
-    : {};
-  const isTestAccount =
-    Boolean(process.env.LINE_TEST_BASIC_ID) &&
-    externalAccountId === process.env.LINE_TEST_BASIC_ID;
-
-  if (!isTestAccount) return storedCredentials;
-
-  return {
-    channelId:
-      storedCredentials.channelId ?? process.env.LINE_TEST_CHANNEL_ID,
-    channelSecret:
-      storedCredentials.channelSecret ?? process.env.LINE_TEST_CHANNEL_SECRET,
-    channelAccessToken:
-      storedCredentials.channelAccessToken ??
-      process.env.LINE_TEST_CHANNEL_ACCESS_TOKEN,
   };
 }

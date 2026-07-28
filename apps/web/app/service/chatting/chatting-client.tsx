@@ -365,6 +365,7 @@ export function ChattingClient({
   const [loadingRoomId, setLoadingRoomId] = useState<string | null>(null);
   const [detailError, setDetailError] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [autoTranslate, setAutoTranslate] = useState(true);
   const detailRequestId = useRef(0);
 
   const visibleRooms = useMemo(() => {
@@ -545,7 +546,7 @@ export function ChattingClient({
       const response = await fetch(`/api/conversations/${currentRoom.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: message }),
+        body: JSON.stringify({ content: message, autoTranslate }),
       });
       const result = (await response.json()) as {
         message?: ConversationItem["messages"][number];
@@ -1040,19 +1041,44 @@ export function ChattingClient({
 
         <div className="shrink-0 border-t border-[#dfe3ec] bg-white p-3">
           <div className="mx-auto max-w-[740px]">
-            <div className="mb-2 flex items-center gap-2 text-[9px] text-[#858c9e]">
-              <button
-                type="button"
-                onClick={() =>
-                  setDraft(
-                    "문의 주신 내용을 확인했습니다. 예약 가능한 시간을 확인해 바로 안내드리겠습니다.",
-                  )
-                }
-                className="flex items-center gap-1 rounded-md bg-[#eef2ff] px-2 py-1 font-semibold text-[#3157f6]"
-              >
-                <WandSparkles className="size-3" /> AI 답변 제안
-              </button>
-              <span>고객 언어에 맞춰 자동 번역됩니다.</span>
+            <div className="mb-2 flex items-center justify-between gap-3 text-xs text-[#858c9e]">
+              <div className="flex min-w-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDraft(
+                      "문의 주신 내용을 확인했습니다. 예약 가능한 시간을 확인해 바로 안내드리겠습니다.",
+                    )
+                  }
+                  className="flex shrink-0 items-center gap-1 rounded-md bg-[#eef2ff] px-2 py-1 font-semibold text-[#3157f6]"
+                >
+                  <WandSparkles className="size-3" /> AI 답변 제안
+                </button>
+                <span className="truncate">
+                  {autoTranslate
+                    ? "고객 언어에 맞춰 자동 번역됩니다."
+                    : "입력한 원문 그대로 발송됩니다."}
+                </span>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="font-semibold text-[#596176]">자동 번역</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={autoTranslate}
+                  aria-label="자동 번역"
+                  onClick={() => setAutoTranslate((enabled) => !enabled)}
+                  className={`relative h-5 w-9 rounded-full transition-colors ${
+                    autoTranslate ? "bg-[#3157f6]" : "bg-[#c7ccd8]"
+                  }`}
+                >
+                  <span
+                    className={`absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform ${
+                      autoTranslate ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
             <div className="rounded-xl border border-[#dfe3ec] bg-white p-2 focus-within:border-[#7187f6] focus-within:ring-2 focus-within:ring-[#3157f6]/10">
               <textarea

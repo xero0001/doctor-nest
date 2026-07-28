@@ -179,8 +179,10 @@ export async function POST(request: Request, { params }: RouteContext) {
   const { id } = await params;
   const body = (await request.json().catch(() => null)) as {
     content?: string;
+    autoTranslate?: boolean;
   } | null;
   const content = body?.content?.trim();
+  const autoTranslate = body?.autoTranslate !== false;
 
   if (!content) {
     return Response.json({ error: "메시지를 입력해 주세요." }, { status: 400 });
@@ -222,23 +224,32 @@ export async function POST(request: Request, { params }: RouteContext) {
     );
   }
 
-  let translation;
-  try {
-    translation = await translateStaffReply(
-      content,
-      conversation.patient.language,
-      user.hospitalId,
-    );
-  } catch (error) {
-    return Response.json(
-      {
-        error:
-          error instanceof ChatTranslationError
-            ? error.message
-            : "고객 언어로 번역하지 못했습니다.",
-      },
-      { status: 502 },
-    );
+  let translation = {
+    sourceLanguage: "ko",
+    sourceLanguageName: "한국어",
+    translatedContent: content,
+    translatedLanguage: "ko",
+    translatedLanguageName: "한국어",
+  };
+
+  if (autoTranslate) {
+    try {
+      translation = await translateStaffReply(
+        content,
+        conversation.patient.language,
+        user.hospitalId,
+      );
+    } catch (error) {
+      return Response.json(
+        {
+          error:
+            error instanceof ChatTranslationError
+              ? error.message
+              : "고객 언어로 번역하지 못했습니다.",
+        },
+        { status: 502 },
+      );
+    }
   }
 
   const deliveredContent = translation.translatedContent || content;

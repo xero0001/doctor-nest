@@ -323,11 +323,9 @@ function ChannelBadge({
 
 export function ChattingClient({
   conversations,
-  organizationName,
   manualFolders,
 }: {
   conversations: ConversationItem[];
-  organizationName: string;
   manualFolders: ManualFolderItem[];
 }) {
   const [chatTab, setChatTab] = useState<ChatTab>("OPEN");
@@ -585,7 +583,7 @@ export function ChattingClient({
   return (
     <div className="grid h-full max-h-full min-h-0 min-w-[1260px] grid-cols-[280px_250px_minmax(420px,1fr)_310px] overflow-x-auto overflow-y-hidden bg-white">
       <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-r border-[#e7eaf1] bg-white">
-        <header className="border-b border-[#e8eaf1] px-4 pb-4 pt-4">
+        <header className="h-[72px] shrink-0 border-b border-[#e8eaf1] px-4 pt-4">
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2">
@@ -597,9 +595,6 @@ export function ChattingClient({
                   통합 상담
                 </span>
               </div>
-              <p className="mt-1 text-[10px] font-semibold text-[#9298aa]">
-                {organizationName}
-              </p>
             </div>
             <button
               type="button"

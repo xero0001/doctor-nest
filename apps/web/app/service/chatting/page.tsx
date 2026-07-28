@@ -141,7 +141,6 @@ export default async function ChattingPage() {
   return (
     <ChattingClient
       conversations={serializedConversations}
-      organizationName={user.hospital.name}
       manualFolders={buildManualFolderTree(
         manualFolders.map((folder) => ({
           id: folder.id,

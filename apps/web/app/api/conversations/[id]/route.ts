@@ -108,6 +108,57 @@ export async function GET(_request: Request, { params }: RouteContext) {
   );
 }
 
+export async function PATCH(_request: Request, { params }: RouteContext) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return Response.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const database = getDatabase();
+  const existingConversation = await database.conversation.findFirst({
+    where: {
+      id,
+      hospitalId: user.hospitalId,
+    },
+    select: { id: true },
+  });
+
+  if (!existingConversation) {
+    return Response.json(
+      { error: "채팅을 찾을 수 없습니다." },
+      { status: 404 },
+    );
+  }
+
+  await database.conversation.update({
+    where: { id: existingConversation.id },
+    data: { unreadCount: 0 },
+  });
+
+  const conversation = await findConversationForHospital(
+    existingConversation.id,
+    user.hospitalId,
+  );
+
+  if (!conversation) {
+    return Response.json(
+      { error: "채팅을 찾을 수 없습니다." },
+      { status: 404 },
+    );
+  }
+
+  return Response.json(
+    { conversation: serializeConversation(conversation) },
+    {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    },
+  );
+}
+
 export async function POST(request: Request, { params }: RouteContext) {
   const user = await getCurrentUser();
 

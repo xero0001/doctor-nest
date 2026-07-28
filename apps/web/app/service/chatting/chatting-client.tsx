@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
   BadgeCheck,
@@ -32,6 +32,8 @@ import {
   WandSparkles,
 } from "lucide-react";
 
+import { SectionTabs } from "@/features/chatting/components/section-tabs";
+
 import type {
   ChatChannel,
   ConversationItem,
@@ -40,6 +42,11 @@ import type {
 
 type ChatTab = "OPEN" | "CLOSED" | "IMPORTANT";
 type ManualDocumentItem = ManualFolderItem["documents"][number];
+
+const knowledgeTabs = [
+  { value: "원내매뉴얼", label: "원내매뉴얼" },
+  { value: "콘텐츠", label: "콘텐츠" },
+] as const;
 
 const channelMeta: Record<
   ChatChannel,
@@ -384,6 +391,35 @@ export function ChattingClient({
   const selectedManual =
     manualDocuments.find((document) => document.id === selectedManualId) ??
     manualDocuments[0];
+  const chatTabs = useMemo(() => {
+    let openCount = 0;
+    let closedCount = 0;
+    let importantCount = 0;
+
+    for (const room of rooms) {
+      if (room.status === "OPEN") openCount += 1;
+      if (room.status === "CLOSED") closedCount += 1;
+      if (room.important) importantCount += 1;
+    }
+
+    return [
+      {
+        value: "OPEN",
+        label: "진행 중",
+        count: openCount,
+      },
+      {
+        value: "CLOSED",
+        label: "완료",
+        count: closedCount,
+      },
+      {
+        value: "IMPORTANT",
+        label: "중요",
+        count: importantCount,
+      },
+    ] as const;
+  }, [rooms]);
 
   function toggleManualFolder(id: string) {
     setOpenManualFolderIds((current) => {
@@ -399,7 +435,7 @@ export function ChattingClient({
     });
   }
 
-  async function selectConversation(id: string) {
+  const selectConversation = useCallback(async (id: string) => {
     setSelectedRoomId(id);
     setDetailError("");
     setLoadingRoomId(id);
@@ -408,6 +444,7 @@ export function ChattingClient({
 
     try {
       const response = await fetch(`/api/conversations/${id}`, {
+        method: "PATCH",
         cache: "no-store",
       });
       const result = (await response.json()) as {
@@ -436,7 +473,54 @@ export function ChattingClient({
         setLoadingRoomId(null);
       }
     }
-  }
+  }, []);
+
+  const initialConversationId = conversations[0]?.id ?? "";
+  const initialUnreadCount = conversations[0]?.unreadCount ?? 0;
+
+  useEffect(() => {
+    if (!initialConversationId || initialUnreadCount === 0) return;
+
+    const abortController = new AbortController();
+
+    async function markInitialConversationAsRead() {
+      try {
+        const response = await fetch(
+          `/api/conversations/${initialConversationId}`,
+          {
+            method: "PATCH",
+            cache: "no-store",
+            signal: abortController.signal,
+          },
+        );
+        const result = (await response.json()) as {
+          conversation?: ConversationItem;
+          error?: string;
+        };
+
+        if (!response.ok || !result.conversation) {
+          throw new Error(result.error ?? "채팅 내용을 불러오지 못했습니다.");
+        }
+
+        setRooms((current) =>
+          current.map((room) =>
+            room.id === initialConversationId ? result.conversation! : room,
+          ),
+        );
+      } catch (error) {
+        if (abortController.signal.aborted) return;
+        setDetailError(
+          error instanceof Error
+            ? error.message
+            : "채팅 내용을 불러오지 못했습니다.",
+        );
+      }
+    }
+
+    void markInitialConversationAsRead();
+
+    return () => abortController.abort();
+  }, [initialConversationId, initialUnreadCount]);
 
   async function sendMessage() {
     const message = draft.trim();
@@ -525,8 +609,17 @@ export function ChattingClient({
               <Settings2 className="size-4" />
             </button>
           </div>
+        </header>
 
-          <label className="mt-4 flex h-9 items-center gap-2 rounded-xl border border-[#e1e5ed] bg-[#f9fafc] px-3 text-[#949bad] focus-within:border-[#7187f6] focus-within:bg-white focus-within:ring-3 focus-within:ring-[#3157f6]/10">
+        <SectionTabs
+          ariaLabel="채팅 상태"
+          options={chatTabs}
+          value={chatTab}
+          onValueChange={setChatTab}
+        />
+
+        <div className="border-b border-[#eceef4] px-3 py-2.5">
+          <label className="flex h-9 items-center gap-2 rounded-xl border border-[#e1e5ed] bg-[#f9fafc] px-3 text-[#949bad] focus-within:border-[#7187f6] focus-within:bg-white focus-within:ring-3 focus-within:ring-[#3157f6]/10">
             <Search className="size-3.5" />
             <input
               value={query}
@@ -535,44 +628,6 @@ export function ChattingClient({
               className="min-w-0 flex-1 bg-transparent text-[11px] text-[#30364b] outline-none placeholder:text-[#aab0bf]"
             />
           </label>
-        </header>
-
-        <div className="grid grid-cols-3 border-b border-[#e8eaf1] px-3">
-          {(
-            [
-              ["OPEN", "진행 중"],
-              ["CLOSED", "완료"],
-              ["IMPORTANT", "중요"],
-            ] as const
-          ).map(([tab, label]) => {
-            const count =
-              tab === "IMPORTANT"
-                ? rooms.filter((room) => room.important).length
-                : rooms.filter((room) => room.status === tab).length;
-
-            return (
-              <button
-                type="button"
-                key={tab}
-                onClick={() => setChatTab(tab)}
-                className={`relative flex h-11 items-center justify-center gap-1.5 text-xs font-semibold ${
-                  chatTab === tab ? "text-[#252a3e]" : "text-[#9ca1b1]"
-                }`}
-              >
-                {label}
-                <span
-                  className={
-                    chatTab === tab ? "text-[#3157f6]" : "text-[#adb2bf]"
-                  }
-                >
-                  {count}
-                </span>
-                {chatTab === tab ? (
-                  <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-[#3157f6]" />
-                ) : null}
-              </button>
-            );
-          })}
         </div>
 
         <div className="border-b border-[#eceef4] px-3 py-2.5">
@@ -682,23 +737,12 @@ export function ChattingClient({
           </h2>
         </header>
 
-        <div className="grid shrink-0 grid-cols-2 border-b border-[#e8eaf1] px-3">
-          {(["원내매뉴얼", "콘텐츠"] as const).map((tab) => (
-            <button
-              type="button"
-              key={tab}
-              onClick={() => setKnowledgeTab(tab)}
-              className={`relative h-11 text-xs font-semibold ${
-                knowledgeTab === tab ? "text-[#2c3146]" : "text-[#9da2b2]"
-              }`}
-            >
-              {tab}
-              {knowledgeTab === tab ? (
-                <span className="absolute inset-x-4 bottom-0 h-[2px] rounded-full bg-[#6657e9]" />
-              ) : null}
-            </button>
-          ))}
-        </div>
+        <SectionTabs
+          ariaLabel="상담 백과사전 구분"
+          options={knowledgeTabs}
+          value={knowledgeTab}
+          onValueChange={setKnowledgeTab}
+        />
 
         <div className="shrink-0 border-b border-[#edf0f5] p-3">
           <label className="flex h-8 items-center gap-2 rounded-lg border border-[#e2e5ed] px-3 text-[#9ba1b1] focus-within:border-[#8676ef]">

@@ -1,7 +1,17 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
-  "globalEnv": ["DATABASE_URL", "NEXT_PUBLIC_APP_URL"],
+  "globalEnv": [
+    "AI_GATEWAY_API_KEY",
+    "AI_GATEWAY_CHAT_COACH_MODEL",
+    "AI_GATEWAY_TRANSLATION_MODEL",
+    "BETTER_AUTH_SECRET",
+    "BETTER_AUTH_URL",
+    "CHANNEL_CREDENTIALS_KEY",
+    "DATABASE_URL",
+    "DOCTORNEST_AUTH_SEED",
+    "NEXT_PUBLIC_APP_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

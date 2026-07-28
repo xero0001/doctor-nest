@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "auth:seed": "node scripts/seed-auth.mjs",
+    "prebuild": "pnpm --filter @doctornest/database db:generate",
     "build": "next build",
     "check-types": "tsc --noEmit",
     "dev": "next dev --turbopack --port 3000",

@@ -119,7 +119,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
   );
 }
 
-export async function PATCH(_request: Request, { params }: RouteContext) {
+export async function PATCH(request: Request, { params }: RouteContext) {
   const user = await getCurrentUser();
 
   if (!user) {
@@ -127,6 +127,21 @@ export async function PATCH(_request: Request, { params }: RouteContext) {
   }
 
   const { id } = await params;
+  const body = (await request.json().catch(() => null)) as {
+    important?: unknown;
+  } | null;
+
+  if (
+    body &&
+    Object.hasOwn(body, "important") &&
+    typeof body.important !== "boolean"
+  ) {
+    return Response.json(
+      { error: "중요 표시 값이 올바르지 않습니다." },
+      { status: 400 },
+    );
+  }
+
   const database = getDatabase();
   const existingConversation = await database.conversation.findFirst({
     where: {
@@ -145,7 +160,10 @@ export async function PATCH(_request: Request, { params }: RouteContext) {
 
   await database.conversation.update({
     where: { id: existingConversation.id },
-    data: { unreadCount: 0 },
+    data:
+      typeof body?.important === "boolean"
+        ? { important: body.important }
+        : { unreadCount: 0 },
   });
 
   const conversation = await findConversationForHospital(

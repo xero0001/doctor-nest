@@ -481,6 +481,7 @@ export function ChattingClient({
   const detailRequestId = useRef(0);
   const coachRequestId = useRef(0);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const importantRequestIds = useRef(new Set<string>());
 
   const visibleRooms = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -597,6 +598,64 @@ export function ChattingClient({
 
       return next;
     });
+  }
+
+  async function toggleConversationImportant(id: string) {
+    if (importantRequestIds.current.has(id)) return;
+
+    const room = rooms.find((conversation) => conversation.id === id);
+    if (!room) return;
+
+    const previousImportant = room.important;
+    const nextImportant = !previousImportant;
+    importantRequestIds.current.add(id);
+    setDetailError("");
+    setRooms((current) =>
+      current.map((conversation) =>
+        conversation.id === id
+          ? { ...conversation, important: nextImportant }
+          : conversation,
+      ),
+    );
+
+    try {
+      const response = await fetch(`/api/conversations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ important: nextImportant }),
+        cache: "no-store",
+      });
+      const result = (await response.json()) as {
+        conversation?: ConversationItem;
+        error?: string;
+      };
+
+      if (!response.ok || !result.conversation) {
+        throw new Error(result.error ?? "중요 표시를 변경하지 못했습니다.");
+      }
+
+      setRooms((current) =>
+        current.map((conversation) =>
+          conversation.id === id ? result.conversation! : conversation,
+        ),
+      );
+    } catch (error) {
+      setRooms((current) =>
+        current.map((conversation) =>
+          conversation.id === id &&
+          conversation.important === nextImportant
+            ? { ...conversation, important: previousImportant }
+            : conversation,
+        ),
+      );
+      setDetailError(
+        error instanceof Error
+          ? error.message
+          : "중요 표시를 변경하지 못했습니다.",
+      );
+    } finally {
+      importantRequestIds.current.delete(id);
+    }
   }
 
   const selectConversation = useCallback(async (id: string) => {
@@ -941,18 +1000,20 @@ export function ChattingClient({
             const selected = currentRoom.id === room.id;
 
             return (
-              <button
-                type="button"
+              <div
                 key={room.id}
-                onClick={() => void selectConversation(room.id)}
-                className={`relative w-full border-b border-[#f0f1f5] px-4 py-3.5 text-left transition-colors ${
+                className={`relative w-full border-b border-[#f0f1f5] transition-colors ${
                   selected ? "bg-[#edf3ff]" : "hover:bg-[#f8f9fc]"
                 }`}
               >
                 {selected ? (
                   <span className="absolute inset-y-0 left-0 w-[3px] bg-[#3157f6]" />
                 ) : null}
-                <div className="flex items-start justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => void selectConversation(room.id)}
+                  className="w-full px-4 py-3.5 pr-12 text-left"
+                >
                   <div className="flex min-w-0 items-center gap-2">
                     <ChannelBadge channel={room.channel} />
                     <span className="truncate text-base font-bold text-[#2f3449]">
@@ -964,25 +1025,33 @@ export function ChattingClient({
                       </span>
                     ) : null}
                   </div>
+                  <div className="mt-2 flex h-10 items-end justify-between gap-3 pl-[30px]">
+                    <div className="flex h-full min-w-0 flex-1 items-center">
+                      <p className="line-clamp-2 text-sm leading-relaxed text-[#767d91]">
+                        {latestMessageContent}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-[9px] text-[#a8adba]">
+                      {formatListTime(room.lastMessageAt)}
+                    </span>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void toggleConversationImportant(room.id)}
+                  aria-pressed={room.important}
+                  aria-label={`${room.customer.name} 중요 표시 ${room.important ? "해제" : "추가"}`}
+                  className="absolute right-2.5 top-2.5 z-10 flex size-8 items-center justify-center rounded-lg hover:bg-white/70"
+                >
                   <Star
-                    className={`size-3.5 shrink-0 ${
+                    className={`size-4 shrink-0 transition-colors ${
                       room.important
                         ? "fill-[#ffcf34] text-[#ffbe19]"
-                        : "text-[#d2d5de]"
+                        : "text-[#d2d5de] hover:text-[#ffbe19]"
                     }`}
                   />
-                </div>
-                <div className="mt-2 flex h-10 items-end justify-between gap-3 pl-[30px]">
-                  <div className="flex h-full min-w-0 flex-1 items-center">
-                    <p className="line-clamp-2 text-sm leading-relaxed text-[#767d91]">
-                      {latestMessageContent}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-[9px] text-[#a8adba]">
-                    {formatListTime(room.lastMessageAt)}
-                  </span>
-                </div>
-              </button>
+                </button>
+              </div>
             );
           })}
 

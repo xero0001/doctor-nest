@@ -39,6 +39,7 @@ import type {
 } from "./chat-types";
 
 type ChatTab = "OPEN" | "CLOSED" | "IMPORTANT";
+type ManualDocumentItem = ManualFolderItem["documents"][number];
 
 const channelMeta: Record<
   ChatChannel,
@@ -132,6 +133,163 @@ function formatBirthDate(value: string | null) {
   return new Intl.DateTimeFormat("ko-KR").format(new Date(value));
 }
 
+function flattenManualDocuments(
+  folders: ManualFolderItem[],
+): ManualDocumentItem[] {
+  return folders.flatMap((folder) => [
+    ...folder.documents,
+    ...flattenManualDocuments(folder.children),
+  ]);
+}
+
+function collectManualFolderIds(folders: ManualFolderItem[]): string[] {
+  return folders.flatMap((folder) => [
+    folder.id,
+    ...collectManualFolderIds(folder.children),
+  ]);
+}
+
+function countManualDocuments(folder: ManualFolderItem): number {
+  return (
+    folder.documents.length +
+    folder.children.reduce(
+      (count, child) => count + countManualDocuments(child),
+      0,
+    )
+  );
+}
+
+function filterManualFolderTree(
+  folders: ManualFolderItem[],
+  query: string,
+): ManualFolderItem[] {
+  if (!query) return folders;
+
+  return folders.flatMap((folder) => {
+    const folderMatches = folder.name.toLowerCase().includes(query);
+    const children = filterManualFolderTree(folder.children, query);
+    const documents = folderMatches
+      ? folder.documents
+      : folder.documents.filter((document) =>
+          [
+            document.title,
+            document.slug,
+            ...document.tags.map((tag) => tag.name),
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(query),
+        );
+
+    if (!folderMatches && children.length === 0 && documents.length === 0) {
+      return [];
+    }
+
+    return [
+      {
+        ...folder,
+        children: folderMatches ? folder.children : children,
+        documents,
+      },
+    ];
+  });
+}
+
+function ManualFolderBranch({
+  folder,
+  depth,
+  forceExpanded,
+  openFolderIds,
+  selectedManualId,
+  onToggleFolder,
+  onSelectManual,
+}: {
+  folder: ManualFolderItem;
+  depth: number;
+  forceExpanded: boolean;
+  openFolderIds: Set<string>;
+  selectedManualId: string;
+  onToggleFolder: (id: string) => void;
+  onSelectManual: (id: string) => void;
+}) {
+  const expanded = forceExpanded || openFolderIds.has(folder.id);
+  const contentId = `manual-folder-${folder.id}`;
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => onToggleFolder(folder.id)}
+        aria-expanded={expanded}
+        aria-controls={contentId}
+        className="flex w-full items-center gap-2 py-2.5 pr-4 text-left text-[11px] font-bold text-[#51586d] hover:bg-[#f8f9fc]"
+        style={{ paddingLeft: 16 + depth * 14 }}
+      >
+        <ChevronRight
+          className={`size-3 shrink-0 transition-transform ${
+            expanded ? "rotate-90" : ""
+          }`}
+        />
+        <Folder
+          className={`size-3.5 shrink-0 ${
+            expanded ? "fill-[#f3f0ff] text-[#8066ec]" : "text-[#8d93a5]"
+          }`}
+        />
+        <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+        <span className="text-[9px] font-medium text-[#a0a5b3]">
+          {countManualDocuments(folder)}
+        </span>
+      </button>
+
+      {expanded ? (
+        <div id={contentId}>
+          {folder.children.map((child) => (
+            <ManualFolderBranch
+              key={child.id}
+              folder={child}
+              depth={depth + 1}
+              forceExpanded={forceExpanded}
+              openFolderIds={openFolderIds}
+              selectedManualId={selectedManualId}
+              onToggleFolder={onToggleFolder}
+              onSelectManual={onSelectManual}
+            />
+          ))}
+
+          {folder.documents.map((document) => {
+            const selected = selectedManualId === document.id;
+
+            return (
+              <button
+                type="button"
+                key={document.id}
+                onClick={() => onSelectManual(document.id)}
+                className={`flex w-full items-center gap-2 py-2.5 pr-4 text-left text-[10.5px] font-semibold ${
+                  selected
+                    ? "bg-[#f0ebff] text-[#6657e9]"
+                    : "text-[#646b7f] hover:bg-[#f8f9fc]"
+                }`}
+                style={{ paddingLeft: 36 + depth * 14 }}
+              >
+                <Bookmark
+                  className={`size-3.5 shrink-0 ${
+                    selected
+                      ? "fill-[#8066ec] text-[#8066ec]"
+                      : "text-[#a5aaba]"
+                  }`}
+                />
+                <span className="min-w-0 flex-1 truncate">
+                  {document.title}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ChannelBadge({
   channel,
   large = false,
@@ -178,8 +336,11 @@ export function ChattingClient({
     "원내매뉴얼",
   );
   const [manualQuery, setManualQuery] = useState("");
+  const [openManualFolderIds, setOpenManualFolderIds] = useState<Set<string>>(
+    () => new Set(collectManualFolderIds(manualFolders)),
+  );
   const [selectedManualId, setSelectedManualId] = useState(
-    () => manualFolders.flatMap((folder) => folder.documents)[0]?.id ?? "",
+    () => flattenManualDocuments(manualFolders)[0]?.id ?? "",
   );
   const [rooms, setRooms] = useState(conversations);
   const [loadingRoomId, setLoadingRoomId] = useState<string | null>(null);
@@ -213,32 +374,30 @@ export function ChattingClient({
     rooms[0];
   const normalizedManualQuery = manualQuery.trim().toLowerCase();
   const filteredManualFolders = useMemo(
-    () =>
-      manualFolders
-        .map((folder) => ({
-          ...folder,
-          documents: folder.documents.filter((document) => {
-            const searchable = [
-              folder.name,
-              document.title,
-              ...document.tags.map((tag) => tag.name),
-            ]
-              .join(" ")
-              .toLowerCase();
-            return (
-              !normalizedManualQuery ||
-              searchable.includes(normalizedManualQuery)
-            );
-          }),
-        }))
-        .filter((folder) => folder.documents.length > 0),
+    () => filterManualFolderTree(manualFolders, normalizedManualQuery),
     [manualFolders, normalizedManualQuery],
   );
+  const manualDocuments = useMemo(
+    () => flattenManualDocuments(manualFolders),
+    [manualFolders],
+  );
   const selectedManual =
-    manualFolders
-      .flatMap((folder) => folder.documents)
-      .find((document) => document.id === selectedManualId) ??
-    manualFolders.flatMap((folder) => folder.documents)[0];
+    manualDocuments.find((document) => document.id === selectedManualId) ??
+    manualDocuments[0];
+
+  function toggleManualFolder(id: string) {
+    setOpenManualFolderIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+
+      return next;
+    });
+  }
 
   async function selectConversation(id: string) {
     setSelectedRoomId(id);
@@ -340,15 +499,12 @@ export function ChattingClient({
   const currentMeta = channelMeta[currentRoom.channel];
 
   return (
-    <div className="grid h-full min-w-[1260px] grid-cols-[280px_250px_minmax(420px,1fr)_310px] overflow-x-auto bg-white">
-      <section className="flex min-w-0 flex-col border-r border-[#e7eaf1] bg-white">
+    <div className="grid h-full max-h-full min-h-0 min-w-[1260px] grid-cols-[280px_250px_minmax(420px,1fr)_310px] overflow-x-auto overflow-y-hidden bg-white">
+      <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-r border-[#e7eaf1] bg-white">
         <header className="border-b border-[#e8eaf1] px-4 pb-4 pt-4">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[10px] font-semibold text-[#9298aa]">
-                {organizationName}
-              </p>
-              <div className="mt-1 flex items-center gap-2">
+              <div className="flex items-center gap-2">
                 <h1 className="text-base font-bold tracking-[-0.03em]">
                   고객채팅
                 </h1>
@@ -357,6 +513,9 @@ export function ChattingClient({
                   통합 상담
                 </span>
               </div>
+              <p className="mt-1 text-[10px] font-semibold text-[#9298aa]">
+                {organizationName}
+              </p>
             </div>
             <button
               type="button"
@@ -516,13 +675,14 @@ export function ChattingClient({
         </div>
       </section>
 
-      <section className="flex min-w-0 flex-col border-r border-[#e8eaf1] bg-white">
-        <header className="flex h-[72px] shrink-0 items-center border-b border-[#e8eaf1] px-4">
-          <BookOpenText className="mr-2 size-[17px] text-[#6657e9]" />
-          <h2 className="text-[14px] font-bold">상담 백과사전</h2>
+      <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-r border-[#e8eaf1] bg-white">
+        <header className="flex h-[72px] shrink-0 items-start border-b border-[#e8eaf1] px-4 pt-4">
+          <h2 className="text-base font-bold tracking-[-0.03em]">
+            상담 백과사전
+          </h2>
         </header>
 
-        <div className="grid grid-cols-2 border-b border-[#e8eaf1] px-3">
+        <div className="grid shrink-0 grid-cols-2 border-b border-[#e8eaf1] px-3">
           {(["원내매뉴얼", "콘텐츠"] as const).map((tab) => (
             <button
               type="button"
@@ -540,13 +700,13 @@ export function ChattingClient({
           ))}
         </div>
 
-        <div className="border-b border-[#edf0f5] p-3">
+        <div className="shrink-0 border-b border-[#edf0f5] p-3">
           <label className="flex h-8 items-center gap-2 rounded-lg border border-[#e2e5ed] px-3 text-[#9ba1b1] focus-within:border-[#8676ef]">
             <Search className="size-3.5" />
             <input
               value={manualQuery}
               onChange={(event) => setManualQuery(event.target.value)}
-              placeholder="태그명으로 검색"
+              placeholder="폴더, 문서, 태그 검색"
               className="min-w-0 flex-1 bg-transparent text-[11px] outline-none placeholder:text-[#aeb3c0]"
             />
           </label>
@@ -557,42 +717,16 @@ export function ChattingClient({
             <>
               <div className="border-b border-[#e8eaf1] py-2">
                 {filteredManualFolders.map((folder) => (
-                  <div key={folder.id}>
-                    <div className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[11px] font-bold text-[#51586d]">
-                      <ChevronRight className="size-3 rotate-90" />
-                      <Folder className="size-3.5 text-[#8d93a5]" />
-                      <span className="flex-1">{folder.name}</span>
-                      <span className="text-[9px] font-medium text-[#a0a5b3]">
-                        {folder.documents.length}
-                      </span>
-                    </div>
-                    {folder.documents.map((document) => {
-                      const selected = selectedManual?.id === document.id;
-                      return (
-                        <button
-                          type="button"
-                          key={document.id}
-                          onClick={() => setSelectedManualId(document.id)}
-                          className={`flex w-full items-center gap-2 py-2.5 pl-9 pr-4 text-left text-[10.5px] font-semibold ${
-                            selected
-                              ? "bg-[#f0ebff] text-[#6657e9]"
-                              : "text-[#646b7f] hover:bg-[#f8f9fc]"
-                          }`}
-                        >
-                          <Bookmark
-                            className={`size-3.5 ${
-                              selected
-                                ? "fill-[#8066ec] text-[#8066ec]"
-                                : "text-[#a5aaba]"
-                            }`}
-                          />
-                          <span className="min-w-0 flex-1 truncate">
-                            {document.tags[0]?.name ?? document.title}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <ManualFolderBranch
+                    key={folder.id}
+                    folder={folder}
+                    depth={0}
+                    forceExpanded={Boolean(normalizedManualQuery)}
+                    openFolderIds={openManualFolderIds}
+                    selectedManualId={selectedManual?.id ?? ""}
+                    onToggleFolder={toggleManualFolder}
+                    onSelectManual={setSelectedManualId}
+                  />
                 ))}
                 {filteredManualFolders.length === 0 ? (
                   <div className="px-4 py-8 text-center text-[10px] text-[#989eae]">
@@ -663,13 +797,13 @@ export function ChattingClient({
         </div>
       </section>
 
-      <section className="relative flex min-w-0 flex-col bg-[#f2f5fb]">
+      <section className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#f2f5fb]">
         <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-[#e5e8f0] bg-white px-5">
           <div className="flex min-w-0 items-center gap-3">
             <ChannelBadge channel={currentRoom.channel} large />
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="truncate text-base font-bold">
+                <h2 className="truncate text-base font-bold tracking-[-0.03em]">
                   {currentRoom.customer.name}
                 </h2>
                 {currentRoom.customer.tags.includes("VIP") ? (
@@ -870,8 +1004,8 @@ export function ChattingClient({
         </div>
       </section>
 
-      <aside className="flex min-w-0 flex-col border-l border-[#e8eaf1] bg-[#fafbfe]">
-        <header className="flex h-[72px] items-center justify-between border-b border-[#e8eaf1] bg-white px-4">
+      <aside className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-l border-[#e8eaf1] bg-[#fafbfe]">
+        <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-[#e8eaf1] bg-white px-4">
           <div>
             <p className="text-[9px] font-semibold text-[#8d94a6]">고객 정보</p>
             <h2 className="mt-1 text-[14px] font-bold">

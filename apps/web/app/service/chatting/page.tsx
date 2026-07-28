@@ -3,9 +3,53 @@ import { getDatabase } from "@doctornest/database";
 import { requireUser } from "@/lib/auth";
 
 import { ChattingClient } from "./chatting-client";
-import type { ConversationItem } from "./chat-types";
+import type { ConversationItem, ManualFolderItem } from "./chat-types";
 
 export const dynamic = "force-dynamic";
+
+type ManualFolderRecord = {
+  id: string;
+  parentId: string | null;
+  name: string;
+  documents: ManualFolderItem["documents"];
+};
+
+function buildManualFolderTree(folders: ManualFolderRecord[]) {
+  const nodes = new Map<
+    string,
+    ManualFolderRecord & { children: ManualFolderItem[] }
+  >(
+    folders.map((folder) => [
+      folder.id,
+      {
+        ...folder,
+        children: [],
+      },
+    ]),
+  );
+  const roots: ManualFolderItem[] = [];
+
+  for (const folder of folders) {
+    const node = nodes.get(folder.id);
+    if (!node) continue;
+
+    const item: ManualFolderItem = {
+      id: node.id,
+      name: node.name,
+      documents: node.documents,
+      children: node.children,
+    };
+    const parent = folder.parentId ? nodes.get(folder.parentId) : undefined;
+
+    if (parent) {
+      parent.children.push(item);
+    } else {
+      roots.push(item);
+    }
+  }
+
+  return roots;
+}
 
 export default async function ChattingPage() {
   const user = await requireUser();
@@ -47,7 +91,7 @@ export default async function ChattingPage() {
           orderBy: { sortOrder: "asc" },
         },
       },
-      orderBy: { sortOrder: "asc" },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
   ]);
 
@@ -98,21 +142,24 @@ export default async function ChattingPage() {
     <ChattingClient
       conversations={serializedConversations}
       organizationName={user.hospital.name}
-      manualFolders={manualFolders.map((folder) => ({
-        id: folder.id,
-        name: folder.name,
-        documents: folder.documents.map((document) => ({
-          id: document.id,
-          title: document.title,
-          slug: document.slug,
-          contentMarkdown: document.contentMarkdown,
-          tags: document.tags.map(({ tag }) => ({
-            id: tag.id,
-            name: tag.name,
-            color: tag.color,
+      manualFolders={buildManualFolderTree(
+        manualFolders.map((folder) => ({
+          id: folder.id,
+          parentId: folder.parentId,
+          name: folder.name,
+          documents: folder.documents.map((document) => ({
+            id: document.id,
+            title: document.title,
+            slug: document.slug,
+            contentMarkdown: document.contentMarkdown,
+            tags: document.tags.map(({ tag }) => ({
+              id: tag.id,
+              name: tag.name,
+              color: tag.color,
+            })),
           })),
         })),
-      }))}
+      )}
     />
   );
 }

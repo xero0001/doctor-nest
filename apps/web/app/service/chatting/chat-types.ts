@@ -20,6 +20,7 @@ export type ConversationAppointment = {
 export type ManualFolderItem = {
   id: string;
   name: string;
+  children: ManualFolderItem[];
   documents: Array<{
     id: string;
     title: string;

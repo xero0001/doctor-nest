@@ -488,6 +488,17 @@ export function ChattingClient({
   const importantRequestIds = useRef(new Set<string>());
   const conversationSettingRequestIds = useRef(new Map<string, number>());
 
+  useEffect(() => {
+    const composer = composerRef.current;
+    if (!composer) return;
+
+    composer.style.height = "auto";
+    const maxHeight = 160;
+    composer.style.height = `${Math.min(composer.scrollHeight, maxHeight)}px`;
+    composer.style.overflowY =
+      composer.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [draft]);
+
   useEffect(
     () => () => {
       if (chartNumberCopyTimeoutRef.current) {
@@ -1604,9 +1615,9 @@ export function ChattingClient({
                     void sendMessage();
                   }
                 }}
-                rows={2}
+                rows={1}
                 placeholder={`${currentMeta.label}로 메시지를 입력해 주세요.`}
-                className="w-full resize-none bg-transparent px-1 text-[11px] leading-5 text-[#33394e] outline-none placeholder:text-[#adb2bf]"
+                className="min-h-10 w-full resize-none overflow-y-hidden bg-transparent px-1 text-sm leading-6 text-[#33394e] outline-none placeholder:text-[#adb2bf]"
               />
               <div className="flex items-center justify-between pt-1">
                 <div className="flex items-center gap-1 text-[#9198aa]">
@@ -1629,7 +1640,7 @@ export function ChattingClient({
                   type="button"
                   onClick={() => void sendMessage()}
                   disabled={!draft.trim() || isSending}
-                  className="flex h-7 items-center gap-1 rounded-lg bg-[#3157f6] px-3 text-[10px] font-bold text-white disabled:bg-[#d9dde6]"
+                  className="flex h-7 items-center gap-1 rounded-lg bg-[#3157f6] px-3 text-sm font-bold text-white disabled:bg-[#d9dde6]"
                 >
                   {isSending ? (
                     <LoaderCircle className="size-3 animate-spin" />

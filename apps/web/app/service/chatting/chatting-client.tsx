@@ -32,6 +32,7 @@ import {
   WandSparkles,
 } from "lucide-react";
 
+import { LineChannelIcon } from "@/features/channels/components/line-channel-icon";
 import { SectionTabs } from "@/features/chatting/components/section-tabs";
 
 import type {
@@ -411,6 +412,11 @@ function ChannelBadge({
   large?: boolean;
 }) {
   const meta = channelMeta[channel];
+  const size = large ? 36 : 22;
+
+  if (channel === "LINE") {
+    return <LineChannelIcon size={size} />;
+  }
 
   return (
     <span
@@ -845,13 +851,17 @@ export function ChattingClient({
             <span>연결 채널 6개</span>
             <div className="flex -space-x-1">
               {(Object.keys(channelMeta) as ChatChannel[]).map((channel) => (
-                <span
-                  key={channel}
-                  title={channelMeta[channel].label}
-                  className={`flex size-5 items-center justify-center rounded-full border-2 border-white text-[7px] font-black ${channelMeta[channel].badgeClass}`}
-                >
-                  {channelMeta[channel].compactLabel}
-                </span>
+                channel === "LINE" ? (
+                  <LineChannelIcon key={channel} size={20} />
+                ) : (
+                  <span
+                    key={channel}
+                    title={channelMeta[channel].label}
+                    className={`flex size-5 items-center justify-center rounded-full border-2 border-white text-[7px] font-black ${channelMeta[channel].badgeClass}`}
+                  >
+                    {channelMeta[channel].compactLabel}
+                  </span>
+                )
               ))}
             </div>
           </div>
@@ -1242,16 +1252,20 @@ export function ChattingClient({
                 <span className="shrink-0">연결 채널</span>
                 <span className="flex min-w-0 flex-wrap gap-1">
                   {currentRoom.customer.channels.map((patientChannel) => (
-                    <span
-                      key={patientChannel.id}
-                      title={
-                        patientChannel.displayName ??
-                        channelMeta[patientChannel.channel].label
-                      }
-                      className={`flex size-6 items-center justify-center rounded-md text-xs font-black ${channelMeta[patientChannel.channel].badgeClass}`}
-                    >
-                      {channelMeta[patientChannel.channel].compactLabel}
-                    </span>
+                    patientChannel.channel === "LINE" ? (
+                      <LineChannelIcon key={patientChannel.id} size={24} />
+                    ) : (
+                      <span
+                        key={patientChannel.id}
+                        title={
+                          patientChannel.displayName ??
+                          channelMeta[patientChannel.channel].label
+                        }
+                        className={`flex size-6 items-center justify-center rounded-md text-xs font-black ${channelMeta[patientChannel.channel].badgeClass}`}
+                      >
+                        {channelMeta[patientChannel.channel].compactLabel}
+                      </span>
+                    )
                   ))}
                 </span>
               </div>

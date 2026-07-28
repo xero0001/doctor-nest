@@ -21,6 +21,8 @@ import {
   X,
 } from "lucide-react";
 
+import { LineChannelIcon } from "@/features/channels/components/line-channel-icon";
+
 type ChannelType =
   "KAKAO" | "LINE" | "NAVER_TALK" | "WECHAT" | "WHATSAPP" | "INSTAGRAM";
 
@@ -445,11 +447,15 @@ export function ChannelsClient({
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex min-w-0 items-center gap-3">
-                    <span
-                      className={`flex size-11 shrink-0 items-center justify-center rounded-2xl text-xs font-extrabold shadow-sm ${definition.badgeClass}`}
-                    >
-                      {definition.badge}
-                    </span>
+                    {channel === "LINE" ? (
+                      <LineChannelIcon size={44} />
+                    ) : (
+                      <span
+                        className={`flex size-11 shrink-0 items-center justify-center rounded-2xl text-xs font-extrabold shadow-sm ${definition.badgeClass}`}
+                      >
+                        {definition.badge}
+                      </span>
+                    )}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <h3 className="text-sm font-bold">
@@ -531,11 +537,15 @@ export function ChannelsClient({
           <aside className="relative flex h-full w-full max-w-[520px] flex-col bg-white shadow-[-20px_0_60px_rgba(27,34,70,0.16)]">
             <header className="flex items-center justify-between border-b border-[#e5e8ef] px-6 py-5">
               <div className="flex items-center gap-3">
-                <span
-                  className={`flex size-10 items-center justify-center rounded-xl text-xs font-extrabold ${selectedDefinition.badgeClass}`}
-                >
-                  {selectedDefinition.badge}
-                </span>
+                {selectedChannel === "LINE" ? (
+                  <LineChannelIcon size={40} />
+                ) : (
+                  <span
+                    className={`flex size-10 items-center justify-center rounded-xl text-xs font-extrabold ${selectedDefinition.badgeClass}`}
+                  >
+                    {selectedDefinition.badge}
+                  </span>
+                )}
                 <div>
                   <h2 className="text-base font-bold">
                     {selectedDefinition.label} 연동

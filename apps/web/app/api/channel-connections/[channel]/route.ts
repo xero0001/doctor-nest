@@ -40,8 +40,8 @@ export async function POST(request: Request, { params }: RouteContext) {
   if (body?.action === "disconnect") {
     const connection = await getDatabase().channelConnection.update({
       where: {
-        organizationId_channel: {
-          organizationId: user.organizationId,
+        hospitalId_channel: {
+          hospitalId: user.hospitalId,
           channel: channel as
             | "KAKAO"
             | "LINE"
@@ -78,8 +78,8 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const connection = await getDatabase().channelConnection.upsert({
     where: {
-      organizationId_channel: {
-        organizationId: user.organizationId,
+      hospitalId_channel: {
+        hospitalId: user.hospitalId,
         channel: channel as
           "KAKAO" | "LINE" | "NAVER_TALK" | "WECHAT" | "WHATSAPP" | "INSTAGRAM",
       },
@@ -90,7 +90,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       status: "CONFIGURING",
     },
     create: {
-      organizationId: user.organizationId,
+      hospitalId: user.hospitalId,
       channel: channel as
         "KAKAO" | "LINE" | "NAVER_TALK" | "WECHAT" | "WHATSAPP" | "INSTAGRAM",
       displayName,

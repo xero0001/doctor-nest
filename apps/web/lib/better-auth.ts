@@ -16,7 +16,7 @@ export const auth = betterAuth({
   user: {
     modelName: "AuthUser",
     additionalFields: {
-      organizationId: {
+      hospitalId: {
         type: "string",
         required: false,
         input: false,

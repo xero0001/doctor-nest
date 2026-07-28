@@ -7,17 +7,25 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Organization {
+model Hospital {
   id                 String              @id @default(cuid())
   name               String
   slug               String              @unique
   users              User[]
+  authUsers          AuthUser[]
   channelConnections ChannelConnection[]
-  customers          Customer[]
+  patients           Patient[]
+  patientTags        PatientTag[]
   conversations      Conversation[]
   appointments       Appointment[]
+  manualFolders      ManualFolder[]
+  manualTags         ManualTag[]
+  manualDocuments    ManualDocument[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+  patientChannels    PatientChannel[]
+
+  @@map("Organization")
 }
 
 enum UserRole {
@@ -27,18 +35,18 @@ enum UserRole {
 }
 
 model User {
-  id             String       @id @default(cuid())
-  organizationId String
-  username       String       @unique
-  passwordHash   String
-  name           String
-  role           UserRole     @default(AGENT)
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sessions       Session[]
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id           String    @id @default(cuid())
+  hospitalId   String    @map("organizationId")
+  username     String    @unique
+  passwordHash String
+  name         String
+  role         UserRole  @default(AGENT)
+  hospital     Hospital  @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  sessions     Session[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  @@index([organizationId])
+  @@index([hospitalId])
 }
 
 model Session {
@@ -63,12 +71,13 @@ model AuthUser {
   updatedAt       DateTime      @updatedAt
   username        String?       @unique
   displayUsername String?
-  organizationId  String?
+  hospitalId      String?       @map("organizationId")
   role            String        @default("AGENT")
+  hospital        Hospital?     @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
   authsessions    AuthSession[]
   authaccounts    AuthAccount[]
 
-  @@index([organizationId])
+  @@index([hospitalId])
 }
 
 model AuthSession {
@@ -133,7 +142,7 @@ enum ChannelStatus {
 
 model ChannelConnection {
   id                   String        @id @default(cuid())
-  organizationId       String
+  hospitalId           String        @map("organizationId")
   channel              ChatChannel
   status               ChannelStatus @default(DISCONNECTED)
   displayName          String?
@@ -141,35 +150,91 @@ model ChannelConnection {
   credentialsEncrypted String?
   webhookToken         String        @default(cuid())
   connectedAt          DateTime?
-  organization         Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  hospital             Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 
-  @@unique([organizationId, channel])
-  @@index([organizationId, status])
+  @@unique([hospitalId, channel])
+  @@index([hospitalId, status])
 }
 
-model Customer {
-  id             String         @id @default(cuid())
-  organizationId String
-  externalRef    String?
-  name           String
-  phone          String?
-  email          String?
-  gender         String?
-  birthDate      DateTime?
-  language       String         @default("ko")
-  notes          String?
-  tags           String[]
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  conversations  Conversation[]
-  appointments   Appointment[]
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+model Patient {
+  id              String                 @id @default(cuid())
+  hospitalId      String                 @map("organizationId")
+  chartNumber     String                 @map("externalRef")
+  name            String
+  phone           String?
+  phoneNormalized String?
+  email           String?
+  gender          String?
+  birthDate       DateTime?
+  language        String                 @default("ko")
+  notes           String?
+  legacyTags      String[]               @default([]) @map("tags")
+  hospital        Hospital               @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  channels        PatientChannel[]
+  tagAssignments  PatientTagAssignment[]
+  conversations   Conversation[]
+  appointments    Appointment[]
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
 
-  @@unique([organizationId, externalRef])
-  @@index([organizationId, name])
-  @@index([organizationId, phone])
+  @@unique([hospitalId, chartNumber])
+  @@index([hospitalId, name])
+  @@index([hospitalId, phoneNormalized])
+  @@map("Customer")
+}
+
+model PatientChannel {
+  id                 String         @id @default(cuid())
+  hospitalId         String
+  patientId          String
+  channel            ChatChannel
+  externalCustomerId String
+  displayName        String?
+  phone              String?
+  phoneNormalized    String?
+  hospital           Hospital       @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patient            Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  conversations      Conversation[]
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@unique([hospitalId, channel, externalCustomerId])
+  @@index([hospitalId, phoneNormalized])
+  @@index([patientId, channel])
+}
+
+enum PatientTagCategory {
+  TREATMENT
+  STATUS
+  SOURCE
+}
+
+model PatientTag {
+  id          String                 @id @default(cuid())
+  hospitalId  String
+  name        String
+  color       String                 @default("#3157F6")
+  category    PatientTagCategory     @default(TREATMENT)
+  hospital    Hospital               @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  assignments PatientTagAssignment[]
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  @@unique([hospitalId, name])
+  @@index([hospitalId, category])
+}
+
+model PatientTagAssignment {
+  patientId String
+  tagId     String
+  patient   Patient    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  tag       PatientTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@id([patientId, tagId])
+  @@index([tagId])
 }
 
 enum ConversationStatus {
@@ -179,23 +244,25 @@ enum ConversationStatus {
 
 model Conversation {
   id               String             @id @default(cuid())
-  organizationId   String
-  customerId       String
+  hospitalId       String             @map("organizationId")
+  patientId        String             @map("customerId")
+  patientChannelId String?
   channel          ChatChannel
   externalThreadId String?
   status           ConversationStatus @default(OPEN)
   important        Boolean            @default(false)
   unreadCount      Int                @default(0)
   lastMessageAt    DateTime           @default(now())
-  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  customer         Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  hospital         Hospital           @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patient          Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientChannel   PatientChannel?    @relation(fields: [patientChannelId], references: [id], onDelete: SetNull)
   messages         Message[]
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 
-  @@unique([organizationId, channel, externalThreadId])
-  @@index([organizationId, status, lastMessageAt])
-  @@index([customerId])
+  @@unique([hospitalId, channel, externalThreadId])
+  @@index([hospitalId, status, lastMessageAt])
+  @@index([patientId])
 }
 
 enum MessageDirection {
@@ -232,18 +299,75 @@ enum AppointmentStatus {
 }
 
 model Appointment {
-  id             String            @id @default(cuid())
-  organizationId String
-  customerId     String
-  scheduledAt    DateTime
-  doctorName     String
-  treatment      String?
-  status         AppointmentStatus @default(SCHEDULED)
-  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  customer       Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  id          String            @id @default(cuid())
+  hospitalId  String            @map("organizationId")
+  patientId   String            @map("customerId")
+  scheduledAt DateTime
+  doctorName  String
+  treatment   String?
+  status      AppointmentStatus @default(SCHEDULED)
+  hospital    Hospital          @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patient     Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
-  @@index([organizationId, scheduledAt])
-  @@index([customerId, scheduledAt])
+  @@index([hospitalId, scheduledAt])
+  @@index([patientId, scheduledAt])
+}
+
+model ManualFolder {
+  id         String           @id @default(cuid())
+  hospitalId String
+  name       String
+  sortOrder  Int              @default(0)
+  hospital   Hospital         @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  documents  ManualDocument[]
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([hospitalId, name])
+  @@index([hospitalId, sortOrder])
+}
+
+model ManualDocument {
+  id              String              @id @default(cuid())
+  hospitalId      String
+  folderId        String
+  title           String
+  slug            String
+  contentMarkdown String
+  sortOrder       Int                 @default(0)
+  hospital        Hospital            @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  folder          ManualFolder        @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  tags            ManualDocumentTag[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@unique([hospitalId, slug])
+  @@index([folderId, sortOrder])
+}
+
+model ManualTag {
+  id         String              @id @default(cuid())
+  hospitalId String
+  name       String
+  color      String              @default("#8066EC")
+  hospital   Hospital            @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  documents  ManualDocumentTag[]
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  @@unique([hospitalId, name])
+  @@index([hospitalId])
+}
+
+model ManualDocumentTag {
+  documentId String
+  tagId      String
+  document   ManualDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  tag        ManualTag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt  DateTime       @default(now())
+
+  @@id([documentId, tagId])
+  @@index([tagId])
 }

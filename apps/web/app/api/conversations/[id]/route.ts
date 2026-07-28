@@ -8,7 +8,7 @@ type RouteContext = {
 
 function serializeConversation(
   conversation: NonNullable<
-    Awaited<ReturnType<typeof findConversationForOrganization>>
+    Awaited<ReturnType<typeof findConversationForHospital>>
   >,
 ) {
   return {
@@ -19,17 +19,23 @@ function serializeConversation(
     unreadCount: conversation.unreadCount,
     lastMessageAt: conversation.lastMessageAt.toISOString(),
     customer: {
-      id: conversation.customer.id,
-      externalRef: conversation.customer.externalRef,
-      name: conversation.customer.name,
-      phone: conversation.customer.phone,
-      email: conversation.customer.email,
-      gender: conversation.customer.gender,
-      birthDate: conversation.customer.birthDate?.toISOString() ?? null,
-      language: conversation.customer.language,
-      notes: conversation.customer.notes,
-      tags: conversation.customer.tags,
-      appointments: conversation.customer.appointments.map((appointment) => ({
+      id: conversation.patient.id,
+      chartNumber: conversation.patient.chartNumber,
+      name: conversation.patient.name,
+      phone: conversation.patient.phone,
+      email: conversation.patient.email,
+      gender: conversation.patient.gender,
+      birthDate: conversation.patient.birthDate?.toISOString() ?? null,
+      language: conversation.patient.language,
+      notes: conversation.patient.notes,
+      tags: conversation.patient.tagAssignments.map(({ tag }) => tag.name),
+      channels: conversation.patient.channels.map((patientChannel) => ({
+        id: patientChannel.id,
+        channel: patientChannel.channel,
+        displayName: patientChannel.displayName,
+        phone: patientChannel.phone,
+      })),
+      appointments: conversation.patient.appointments.map((appointment) => ({
         id: appointment.id,
         scheduledAt: appointment.scheduledAt.toISOString(),
         doctorName: appointment.doctorName,
@@ -47,15 +53,22 @@ function serializeConversation(
   };
 }
 
-function findConversationForOrganization(id: string, organizationId: string) {
+function findConversationForHospital(id: string, hospitalId: string) {
   return getDatabase().conversation.findFirst({
     where: {
       id,
-      organizationId,
+      hospitalId,
     },
     include: {
-      customer: {
+      patient: {
         include: {
+          channels: {
+            orderBy: { createdAt: "asc" },
+          },
+          tagAssignments: {
+            include: { tag: true },
+            orderBy: { createdAt: "asc" },
+          },
           appointments: {
             orderBy: { scheduledAt: "desc" },
           },
@@ -76,10 +89,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
   }
 
   const { id } = await params;
-  const conversation = await findConversationForOrganization(
-    id,
-    user.organizationId,
-  );
+  const conversation = await findConversationForHospital(id, user.hospitalId);
 
   if (!conversation) {
     return Response.json(
@@ -126,7 +136,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   const conversation = await database.conversation.findFirst({
     where: {
       id,
-      organizationId: user.organizationId,
+      hospitalId: user.hospitalId,
     },
     select: { id: true },
   });

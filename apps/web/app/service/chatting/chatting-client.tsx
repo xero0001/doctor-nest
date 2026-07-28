@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import {
   BadgeCheck,
   BellRing,
@@ -31,7 +32,11 @@ import {
   WandSparkles,
 } from "lucide-react";
 
-import type { ChatChannel, ConversationItem } from "./chat-types";
+import type {
+  ChatChannel,
+  ConversationItem,
+  ManualFolderItem,
+} from "./chat-types";
 
 type ChatTab = "OPEN" | "CLOSED" | "IMPORTANT";
 
@@ -97,12 +102,6 @@ const languageLabels: Record<string, string> = {
   zh: "中文",
 };
 
-const knowledgeGroups = [
-  { label: "피부", count: 12 },
-  { label: "레이저 시술", count: 8 },
-  { label: "필러 · 보톡스", count: 6 },
-];
-
 function formatListTime(value: string) {
   return new Intl.DateTimeFormat("ko-KR", {
     hour: "numeric",
@@ -160,9 +159,11 @@ function ChannelBadge({
 export function ChattingClient({
   conversations,
   organizationName,
+  manualFolders,
 }: {
   conversations: ConversationItem[];
   organizationName: string;
+  manualFolders: ManualFolderItem[];
 }) {
   const [chatTab, setChatTab] = useState<ChatTab>("OPEN");
   const [selectedRoomId, setSelectedRoomId] = useState(
@@ -175,6 +176,10 @@ export function ChattingClient({
   const [draft, setDraft] = useState("");
   const [knowledgeTab, setKnowledgeTab] = useState<"원내매뉴얼" | "콘텐츠">(
     "원내매뉴얼",
+  );
+  const [manualQuery, setManualQuery] = useState("");
+  const [selectedManualId, setSelectedManualId] = useState(
+    () => manualFolders.flatMap((folder) => folder.documents)[0]?.id ?? "",
   );
   const [rooms, setRooms] = useState(conversations);
   const [loadingRoomId, setLoadingRoomId] = useState<string | null>(null);
@@ -206,6 +211,34 @@ export function ChattingClient({
   const currentRoom =
     rooms.find((conversation) => conversation.id === selectedRoomId) ??
     rooms[0];
+  const normalizedManualQuery = manualQuery.trim().toLowerCase();
+  const filteredManualFolders = useMemo(
+    () =>
+      manualFolders
+        .map((folder) => ({
+          ...folder,
+          documents: folder.documents.filter((document) => {
+            const searchable = [
+              folder.name,
+              document.title,
+              ...document.tags.map((tag) => tag.name),
+            ]
+              .join(" ")
+              .toLowerCase();
+            return (
+              !normalizedManualQuery ||
+              searchable.includes(normalizedManualQuery)
+            );
+          }),
+        }))
+        .filter((folder) => folder.documents.length > 0),
+    [manualFolders, normalizedManualQuery],
+  );
+  const selectedManual =
+    manualFolders
+      .flatMap((folder) => folder.documents)
+      .find((document) => document.id === selectedManualId) ??
+    manualFolders.flatMap((folder) => folder.documents)[0];
 
   async function selectConversation(id: string) {
     setSelectedRoomId(id);
@@ -511,6 +544,8 @@ export function ChattingClient({
           <label className="flex h-8 items-center gap-2 rounded-lg border border-[#e2e5ed] px-3 text-[#9ba1b1] focus-within:border-[#8676ef]">
             <Search className="size-3.5" />
             <input
+              value={manualQuery}
+              onChange={(event) => setManualQuery(event.target.value)}
               placeholder="태그명으로 검색"
               className="min-w-0 flex-1 bg-transparent text-[11px] outline-none placeholder:text-[#aeb3c0]"
             />
@@ -518,90 +553,113 @@ export function ChattingClient({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="border-b border-[#e8eaf1] py-2">
-            {knowledgeGroups.map((group, index) => (
-              <button
-                type="button"
-                key={group.label}
-                className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-[11px] font-semibold ${
-                  index === 1
-                    ? "bg-[#f0ebff] text-[#6657e9]"
-                    : "text-[#51586d] hover:bg-[#f8f9fc]"
-                }`}
-              >
-                <ChevronRight
-                  className={`size-3 ${index === 1 ? "rotate-90" : ""}`}
-                />
-                {index === 1 ? (
-                  <Bookmark className="size-3.5 fill-[#8066ec] text-[#8066ec]" />
-                ) : (
-                  <Folder className="size-3.5 text-[#8d93a5]" />
-                )}
-                <span className="flex-1">{group.label}</span>
-                <span className="text-[9px] font-medium text-[#a0a5b3]">
-                  {group.count}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <article className="space-y-4 px-4 py-4 text-[10.5px] leading-[1.65] text-[#5d6478]">
-            <div>
-              <div className="mb-2 flex items-center gap-2">
-                <span className="rounded-md bg-[#eee9ff] px-2 py-1 text-[9px] font-bold text-[#6657e9]">
-                  레이저
-                </span>
-                <h3 className="text-[12px] font-bold text-[#33394d]">
-                  피코토닝 시술 안내
-                </h3>
+          {knowledgeTab === "원내매뉴얼" ? (
+            <>
+              <div className="border-b border-[#e8eaf1] py-2">
+                {filteredManualFolders.map((folder) => (
+                  <div key={folder.id}>
+                    <div className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[11px] font-bold text-[#51586d]">
+                      <ChevronRight className="size-3 rotate-90" />
+                      <Folder className="size-3.5 text-[#8d93a5]" />
+                      <span className="flex-1">{folder.name}</span>
+                      <span className="text-[9px] font-medium text-[#a0a5b3]">
+                        {folder.documents.length}
+                      </span>
+                    </div>
+                    {folder.documents.map((document) => {
+                      const selected = selectedManual?.id === document.id;
+                      return (
+                        <button
+                          type="button"
+                          key={document.id}
+                          onClick={() => setSelectedManualId(document.id)}
+                          className={`flex w-full items-center gap-2 py-2.5 pl-9 pr-4 text-left text-[10.5px] font-semibold ${
+                            selected
+                              ? "bg-[#f0ebff] text-[#6657e9]"
+                              : "text-[#646b7f] hover:bg-[#f8f9fc]"
+                          }`}
+                        >
+                          <Bookmark
+                            className={`size-3.5 ${
+                              selected
+                                ? "fill-[#8066ec] text-[#8066ec]"
+                                : "text-[#a5aaba]"
+                            }`}
+                          />
+                          <span className="min-w-0 flex-1 truncate">
+                            {document.tags[0]?.name ?? document.title}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+                {filteredManualFolders.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-[10px] text-[#989eae]">
+                    검색 조건에 맞는 원내매뉴얼이 없습니다.
+                  </div>
+                ) : null}
               </div>
-              <p>
-                피코토닝은 짧은 시간에 높은 에너지를 전달해 색소를 잘게 분해하는
-                레이저 시술입니다. 기미, 잡티, 피부톤 개선에 도움을 줄 수
-                있습니다.
-              </p>
+
+              {selectedManual ? (
+                <article className="px-4 py-4 text-[10.5px] leading-[1.75] text-[#5d6478]">
+                  <div className="mb-3 flex flex-wrap gap-1.5">
+                    {selectedManual.tags.map((tag) => (
+                      <span
+                        key={tag.id}
+                        className="rounded-md px-2 py-1 text-[9px] font-bold"
+                        style={{
+                          backgroundColor: `${tag.color}18`,
+                          color: tag.color,
+                        }}
+                      >
+                        {tag.name}
+                      </span>
+                    ))}
+                  </div>
+                  <ReactMarkdown
+                    components={{
+                      h2: ({ children }) => (
+                        <h2 className="mt-5 border-t border-[#eceef3] pt-4 text-[12px] font-bold text-[#33394d] first:mt-0 first:border-t-0 first:pt-0">
+                          {children}
+                        </h2>
+                      ),
+                      h3: ({ children }) => (
+                        <h3 className="mt-4 text-[11px] font-bold text-[#41485c]">
+                          {children}
+                        </h3>
+                      ),
+                      p: ({ children }) => (
+                        <p className="mt-2 whitespace-pre-wrap">{children}</p>
+                      ),
+                      ul: ({ children }) => (
+                        <ul className="mt-2 list-disc space-y-1 pl-4">
+                          {children}
+                        </ul>
+                      ),
+                      blockquote: ({ children }) => (
+                        <blockquote className="mt-3 rounded-lg border-l-2 border-[#8066ec] bg-[#f7f4ff] px-3 py-2 text-[#71778a]">
+                          {children}
+                        </blockquote>
+                      ),
+                      hr: () => <hr className="my-4 border-[#eceef3]" />,
+                    }}
+                  >
+                    {selectedManual.contentMarkdown}
+                  </ReactMarkdown>
+                </article>
+              ) : (
+                <div className="px-4 py-10 text-center text-[10px] text-[#989eae]">
+                  등록된 원내매뉴얼이 없습니다.
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex h-48 flex-col items-center justify-center text-[#9aa0b0]">
+              <BookOpenText className="mb-2 size-6" />
+              <p className="text-[10px]">병원 콘텐츠를 준비하고 있습니다.</p>
             </div>
-            <div className="border-t border-[#eceef3] pt-4">
-              <h4 className="mb-2 text-[11px] font-bold text-[#3d4357]">
-                시술 효과
-              </h4>
-              <ul className="space-y-1 pl-3">
-                <li>• 피부톤과 칙칙함 개선</li>
-                <li>• 기미, 잡티 등 색소 병변 완화</li>
-                <li>• 피부결과 모공 개선에 도움</li>
-              </ul>
-            </div>
-            <div className="border-t border-[#eceef3] pt-4">
-              <h4 className="mb-2 text-[11px] font-bold text-[#3d4357]">
-                시술 방법
-              </h4>
-              <p>클렌징 → 마취 크림 → 레이저 시술 → 진정 관리</p>
-              <p className="mt-2 text-[#878d9e]">
-                ※ 시술 시간은 피부 상태에 따라 달라질 수 있습니다.
-              </p>
-            </div>
-            <div className="border-t border-[#eceef3] pt-4">
-              <h4 className="mb-2 text-[11px] font-bold text-[#3d4357]">
-                시술 후 주의사항
-              </h4>
-              <ul className="space-y-1 pl-3">
-                <li>• 자외선 차단제를 꼼꼼히 발라주세요.</li>
-                <li>• 당일 사우나와 격한 운동은 피해주세요.</li>
-              </ul>
-            </div>
-            <div className="border-t border-[#eceef3] pt-4">
-              <h4 className="mb-2 text-[11px] font-bold text-[#3d4357]">
-                자주 묻는 질문
-              </h4>
-              <p className="font-semibold text-[#474e62]">
-                Q. 시술 직후 세안이 가능한가요?
-              </p>
-              <p className="mt-1">
-                A. 미온수로 가볍게 세안하실 수 있으며 자극적인 제품은 피해
-                주세요.
-              </p>
-            </div>
-          </article>
+          )}
         </div>
       </section>
 
@@ -611,7 +669,7 @@ export function ChattingClient({
             <ChannelBadge channel={currentRoom.channel} large />
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="truncate text-[14px] font-bold">
+                <h2 className="truncate text-base font-bold">
                   {currentRoom.customer.name}
                 </h2>
                 {currentRoom.customer.tags.includes("VIP") ? (
@@ -650,6 +708,9 @@ export function ChattingClient({
 
         <div className="flex items-center justify-between border-b border-[#e5e8f0] bg-white px-5 py-2">
           <div className="flex items-center gap-1.5">
+            <span className="mr-1 text-[9px] font-semibold text-[#858c9e]">
+              치료태그
+            </span>
             {currentRoom.customer.tags.map((tag) => (
               <span
                 key={tag}
@@ -710,7 +771,7 @@ export function ChattingClient({
                 >
                   <div className={`max-w-[72%] ${inbound ? "" : "text-right"}`}>
                     {inbound ? (
-                      <p className="mb-1.5 pl-1 text-xs font-bold text-[#596176]">
+                      <p className="mb-1.5 pl-1 text-[13px] font-bold text-[#596176]">
                         {currentRoom.customer.name}
                       </p>
                     ) : null}
@@ -720,7 +781,7 @@ export function ChattingClient({
                       </p>
                     ) : null}
                     <div
-                      className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-left text-[11px] leading-[1.65] shadow-sm ${
+                      className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-left text-[13px] leading-[1.7] shadow-sm ${
                         inbound
                           ? "rounded-tl-[5px] border border-[#dfe3ec] bg-white text-[#454b5e]"
                           : "rounded-br-[5px] bg-gradient-to-br from-[#3157f6] to-[#6657e9] text-white"
@@ -813,12 +874,10 @@ export function ChattingClient({
         <header className="flex h-[72px] items-center justify-between border-b border-[#e8eaf1] bg-white px-4">
           <div>
             <p className="text-[9px] font-semibold text-[#8d94a6]">고객 정보</p>
-            <h2 className="mt-1 text-[13px] font-bold">
+            <h2 className="mt-1 text-[14px] font-bold">
               {currentRoom.customer.name}
               <span className="ml-1.5 font-mono text-[9px] font-medium text-[#9aa0af]">
-                #
-                {currentRoom.customer.externalRef ??
-                  currentRoom.customer.id.slice(-6)}
+                #{currentRoom.customer.chartNumber}
               </span>
             </h2>
           </div>
@@ -838,7 +897,9 @@ export function ChattingClient({
                 <CircleUserRound className="size-6" />
               </span>
               <div>
-                <p className="text-xs font-bold">{currentRoom.customer.name}</p>
+                <p className="text-[13px] font-bold">
+                  {currentRoom.customer.name}
+                </p>
                 <p className="mt-1 text-[9px] text-[#8d94a6]">
                   {currentRoom.customer.gender ?? "미등록"} ·{" "}
                   {formatBirthDate(currentRoom.customer.birthDate)}
@@ -857,7 +918,21 @@ export function ChattingClient({
               </div>
               <div className="flex items-center gap-2 text-[10px] text-[#697084]">
                 <MessageCircleMore className="size-3.5 text-[#9ca2b3]" />
-                최초 유입: {currentMeta.label}
+                <span className="shrink-0">연결 채널</span>
+                <span className="flex min-w-0 flex-wrap gap-1">
+                  {currentRoom.customer.channels.map((patientChannel) => (
+                    <span
+                      key={patientChannel.id}
+                      title={
+                        patientChannel.displayName ??
+                        channelMeta[patientChannel.channel].label
+                      }
+                      className={`flex size-5 items-center justify-center rounded-md text-[7px] font-black ${channelMeta[patientChannel.channel].badgeClass}`}
+                    >
+                      {channelMeta[patientChannel.channel].compactLabel}
+                    </span>
+                  ))}
+                </span>
               </div>
             </div>
           </section>

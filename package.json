@@ -16,6 +16,7 @@
     "db:migrate:dev": "turbo db:migrate:dev",
     "db:migrate:deploy": "turbo db:migrate:deploy",
     "db:push": "turbo db:push",
+    "db:seed": "pnpm --filter @doctornest/database db:seed && pnpm --filter @doctornest/web auth:seed",
     "db:studio": "pnpm --filter @doctornest/database db:studio"
   },
   "devDependencies": {

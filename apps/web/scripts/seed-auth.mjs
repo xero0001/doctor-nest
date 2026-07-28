@@ -8,11 +8,11 @@ import { hashPassword } from "better-auth/crypto";
 const database = getDatabase();
 
 async function main() {
-  const organization = await database.organization.findUnique({
+  const hospital = await database.hospital.findUnique({
     where: { slug: "test-clinic" },
   });
 
-  if (!organization) {
+  if (!hospital) {
     throw new Error("Run the database seed before creating the auth account.");
   }
 
@@ -29,7 +29,7 @@ async function main() {
           email: "test@doctornest.local",
           emailVerified: true,
           displayUsername: "test",
-          organizationId: organization.id,
+          hospitalId: hospital.id,
           role: "OWNER",
         },
       })
@@ -41,7 +41,7 @@ async function main() {
           emailVerified: true,
           username: "test",
           displayUsername: "test",
-          organizationId: organization.id,
+          hospitalId: hospital.id,
           role: "OWNER",
         },
       });

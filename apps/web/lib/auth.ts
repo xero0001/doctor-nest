@@ -9,25 +9,25 @@ export async function getCurrentUser() {
     headers: await headers(),
   });
 
-  if (!currentSession?.user.organizationId) {
+  if (!currentSession?.user.hospitalId) {
     return null;
   }
 
-  const organization = await getDatabase().organization.findUnique({
-    where: { id: currentSession.user.organizationId },
+  const hospital = await getDatabase().hospital.findUnique({
+    where: { id: currentSession.user.hospitalId },
   });
 
-  if (!organization) {
+  if (!hospital) {
     return null;
   }
 
   return {
     id: currentSession.user.id,
-    organizationId: currentSession.user.organizationId,
+    hospitalId: currentSession.user.hospitalId,
     username: currentSession.user.username ?? "",
     name: currentSession.user.name,
     role: currentSession.user.role,
-    organization,
+    hospital,
   };
 }
 

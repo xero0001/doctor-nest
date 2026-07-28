@@ -9,24 +9,47 @@ export const dynamic = "force-dynamic";
 
 export default async function ChattingPage() {
   const user = await requireUser();
-  const conversations = await getDatabase().conversation.findMany({
-    where: {
-      organizationId: user.organizationId,
-    },
-    include: {
-      customer: {
-        include: {
-          appointments: {
-            orderBy: { scheduledAt: "desc" },
+  const [conversations, manualFolders] = await Promise.all([
+    getDatabase().conversation.findMany({
+      where: {
+        hospitalId: user.hospitalId,
+      },
+      include: {
+        patient: {
+          include: {
+            channels: {
+              orderBy: { createdAt: "asc" },
+            },
+            tagAssignments: {
+              include: { tag: true },
+              orderBy: { createdAt: "asc" },
+            },
+            appointments: {
+              orderBy: { scheduledAt: "desc" },
+            },
           },
         },
+        messages: {
+          orderBy: { sentAt: "asc" },
+        },
       },
-      messages: {
-        orderBy: { sentAt: "asc" },
+      orderBy: { lastMessageAt: "desc" },
+    }),
+    getDatabase().manualFolder.findMany({
+      where: { hospitalId: user.hospitalId },
+      include: {
+        documents: {
+          include: {
+            tags: {
+              include: { tag: true },
+            },
+          },
+          orderBy: { sortOrder: "asc" },
+        },
       },
-    },
-    orderBy: { lastMessageAt: "desc" },
-  });
+      orderBy: { sortOrder: "asc" },
+    }),
+  ]);
 
   const serializedConversations: ConversationItem[] = conversations.map(
     (conversation) => ({
@@ -37,17 +60,23 @@ export default async function ChattingPage() {
       unreadCount: conversation.unreadCount,
       lastMessageAt: conversation.lastMessageAt.toISOString(),
       customer: {
-        id: conversation.customer.id,
-        externalRef: conversation.customer.externalRef,
-        name: conversation.customer.name,
-        phone: conversation.customer.phone,
-        email: conversation.customer.email,
-        gender: conversation.customer.gender,
-        birthDate: conversation.customer.birthDate?.toISOString() ?? null,
-        language: conversation.customer.language,
-        notes: conversation.customer.notes,
-        tags: conversation.customer.tags,
-        appointments: conversation.customer.appointments.map((appointment) => ({
+        id: conversation.patient.id,
+        chartNumber: conversation.patient.chartNumber,
+        name: conversation.patient.name,
+        phone: conversation.patient.phone,
+        email: conversation.patient.email,
+        gender: conversation.patient.gender,
+        birthDate: conversation.patient.birthDate?.toISOString() ?? null,
+        language: conversation.patient.language,
+        notes: conversation.patient.notes,
+        tags: conversation.patient.tagAssignments.map(({ tag }) => tag.name),
+        channels: conversation.patient.channels.map((patientChannel) => ({
+          id: patientChannel.id,
+          channel: patientChannel.channel,
+          displayName: patientChannel.displayName,
+          phone: patientChannel.phone,
+        })),
+        appointments: conversation.patient.appointments.map((appointment) => ({
           id: appointment.id,
           scheduledAt: appointment.scheduledAt.toISOString(),
           doctorName: appointment.doctorName,
@@ -68,7 +97,22 @@ export default async function ChattingPage() {
   return (
     <ChattingClient
       conversations={serializedConversations}
-      organizationName={user.organization.name}
+      organizationName={user.hospital.name}
+      manualFolders={manualFolders.map((folder) => ({
+        id: folder.id,
+        name: folder.name,
+        documents: folder.documents.map((document) => ({
+          id: document.id,
+          title: document.title,
+          slug: document.slug,
+          contentMarkdown: document.contentMarkdown,
+          tags: document.tags.map(({ tag }) => ({
+            id: tag.id,
+            name: tag.name,
+            color: tag.color,
+          })),
+        })),
+      }))}
     />
   );
 }

@@ -17,6 +17,22 @@ export type ConversationAppointment = {
   status: "SCHEDULED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
 };
 
+export type ManualFolderItem = {
+  id: string;
+  name: string;
+  documents: Array<{
+    id: string;
+    title: string;
+    slug: string;
+    contentMarkdown: string;
+    tags: Array<{
+      id: string;
+      name: string;
+      color: string;
+    }>;
+  }>;
+};
+
 export type ConversationItem = {
   id: string;
   channel: ChatChannel;
@@ -26,7 +42,7 @@ export type ConversationItem = {
   lastMessageAt: string;
   customer: {
     id: string;
-    externalRef: string | null;
+    chartNumber: string;
     name: string;
     phone: string | null;
     email: string | null;
@@ -35,6 +51,12 @@ export type ConversationItem = {
     language: string;
     notes: string | null;
     tags: string[];
+    channels: Array<{
+      id: string;
+      channel: ChatChannel;
+      displayName: string | null;
+      phone: string | null;
+    }>;
     appointments: ConversationAppointment[];
   };
   messages: ConversationMessage[];

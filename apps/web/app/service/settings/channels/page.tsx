@@ -9,13 +9,13 @@ export const dynamic = "force-dynamic";
 export default async function ChannelSettingsPage() {
   const user = await requireUser();
   const connections = await getDatabase().channelConnection.findMany({
-    where: { organizationId: user.organizationId },
+    where: { hospitalId: user.hospitalId },
     orderBy: { channel: "asc" },
   });
 
   return (
     <ChannelsClient
-      organizationName={user.organization.name}
+      organizationName={user.hospital.name}
       appUrl={process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}
       connections={connections.map((connection) => ({
         channel: connection.channel,

@@ -11,7 +11,7 @@ export default async function ServiceLayout({
     <ServiceShell
       user={{
         name: user.name,
-        organizationName: user.organization.name,
+        organizationName: user.hospital.name,
       }}
     >
       {children}

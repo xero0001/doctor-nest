@@ -216,22 +216,80 @@ function filterManualFolderTree(
   });
 }
 
+function ManualDocumentContent({ document }: { document: ManualDocumentItem }) {
+  return (
+    <article className="border-b border-[#e8eaf1] px-4 py-4 text-sm leading-[1.75] text-[#5d6478]">
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {document.tags.map((tag) => (
+          <span
+            key={tag.id}
+            className="rounded-md px-2 py-1 text-[9px] font-bold"
+            style={{
+              backgroundColor: `${tag.color}18`,
+              color: tag.color,
+            }}
+          >
+            {tag.name}
+          </span>
+        ))}
+      </div>
+      <ReactMarkdown
+        components={{
+          h1: ({ children }) => (
+            <h1 className="mb-3 text-base font-bold text-[#33394d]">
+              {children}
+            </h1>
+          ),
+          h2: ({ children }) => (
+            <h2 className="mt-5 border-t border-[#eceef3] pt-4 text-base font-bold text-[#33394d] first:mt-0 first:border-t-0 first:pt-0">
+              {children}
+            </h2>
+          ),
+          h3: ({ children }) => (
+            <h3 className="mt-4 text-base font-bold text-[#41485c]">
+              {children}
+            </h3>
+          ),
+          p: ({ children }) => (
+            <p className="mt-2 whitespace-pre-wrap">{children}</p>
+          ),
+          ul: ({ children }) => (
+            <ul className="mt-2 list-disc space-y-1 pl-4">{children}</ul>
+          ),
+          blockquote: ({ children }) => (
+            <blockquote className="mt-3 rounded-lg border-l-2 border-[#8066ec] bg-[#f7f4ff] px-3 py-2 text-[#71778a]">
+              {children}
+            </blockquote>
+          ),
+          hr: () => <hr className="my-4 border-[#eceef3]" />,
+        }}
+      >
+        {document.contentMarkdown}
+      </ReactMarkdown>
+    </article>
+  );
+}
+
 function ManualFolderBranch({
   folder,
   depth,
   forceExpanded,
   openFolderIds,
   selectedManualId,
+  bookmarkedManualIds,
   onToggleFolder,
   onSelectManual,
+  onToggleBookmark,
 }: {
   folder: ManualFolderItem;
   depth: number;
   forceExpanded: boolean;
   openFolderIds: Set<string>;
   selectedManualId: string;
+  bookmarkedManualIds: Set<string>;
   onToggleFolder: (id: string) => void;
   onSelectManual: (id: string) => void;
+  onToggleBookmark: (id: string) => void;
 }) {
   const expanded = forceExpanded || openFolderIds.has(folder.id);
   const contentId = `manual-folder-${folder.id}`;
@@ -272,37 +330,71 @@ function ManualFolderBranch({
               forceExpanded={forceExpanded}
               openFolderIds={openFolderIds}
               selectedManualId={selectedManualId}
+              bookmarkedManualIds={bookmarkedManualIds}
               onToggleFolder={onToggleFolder}
               onSelectManual={onSelectManual}
+              onToggleBookmark={onToggleBookmark}
             />
           ))}
 
           {folder.documents.map((document) => {
             const selected = selectedManualId === document.id;
+            const bookmarked = bookmarkedManualIds.has(document.id);
+            const documentContentId = `manual-document-${document.id}`;
 
             return (
-              <button
-                type="button"
-                key={document.id}
-                onClick={() => onSelectManual(document.id)}
-                className={`flex w-full items-center gap-2 py-2.5 pr-4 text-left text-[10.5px] font-semibold ${
-                  selected
-                    ? "bg-[#f0ebff] text-[#6657e9]"
-                    : "text-[#646b7f] hover:bg-[#f8f9fc]"
-                }`}
-                style={{ paddingLeft: 36 + depth * 14 }}
-              >
-                <Bookmark
-                  className={`size-3.5 shrink-0 ${
+              <div key={document.id}>
+                <div
+                  className={`flex w-full items-center py-2.5 pr-4 text-[10.5px] font-semibold ${
                     selected
-                      ? "fill-[#8066ec] text-[#8066ec]"
-                      : "text-[#a5aaba]"
+                      ? "bg-[#f0ebff] text-[#6657e9]"
+                      : "text-[#646b7f] hover:bg-[#f8f9fc]"
                   }`}
-                />
-                <span className="min-w-0 flex-1 truncate">
-                  {document.title}
-                </span>
-              </button>
+                  style={{ paddingLeft: 22 + depth * 14 }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onSelectManual(document.id)}
+                    aria-expanded={selected}
+                    aria-controls={documentContentId}
+                    aria-label={`${document.title} ${selected ? "접기" : "펼치기"}`}
+                    className="flex size-6 shrink-0 items-center justify-center rounded-md hover:bg-white/70"
+                  >
+                    <ChevronRight
+                      className={`size-3 transition-transform ${
+                        selected ? "rotate-90" : ""
+                      }`}
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onToggleBookmark(document.id)}
+                    aria-pressed={bookmarked}
+                    aria-label={`${document.title} 북마크 ${bookmarked ? "해제" : "추가"}`}
+                    className="flex size-6 shrink-0 items-center justify-center rounded-md hover:bg-white/70"
+                  >
+                    <Bookmark
+                      className={`size-3.5 ${
+                        bookmarked
+                          ? "fill-[#8066ec] text-[#8066ec]"
+                          : "text-[#a5aaba]"
+                      }`}
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelectManual(document.id)}
+                    className="min-w-0 flex-1 truncate text-left"
+                  >
+                    {document.title}
+                  </button>
+                </div>
+                {selected ? (
+                  <div id={documentContentId}>
+                    <ManualDocumentContent document={document} />
+                  </div>
+                ) : null}
+              </div>
             );
           })}
         </div>
@@ -355,6 +447,9 @@ export function ChattingClient({
     "원내매뉴얼",
   );
   const [manualQuery, setManualQuery] = useState("");
+  const [bookmarkedManualIds, setBookmarkedManualIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [openManualFolderIds, setOpenManualFolderIds] = useState<Set<string>>(
     () => new Set(collectManualFolderIds(manualFolders)),
   );
@@ -436,6 +531,20 @@ export function ChattingClient({
 
   function toggleManualFolder(id: string) {
     setOpenManualFolderIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+
+      return next;
+    });
+  }
+
+  function toggleManualBookmark(id: string) {
+    setBookmarkedManualIds((current) => {
       const next = new Set(current);
 
       if (next.has(id)) {
@@ -787,12 +896,14 @@ export function ChattingClient({
                     forceExpanded={Boolean(normalizedManualQuery)}
                     openFolderIds={openManualFolderIds}
                     selectedManualId={selectedManual?.id ?? ""}
+                    bookmarkedManualIds={bookmarkedManualIds}
                     onToggleFolder={toggleManualFolder}
                     onSelectManual={(id) =>
                       setSelectedManualId((current) =>
                         current === id ? "" : id,
                       )
                     }
+                    onToggleBookmark={toggleManualBookmark}
                   />
                 ))}
                 {filteredManualFolders.length === 0 ? (
@@ -801,64 +912,6 @@ export function ChattingClient({
                   </div>
                 ) : null}
               </div>
-
-              {selectedManual ? (
-                <article className="px-4 py-4 text-sm leading-[1.75] text-[#5d6478]">
-                  <div className="mb-3 flex flex-wrap gap-1.5">
-                    {selectedManual.tags.map((tag) => (
-                      <span
-                        key={tag.id}
-                        className="rounded-md px-2 py-1 text-[9px] font-bold"
-                        style={{
-                          backgroundColor: `${tag.color}18`,
-                          color: tag.color,
-                        }}
-                      >
-                        {tag.name}
-                      </span>
-                    ))}
-                  </div>
-                  <ReactMarkdown
-                    components={{
-                      h1: ({ children }) => (
-                        <h1 className="mb-3 text-base font-bold text-[#33394d]">
-                          {children}
-                        </h1>
-                      ),
-                      h2: ({ children }) => (
-                        <h2 className="mt-5 border-t border-[#eceef3] pt-4 text-base font-bold text-[#33394d] first:mt-0 first:border-t-0 first:pt-0">
-                          {children}
-                        </h2>
-                      ),
-                      h3: ({ children }) => (
-                        <h3 className="mt-4 text-base font-bold text-[#41485c]">
-                          {children}
-                        </h3>
-                      ),
-                      p: ({ children }) => (
-                        <p className="mt-2 whitespace-pre-wrap">{children}</p>
-                      ),
-                      ul: ({ children }) => (
-                        <ul className="mt-2 list-disc space-y-1 pl-4">
-                          {children}
-                        </ul>
-                      ),
-                      blockquote: ({ children }) => (
-                        <blockquote className="mt-3 rounded-lg border-l-2 border-[#8066ec] bg-[#f7f4ff] px-3 py-2 text-[#71778a]">
-                          {children}
-                        </blockquote>
-                      ),
-                      hr: () => <hr className="my-4 border-[#eceef3]" />,
-                    }}
-                  >
-                    {selectedManual.contentMarkdown}
-                  </ReactMarkdown>
-                </article>
-              ) : (
-                <div className="px-4 py-10 text-center text-[10px] text-[#989eae]">
-                  등록된 원내매뉴얼이 없습니다.
-                </div>
-              )}
             </>
           ) : (
             <div className="flex h-48 flex-col items-center justify-center text-[#9aa0b0]">
@@ -878,6 +931,9 @@ export function ChattingClient({
                 <h2 className="truncate text-base font-bold tracking-[-0.03em]">
                   {currentRoom.customer.name}
                 </h2>
+                <span className="shrink-0 font-mono text-xs font-medium text-[#9aa0af]">
+                  #{currentRoom.customer.chartNumber}
+                </span>
                 {currentRoom.customer.tags.includes("VIP") ? (
                   <span className="rounded-full bg-[#fff3c5] px-2 py-0.5 text-[8px] font-bold text-[#a97500]">
                     VIP

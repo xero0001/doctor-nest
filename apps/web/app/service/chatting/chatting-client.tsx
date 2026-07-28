@@ -949,7 +949,7 @@ export function ChattingClient({
                 >
                   <div className={`max-w-[72%] ${inbound ? "" : "text-right"}`}>
                     {inbound ? (
-                      <p className="mb-1.5 pl-1 text-[13px] font-bold text-[#596176]">
+                      <p className="mb-1.5 pl-1 text-base font-semibold text-[#596176]">
                         {currentRoom.customer.name}
                       </p>
                     ) : null}
@@ -959,7 +959,7 @@ export function ChattingClient({
                       </p>
                     ) : null}
                     <div
-                      className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-left text-[13px] leading-[1.7] shadow-sm ${
+                      className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-left text-base leading-[1.7] shadow-sm ${
                         inbound
                           ? "rounded-tl-[5px] border border-[#dfe3ec] bg-white text-[#454b5e]"
                           : "rounded-br-[5px] bg-gradient-to-br from-[#3157f6] to-[#6657e9] text-white"

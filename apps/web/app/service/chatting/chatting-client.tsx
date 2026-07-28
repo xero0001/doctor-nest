@@ -1247,7 +1247,7 @@ export function ChattingClient({
                   type="button"
                   onClick={() => void copyChartNumber()}
                   aria-label={`차트번호 ${currentRoom.customer.chartNumber} 복사`}
-                  className="shrink-0 rounded-md border border-[#d9deea] bg-white px-2 py-1 font-mono text-xs font-medium text-[#737b8f] transition-colors hover:border-[#bfc7d8] hover:bg-[#f8f9fc]"
+                  className="shrink-0 rounded-md border border-[#d9deea] bg-white px-1.5 py-0.5 font-mono text-xs font-medium leading-4 text-[#737b8f] transition-colors hover:border-[#bfc7d8] hover:bg-[#f8f9fc]"
                 >
                   {copiedChartNumber === currentRoom.customer.chartNumber
                     ? "복사되었습니다"
@@ -1554,7 +1554,7 @@ export function ChattingClient({
                 type="button"
                 onClick={() => void copyChartNumber()}
                 aria-label={`차트번호 ${currentRoom.customer.chartNumber} 복사`}
-                className="rounded-md border border-[#d9deea] bg-white px-2 py-1 font-mono text-xs font-medium text-[#737b8f] transition-colors hover:border-[#bfc7d8] hover:bg-[#f8f9fc]"
+                className="rounded-md border border-[#d9deea] bg-white px-1.5 py-0.5 font-mono text-xs font-medium leading-4 text-[#737b8f] transition-colors hover:border-[#bfc7d8] hover:bg-[#f8f9fc]"
               >
                 {copiedChartNumber === currentRoom.customer.chartNumber
                   ? "복사되었습니다"

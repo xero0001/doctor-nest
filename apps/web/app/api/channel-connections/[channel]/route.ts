@@ -1,6 +1,11 @@
 import { getDatabase } from "@doctornest/database";
 
 import { getCurrentUser } from "@/lib/auth";
+import {
+  encryptChannelCredentials,
+  resolveLineCredentials,
+  type LineCredentials,
+} from "@/lib/channel-credentials";
 
 const supportedChannels = new Set([
   "KAKAO",
@@ -35,6 +40,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     action?: "save" | "disconnect";
     displayName?: string;
     externalAccountId?: string;
+    lineCredentials?: Partial<LineCredentials>;
   } | null;
 
   if (body?.action === "disconnect") {
@@ -76,6 +82,68 @@ export async function POST(request: Request, { params }: RouteContext) {
     );
   }
 
+  let credentialsEncrypted: string | undefined;
+
+  if (channel === "LINE" && body?.lineCredentials) {
+    const environmentCredentials = resolveLineCredentials({
+      credentialsEncrypted: null,
+      externalAccountId,
+    });
+    const channelId =
+      body.lineCredentials.channelId?.trim() ||
+      environmentCredentials.channelId;
+    const channelSecret =
+      body.lineCredentials.channelSecret?.trim() ||
+      environmentCredentials.channelSecret;
+    const channelAccessToken =
+      body.lineCredentials.channelAccessToken?.trim() ||
+      environmentCredentials.channelAccessToken;
+
+    if (!channelId || !channelSecret || !channelAccessToken) {
+      return Response.json(
+        {
+          error:
+            "LINE Channel ID, Channel secret, Channel access token을 모두 입력해 주세요.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const botInfoResponse = await fetch("https://api.line.me/v2/bot/info", {
+      headers: {
+        Authorization: `Bearer ${channelAccessToken}`,
+      },
+      cache: "no-store",
+    }).catch(() => null);
+
+    if (!botInfoResponse?.ok) {
+      return Response.json(
+        { error: "LINE Channel access token을 확인하지 못했습니다." },
+        { status: 400 },
+      );
+    }
+
+    const botInfo = (await botInfoResponse.json().catch(() => null)) as {
+      basicId?: string;
+    } | null;
+
+    if (botInfo?.basicId && botInfo.basicId !== externalAccountId) {
+      return Response.json(
+        {
+          error:
+            "Channel access token이 입력한 Official Account Basic ID와 일치하지 않습니다.",
+        },
+        { status: 400 },
+      );
+    }
+
+    credentialsEncrypted = encryptChannelCredentials({
+      channelId,
+      channelSecret,
+      channelAccessToken,
+    });
+  }
+
   const connection = await getDatabase().channelConnection.upsert({
     where: {
       hospitalId_channel: {
@@ -88,6 +156,8 @@ export async function POST(request: Request, { params }: RouteContext) {
       displayName,
       externalAccountId,
       status: "CONFIGURING",
+      credentialsEncrypted,
+      connectedAt: null,
     },
     create: {
       hospitalId: user.hospitalId,
@@ -96,6 +166,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       displayName,
       externalAccountId,
       status: "CONFIGURING",
+      credentialsEncrypted,
     },
   });
 
@@ -103,5 +174,6 @@ export async function POST(request: Request, { params }: RouteContext) {
     status: connection.status,
     displayName: connection.displayName,
     externalAccountId: connection.externalAccountId,
+    hasCredentials: Boolean(connection.credentialsEncrypted),
   });
 }

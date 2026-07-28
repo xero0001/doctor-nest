@@ -1,6 +1,8 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 
 import { getDatabase } from "@doctornest/database";
+
+import { resolveLineCredentials } from "@/lib/channel-credentials";
 
 const supportedChannels = [
   "KAKAO",
@@ -28,8 +30,33 @@ type InboundEvent = {
   sentAt?: string;
 };
 
+type LineWebhookEvent = {
+  type?: string;
+  timestamp?: number;
+  webhookEventId?: string;
+  source?: {
+    userId?: string;
+  };
+  message?: {
+    id?: string;
+    type?: string;
+    text?: string;
+  };
+};
+
+type LineWebhookPayload = {
+  events?: LineWebhookEvent[];
+};
+
 type RouteContext = {
   params: Promise<{ channel: string; token: string }>;
+};
+
+type WebhookConnection = {
+  id: string;
+  hospitalId: string;
+  credentialsEncrypted: string | null;
+  externalAccountId: string | null;
 };
 
 function isSupportedChannel(channel: string): channel is SupportedChannel {
@@ -48,36 +75,63 @@ function normalizePhone(phone: string | undefined) {
   return digits || null;
 }
 
-export async function POST(request: Request, { params }: RouteContext) {
-  const { channel, token } = await params;
-
-  if (!isSupportedChannel(channel)) {
-    return Response.json({ error: "Unknown channel" }, { status: 404 });
+function parseJson<T>(rawBody: string) {
+  try {
+    return JSON.parse(rawBody) as T;
+  } catch {
+    return null;
   }
+}
 
-  const connection = await getDatabase().channelConnection.findFirst({
-    where: {
-      channel,
-      webhookToken: token,
-    },
-    select: { id: true, hospitalId: true },
-  });
+function hasValidLineSignature(
+  rawBody: string,
+  signature: string,
+  channelSecret: string,
+) {
+  const expectedSignature = createHmac("sha256", channelSecret)
+    .update(rawBody)
+    .digest();
+  const receivedSignature = Buffer.from(signature, "base64");
 
-  if (!connection) {
-    return Response.json({ error: "Unknown webhook" }, { status: 404 });
-  }
+  return (
+    expectedSignature.length === receivedSignature.length &&
+    timingSafeEqual(expectedSignature, receivedSignature)
+  );
+}
 
-  const event = (await request.json().catch(() => null)) as InboundEvent | null;
-  const externalCustomerId = event?.externalCustomerId?.trim();
-  const message = event?.message?.trim();
+async function getLineDisplayName(userId: string, accessToken: string) {
+  if (!accessToken) return undefined;
 
-  if (!event || !externalCustomerId || !message) {
-    return Response.json(
-      {
-        error:
-          "externalCustomerId와 message가 포함된 정규화 이벤트가 필요합니다.",
+  const response = await fetch(
+    `https://api.line.me/v2/bot/profile/${encodeURIComponent(userId)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
       },
-      { status: 400 },
+      cache: "no-store",
+    },
+  ).catch(() => null);
+
+  if (!response?.ok) return undefined;
+
+  const profile = (await response.json().catch(() => null)) as {
+    displayName?: string;
+  } | null;
+
+  return profile?.displayName?.trim() || undefined;
+}
+
+async function persistInboundEvent(
+  connection: WebhookConnection,
+  channel: SupportedChannel,
+  event: InboundEvent,
+) {
+  const externalCustomerId = event.externalCustomerId?.trim();
+  const message = event.message?.trim();
+
+  if (!externalCustomerId || !message) {
+    throw new Error(
+      "externalCustomerId와 message가 포함된 정규화 이벤트가 필요합니다.",
     );
   }
 
@@ -87,17 +141,11 @@ export async function POST(request: Request, { params }: RouteContext) {
   const birthDate = event.birthDate ? new Date(event.birthDate) : null;
 
   if (Number.isNaN(sentAt.getTime())) {
-    return Response.json(
-      { error: "sentAt 형식이 올바르지 않습니다." },
-      { status: 400 },
-    );
+    throw new Error("sentAt 형식이 올바르지 않습니다.");
   }
 
   if (birthDate && Number.isNaN(birthDate.getTime())) {
-    return Response.json(
-      { error: "birthDate 형식이 올바르지 않습니다." },
-      { status: 400 },
-    );
+    throw new Error("birthDate 형식이 올바르지 않습니다.");
   }
 
   const phone = event.phone?.trim() || null;
@@ -105,7 +153,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   const chartNumber = event.chartNumber?.trim();
   const database = getDatabase();
 
-  const result = await database.$transaction(async (transaction) => {
+  return database.$transaction(async (transaction) => {
     const existingPatientChannel = await transaction.patientChannel.findUnique({
       where: {
         hospitalId_channel_externalCustomerId: {
@@ -280,6 +328,126 @@ export async function POST(request: Request, { params }: RouteContext) {
       matchedBy,
     };
   });
+}
 
-  return Response.json({ received: true, ...result }, { status: 202 });
+export async function POST(request: Request, { params }: RouteContext) {
+  const { channel, token } = await params;
+
+  if (!isSupportedChannel(channel)) {
+    return Response.json({ error: "Unknown channel" }, { status: 404 });
+  }
+
+  const connection = await getDatabase().channelConnection.findFirst({
+    where: {
+      channel,
+      webhookToken: token,
+    },
+    select: {
+      id: true,
+      hospitalId: true,
+      credentialsEncrypted: true,
+      externalAccountId: true,
+    },
+  });
+
+  if (!connection) {
+    return Response.json({ error: "Unknown webhook" }, { status: 404 });
+  }
+
+  const rawBody = await request.text();
+
+  if (channel === "LINE") {
+    let credentials;
+    try {
+      credentials = resolveLineCredentials(connection);
+    } catch {
+      return Response.json(
+        { error: "LINE 자격증명을 읽지 못했습니다." },
+        { status: 503 },
+      );
+    }
+
+    if (!credentials.channelSecret) {
+      return Response.json(
+        { error: "LINE Channel secret이 등록되지 않았습니다." },
+        { status: 503 },
+      );
+    }
+
+    const signature = request.headers.get("x-line-signature");
+    if (
+      !signature ||
+      !hasValidLineSignature(rawBody, signature, credentials.channelSecret)
+    ) {
+      return Response.json({ error: "Invalid signature" }, { status: 401 });
+    }
+
+    const payload = parseJson<LineWebhookPayload>(rawBody);
+    if (!payload || !Array.isArray(payload.events)) {
+      return Response.json({ error: "Invalid LINE webhook" }, { status: 400 });
+    }
+
+    const results = [];
+    for (const lineEvent of payload.events) {
+      if (
+        lineEvent.type !== "message" ||
+        lineEvent.message?.type !== "text" ||
+        !lineEvent.message.text ||
+        !lineEvent.source?.userId
+      ) {
+        continue;
+      }
+
+      const customerName = await getLineDisplayName(
+        lineEvent.source.userId,
+        credentials.channelAccessToken ?? "",
+      );
+      results.push(
+        await persistInboundEvent(connection, channel, {
+          externalCustomerId: lineEvent.source.userId,
+          externalThreadId: lineEvent.source.userId,
+          externalMessageId:
+            lineEvent.message.id ?? lineEvent.webhookEventId,
+          customerName,
+          message: lineEvent.message.text,
+          sentAt: lineEvent.timestamp
+            ? new Date(lineEvent.timestamp).toISOString()
+            : undefined,
+        }),
+      );
+    }
+
+    await getDatabase().channelConnection.update({
+      where: { id: connection.id },
+      data: {
+        status: credentials.channelAccessToken ? "CONNECTED" : "CONFIGURING",
+        connectedAt: credentials.channelAccessToken ? new Date() : null,
+      },
+    });
+
+    return Response.json({ received: true, processed: results.length });
+  }
+
+  const event = parseJson<InboundEvent>(rawBody);
+  if (!event) {
+    return Response.json(
+      { error: "올바른 JSON 이벤트가 필요합니다." },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const result = await persistInboundEvent(connection, channel, event);
+    return Response.json({ received: true, ...result }, { status: 202 });
+  } catch (error) {
+    return Response.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "이벤트를 처리하지 못했습니다.",
+      },
+      { status: 400 },
+    );
+  }
 }

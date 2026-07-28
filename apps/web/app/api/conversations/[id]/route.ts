@@ -1,6 +1,7 @@
 import { getDatabase } from "@doctornest/database";
 
 import { getCurrentUser } from "@/lib/auth";
+import { resolveLineCredentials } from "@/lib/channel-credentials";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -189,7 +190,15 @@ export async function POST(request: Request, { params }: RouteContext) {
       id,
       hospitalId: user.hospitalId,
     },
-    select: { id: true },
+    select: {
+      id: true,
+      channel: true,
+      patientChannel: {
+        select: {
+          externalCustomerId: true,
+        },
+      },
+    },
   });
 
   if (!conversation) {
@@ -197,6 +206,68 @@ export async function POST(request: Request, { params }: RouteContext) {
       { error: "채팅을 찾을 수 없습니다." },
       { status: 404 },
     );
+  }
+
+  if (conversation.channel === "LINE") {
+    const connection = await database.channelConnection.findUnique({
+      where: {
+        hospitalId_channel: {
+          hospitalId: user.hospitalId,
+          channel: "LINE",
+        },
+      },
+      select: {
+        credentialsEncrypted: true,
+        externalAccountId: true,
+      },
+    });
+
+    if (!connection || !conversation.patientChannel?.externalCustomerId) {
+      return Response.json(
+        { error: "LINE Messaging API 연동을 먼저 완료해 주세요." },
+        { status: 409 },
+      );
+    }
+
+    let accessToken: string;
+    try {
+      const credentials = resolveLineCredentials(connection);
+      if (!credentials.channelAccessToken) {
+        return Response.json(
+          { error: "LINE Channel access token을 먼저 등록해 주세요." },
+          { status: 409 },
+        );
+      }
+      accessToken = credentials.channelAccessToken;
+    } catch {
+      return Response.json(
+        { error: "LINE 자격증명을 읽지 못했습니다." },
+        { status: 500 },
+      );
+    }
+
+    const lineResponse = await fetch(
+      "https://api.line.me/v2/bot/message/push",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to: conversation.patientChannel.externalCustomerId,
+          messages: [{ type: "text", text: content }],
+        }),
+        cache: "no-store",
+      },
+    ).catch(() => null);
+
+    if (!lineResponse?.ok) {
+      return Response.json(
+        { error: "LINE 메시지를 발송하지 못했습니다." },
+        { status: 502 },
+      );
+    }
   }
 
   const sentAt = new Date();

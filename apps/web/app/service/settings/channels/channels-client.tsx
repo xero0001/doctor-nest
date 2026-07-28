@@ -32,6 +32,7 @@ type Connection = {
   displayName: string | null;
   externalAccountId: string | null;
   webhookToken: string;
+  hasCredentials: boolean;
 };
 
 type ChannelDefinition = {
@@ -78,8 +79,8 @@ const definitions: Record<ChannelType, ChannelDefinition> = {
     summary:
       "병원 LINE Official Account의 메시지를 Messaging API로 연결합니다.",
     owner: "병원 명의 Official Account와 Provider",
-    accountIdLabel: "Channel ID",
-    accountIdPlaceholder: "1234567890",
+    accountIdLabel: "Official Account Basic ID",
+    accountIdPlaceholder: "@648wzhlw",
     badge: "L",
     badgeClass: "bg-[#06c755] text-white",
     requirements: ["Business ID", "Official Account", "Messaging API"],
@@ -176,10 +177,15 @@ export function ChannelsClient({
   connections: initialConnections,
   organizationName,
   appUrl,
+  lineEnvironmentConfigured,
 }: {
   connections: Connection[];
   organizationName: string;
   appUrl: string;
+  lineEnvironmentConfigured: {
+    channelId: boolean;
+    channelSecret: boolean;
+  };
 }) {
   const [connections, setConnections] = useState(initialConnections);
   const [selectedChannel, setSelectedChannel] = useState<ChannelType | null>(
@@ -187,6 +193,9 @@ export function ChannelsClient({
   );
   const [displayName, setDisplayName] = useState("");
   const [externalAccountId, setExternalAccountId] = useState("");
+  const [lineChannelId, setLineChannelId] = useState("");
+  const [lineChannelSecret, setLineChannelSecret] = useState("");
+  const [lineChannelAccessToken, setLineChannelAccessToken] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -207,6 +216,9 @@ export function ChannelsClient({
         `${organizationName} ${definitions[channel].label}`,
     );
     setExternalAccountId(connection?.externalAccountId ?? "");
+    setLineChannelId("");
+    setLineChannelSecret("");
+    setLineChannelAccessToken("");
     setError("");
     setCopied(false);
   }
@@ -219,6 +231,11 @@ export function ChannelsClient({
     setError("");
 
     try {
+      const hasNewLineCredentials =
+        selectedChannel === "LINE" &&
+        Boolean(
+          lineChannelId || lineChannelSecret || lineChannelAccessToken,
+        );
       const response = await fetch(
         `/api/channel-connections/${selectedChannel}`,
         {
@@ -228,6 +245,13 @@ export function ChannelsClient({
             action: "save",
             displayName,
             externalAccountId,
+            lineCredentials: hasNewLineCredentials
+              ? {
+                  channelId: lineChannelId,
+                  channelSecret: lineChannelSecret,
+                  channelAccessToken: lineChannelAccessToken,
+                }
+              : undefined,
           }),
         },
       );
@@ -236,6 +260,7 @@ export function ChannelsClient({
         status?: ConnectionStatus;
         displayName?: string;
         externalAccountId?: string;
+        hasCredentials?: boolean;
       };
 
       if (!response.ok || !result.status) {
@@ -251,6 +276,8 @@ export function ChannelsClient({
                 status: result.status!,
                 displayName: result.displayName ?? null,
                 externalAccountId: result.externalAccountId ?? null,
+                hasCredentials:
+                  result.hasCredentials ?? connection.hasCredentials,
               }
             : connection,
         ),
@@ -286,7 +313,12 @@ export function ChannelsClient({
       setConnections((current) =>
         current.map((connection) =>
           connection.channel === channel
-            ? { ...connection, status: result.status!, externalAccountId: null }
+            ? {
+                ...connection,
+                status: result.status!,
+                externalAccountId: null,
+                hasCredentials: false,
+              }
             : connection,
         ),
       );
@@ -584,6 +616,85 @@ export function ChannelsClient({
                   </span>
                 </label>
 
+                {selectedChannel === "LINE" ? (
+                  <div className="space-y-4 rounded-2xl border border-[#dfe5f0] bg-[#fafbfe] p-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-[#4f576d]">
+                        Messaging API 자격증명
+                      </p>
+                      <p className="mt-1 text-[9px] leading-4 text-[#858c9e]">
+                        LINE Developers Console에서 확인한 값을 입력하세요.
+                        {selectedConnection.hasCredentials
+                          ? " 현재 자격증명이 등록되어 있으며, 변경할 때만 다시 입력하면 됩니다."
+                          : ""}
+                      </p>
+                    </div>
+
+                    <label className="block">
+                      <span className="mb-2 block text-[10px] font-bold text-[#596177]">
+                        Channel ID
+                      </span>
+                      <input
+                        value={lineChannelId}
+                        onChange={(event) =>
+                          setLineChannelId(event.target.value)
+                        }
+                        autoComplete="off"
+                        className="h-11 w-full rounded-xl border border-[#dde2ec] bg-white px-3 font-mono text-[11px] outline-none focus:border-[#6f83f2] focus:ring-3 focus:ring-[#3157f6]/10"
+                        placeholder={
+                          selectedConnection.hasCredentials
+                            ? "등록됨 · 변경할 때만 입력"
+                            : lineEnvironmentConfigured.channelId
+                              ? "Vercel 환경변수에 등록됨"
+                            : "1234567890"
+                        }
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block text-[10px] font-bold text-[#596177]">
+                        Channel secret
+                      </span>
+                      <input
+                        type="password"
+                        value={lineChannelSecret}
+                        onChange={(event) =>
+                          setLineChannelSecret(event.target.value)
+                        }
+                        autoComplete="new-password"
+                        className="h-11 w-full rounded-xl border border-[#dde2ec] bg-white px-3 font-mono text-[11px] outline-none focus:border-[#6f83f2] focus:ring-3 focus:ring-[#3157f6]/10"
+                        placeholder={
+                          selectedConnection.hasCredentials
+                            ? "등록됨 · 변경할 때만 입력"
+                            : lineEnvironmentConfigured.channelSecret
+                              ? "Vercel 환경변수에 등록됨"
+                            : "Channel secret"
+                        }
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block text-[10px] font-bold text-[#596177]">
+                        Channel access token
+                      </span>
+                      <textarea
+                        value={lineChannelAccessToken}
+                        onChange={(event) =>
+                          setLineChannelAccessToken(event.target.value)
+                        }
+                        autoComplete="off"
+                        rows={3}
+                        className="w-full resize-none rounded-xl border border-[#dde2ec] bg-white px-3 py-3 font-mono text-[10px] outline-none focus:border-[#6f83f2] focus:ring-3 focus:ring-[#3157f6]/10"
+                        placeholder={
+                          selectedConnection.hasCredentials
+                            ? "등록됨 · 변경할 때만 입력"
+                            : "발급한 access token"
+                        }
+                      />
+                    </label>
+                  </div>
+                ) : null}
+
                 <div>
                   <span className="mb-2 block text-[10px] font-bold text-[#596177]">
                     닥터네스트 웹훅 URL
@@ -632,8 +743,8 @@ export function ChannelsClient({
                       보안 자격증명은 별도로 등록됩니다
                     </p>
                     <p className="mt-1 text-[9px] leading-4 text-[#858c9e]">
-                      App Secret, Access Token 등의 민감정보는 계정 식별자 저장
-                      후 보안 연결 단계에서 암호화해 등록합니다.
+                      App Secret, Access Token 등의 민감정보는 암호화해 저장하며
+                      저장 후 화면이나 API 응답에 다시 노출하지 않습니다.
                     </p>
                   </div>
                 </div>

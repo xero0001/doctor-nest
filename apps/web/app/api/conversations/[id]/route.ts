@@ -6,6 +6,7 @@ import {
 } from "@/lib/ai-translation";
 import { getCurrentUser } from "@/lib/auth";
 import { decryptLineCredentials } from "@/lib/channel-credentials";
+import { getTranslationContext } from "@/lib/translation-context";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -234,10 +235,15 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   if (autoTranslate) {
     try {
+      const context = await getTranslationContext({
+        hospitalId: user.hospitalId,
+        conversationId: conversation.id,
+      });
       translation = await translateStaffReply(
         content,
         conversation.patient.language,
         user.hospitalId,
+        context,
       );
     } catch (error) {
       return Response.json(

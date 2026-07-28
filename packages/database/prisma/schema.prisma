@@ -8,22 +8,24 @@ datasource db {
 }
 
 model Hospital {
-  id                 String              @id @default(cuid())
-  name               String
-  slug               String              @unique
-  users              User[]
-  authUsers          AuthUser[]
-  channelConnections ChannelConnection[]
-  patients           Patient[]
-  patientTags        PatientTag[]
-  conversations      Conversation[]
-  appointments       Appointment[]
-  manualFolders      ManualFolder[]
-  manualTags         ManualTag[]
-  manualDocuments    ManualDocument[]
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  patientChannels    PatientChannel[]
+  id                             String              @id @default(cuid())
+  name                           String
+  slug                           String              @unique
+  translationContextEnabled      Boolean             @default(true)
+  translationContextMessageCount Int                 @default(10)
+  users                          User[]
+  authUsers                      AuthUser[]
+  channelConnections             ChannelConnection[]
+  patients                       Patient[]
+  patientTags                    PatientTag[]
+  conversations                  Conversation[]
+  appointments                   Appointment[]
+  manualFolders                  ManualFolder[]
+  manualTags                     ManualTag[]
+  manualDocuments                ManualDocument[]
+  createdAt                      DateTime            @default(now())
+  updatedAt                      DateTime            @updatedAt
+  patientChannels                PatientChannel[]
 
   @@map("Organization")
 }

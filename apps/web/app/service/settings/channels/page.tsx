@@ -8,15 +8,28 @@ export const dynamic = "force-dynamic";
 
 export default async function ChannelSettingsPage() {
   const user = await requireUser();
-  const connections = await getDatabase().channelConnection.findMany({
-    where: { hospitalId: user.hospitalId },
-    orderBy: { channel: "asc" },
-  });
+  const [connections, hospital] = await Promise.all([
+    getDatabase().channelConnection.findMany({
+      where: { hospitalId: user.hospitalId },
+      orderBy: { channel: "asc" },
+    }),
+    getDatabase().hospital.findUniqueOrThrow({
+      where: { id: user.hospitalId },
+      select: {
+        translationContextEnabled: true,
+        translationContextMessageCount: true,
+      },
+    }),
+  ]);
 
   return (
     <ChannelsClient
       organizationName={user.hospital.name}
       appUrl={process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}
+      translationSettings={{
+        contextEnabled: hospital.translationContextEnabled,
+        contextMessageCount: hospital.translationContextMessageCount,
+      }}
       connections={connections.map((connection) => ({
         channel: connection.channel,
         status: connection.status,

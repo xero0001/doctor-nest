@@ -5,6 +5,7 @@ import { after } from "next/server";
 
 import { translateIncomingMessage } from "@/lib/ai-translation";
 import { decryptLineCredentials } from "@/lib/channel-credentials";
+import { getTranslationContext } from "@/lib/translation-context";
 
 const supportedChannels = [
   "KAKAO",
@@ -349,9 +350,15 @@ function scheduleInboundTranslation(
   if (result.duplicate) return;
 
   after(async () => {
+    const context = await getTranslationContext({
+      hospitalId: connection.hospitalId,
+      conversationId: result.conversationId,
+      excludeMessageId: result.messageId,
+    });
     const translation = await translateIncomingMessage(
       content,
       connection.hospitalId,
+      context,
     );
     const shouldUpdatePatientLanguage =
       translation.sourceLanguage &&

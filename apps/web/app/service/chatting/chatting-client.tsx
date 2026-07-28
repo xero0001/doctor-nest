@@ -12,6 +12,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  CircleAlert,
   CircleUserRound,
   Clock3,
   Folder,
@@ -36,6 +37,7 @@ import { LineChannelIcon } from "@/features/channels/components/line-channel-ico
 import { SectionTabs } from "@/features/chatting/components/section-tabs";
 
 import type {
+  ChatCoachSuggestion,
   ChatChannel,
   ConversationItem,
   ManualFolderItem,
@@ -466,8 +468,19 @@ export function ChattingClient({
   const [loadingRoomId, setLoadingRoomId] = useState<string | null>(null);
   const [detailError, setDetailError] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [autoRespond, setAutoRespond] = useState(false);
   const [autoTranslate, setAutoTranslate] = useState(true);
+  const [coachSuggestions, setCoachSuggestions] = useState<
+    Record<string, ChatCoachSuggestion>
+  >({});
+  const [coachFailure, setCoachFailure] = useState<{
+    key: string;
+    message: string;
+  } | null>(null);
+  const [coachRetryToken, setCoachRetryToken] = useState(0);
   const detailRequestId = useRef(0);
+  const coachRequestId = useRef(0);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
 
   const visibleRooms = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -505,6 +518,29 @@ export function ChattingClient({
   const selectedManual =
     manualDocuments.find((document) => document.id === selectedManualId) ??
     null;
+  const latestCustomerMessage = currentRoom
+    ? currentRoom.messages
+        .slice()
+        .reverse()
+        .find((message) => message.sender === "CUSTOMER")
+    : undefined;
+  const coachSuggestionKey =
+    currentRoom && latestCustomerMessage
+      ? `${currentRoom.id}:${latestCustomerMessage.id}`
+      : "";
+  const currentCoachSuggestion = coachSuggestionKey
+    ? coachSuggestions[coachSuggestionKey]
+    : undefined;
+  const coachStatus =
+    !autoRespond || !coachSuggestionKey
+      ? "idle"
+      : currentCoachSuggestion
+        ? "ready"
+        : coachFailure?.key === coachSuggestionKey
+          ? "error"
+          : "loading";
+  const coachError =
+    coachFailure?.key === coachSuggestionKey ? coachFailure.message : "";
   const chatTabs = useMemo(() => {
     let openCount = 0;
     let closedCount = 0;
@@ -649,6 +685,118 @@ export function ChattingClient({
 
     return () => abortController.abort();
   }, [initialConversationId, initialUnreadCount]);
+
+  useEffect(() => {
+    if (!autoRespond || !coachSuggestionKey || currentCoachSuggestion) return;
+
+    const abortController = new AbortController();
+    const requestId = ++coachRequestId.current;
+
+    async function generateCoachSuggestion() {
+      try {
+        const response = await fetch(
+          `/api/conversations/${selectedRoomId}/coach`,
+          {
+            method: "POST",
+            cache: "no-store",
+            signal: abortController.signal,
+          },
+        );
+        const result = (await response.json()) as ChatCoachSuggestion & {
+          error?: string;
+        };
+
+        if (
+          !response.ok ||
+          !result.generatedForMessageId ||
+          !result.responseGuide ||
+          !result.answerExample
+        ) {
+          throw new Error(
+            result.error ?? "AI 응대 가이드를 생성하지 못했습니다.",
+          );
+        }
+
+        if (requestId !== coachRequestId.current) return;
+
+        setCoachSuggestions((current) => ({
+          ...current,
+          [`${selectedRoomId}:${result.generatedForMessageId}`]: result,
+        }));
+        setCoachFailure(null);
+      } catch (error) {
+        if (abortController.signal.aborted) return;
+        if (requestId !== coachRequestId.current) return;
+
+        setCoachFailure({
+          key: coachSuggestionKey,
+          message:
+            error instanceof Error
+              ? error.message
+              : "AI 응대 가이드를 생성하지 못했습니다.",
+        });
+      }
+    }
+
+    void generateCoachSuggestion();
+
+    return () => abortController.abort();
+  }, [
+    autoRespond,
+    coachRetryToken,
+    coachSuggestionKey,
+    currentCoachSuggestion,
+    selectedRoomId,
+  ]);
+
+  useEffect(() => {
+    if (!autoRespond || !selectedRoomId) return;
+
+    let fetching = false;
+    const abortController = new AbortController();
+
+    async function refreshCurrentConversation() {
+      if (fetching || document.visibilityState === "hidden") return;
+      fetching = true;
+
+      try {
+        const response = await fetch(`/api/conversations/${selectedRoomId}`, {
+          cache: "no-store",
+          signal: abortController.signal,
+        });
+        const result = (await response.json()) as {
+          conversation?: ConversationItem;
+        };
+
+        if (!response.ok || !result.conversation) return;
+
+        setRooms((current) =>
+          current.map((room) =>
+            room.id === selectedRoomId ? result.conversation! : room,
+          ),
+        );
+      } finally {
+        fetching = false;
+      }
+    }
+
+    const intervalId = window.setInterval(
+      () => void refreshCurrentConversation(),
+      5_000,
+    );
+
+    return () => {
+      window.clearInterval(intervalId);
+      abortController.abort();
+    };
+  }, [autoRespond, selectedRoomId]);
+
+  function applyCoachAnswer() {
+    if (!currentCoachSuggestion) return;
+
+    setDraft(currentCoachSuggestion.answerExample);
+    window.requestAnimationFrame(() => composerRef.current?.focus());
+  }
 
   async function sendMessage() {
     const message = draft.trim();
@@ -1116,43 +1264,75 @@ export function ChattingClient({
               <div className="flex min-w-0 items-center gap-2">
                 <button
                   type="button"
-                  onClick={() =>
-                    setDraft(
-                      "문의 주신 내용을 확인했습니다. 예약 가능한 시간을 확인해 바로 안내드리겠습니다.",
-                    )
-                  }
+                  onClick={() => {
+                    if (currentCoachSuggestion) {
+                      applyCoachAnswer();
+                    } else {
+                      setAutoRespond(true);
+                    }
+                  }}
                   className="flex shrink-0 items-center gap-1 rounded-md bg-[#eef2ff] px-2 py-1 font-semibold text-[#3157f6]"
                 >
                   <WandSparkles className="size-3" /> AI 답변 제안
                 </button>
                 <span className="truncate">
-                  {autoTranslate
-                    ? "고객 언어에 맞춰 자동 번역됩니다."
-                    : "입력한 원문 그대로 발송됩니다."}
+                  {autoRespond
+                    ? coachStatus === "loading"
+                      ? "고객의 마지막 응답을 분석하고 있습니다."
+                      : "응대 가이드와 답변 예시를 준비합니다."
+                    : autoTranslate
+                      ? "고객 언어에 맞춰 자동 번역됩니다."
+                      : "입력한 원문 그대로 발송됩니다."}
                 </span>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="font-semibold text-[#596176]">자동 번역</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={autoTranslate}
-                  aria-label="자동 번역"
-                  onClick={() => setAutoTranslate((enabled) => !enabled)}
-                  className={`relative h-5 w-9 rounded-full transition-colors ${
-                    autoTranslate ? "bg-[#3157f6]" : "bg-[#c7ccd8]"
-                  }`}
-                >
-                  <span
-                    className={`absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform ${
-                      autoTranslate ? "translate-x-4" : "translate-x-0"
+              <div className="flex shrink-0 items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-[#596176]">
+                    자동 응대
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={autoRespond}
+                    aria-label="자동 응대"
+                    onClick={() => setAutoRespond((enabled) => !enabled)}
+                    className={`relative h-5 w-9 rounded-full transition-colors ${
+                      autoRespond ? "bg-[#3157f6]" : "bg-[#c7ccd8]"
                     }`}
-                  />
-                </button>
+                  >
+                    <span
+                      className={`absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform ${
+                        autoRespond ? "translate-x-4" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-[#596176]">
+                    자동 번역
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={autoTranslate}
+                    aria-label="자동 번역"
+                    onClick={() => setAutoTranslate((enabled) => !enabled)}
+                    className={`relative h-5 w-9 rounded-full transition-colors ${
+                      autoTranslate ? "bg-[#3157f6]" : "bg-[#c7ccd8]"
+                    }`}
+                  >
+                    <span
+                      className={`absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform ${
+                        autoTranslate ? "translate-x-4" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
             </div>
             <div className="rounded-xl border border-[#dfe3ec] bg-white p-2 focus-within:border-[#7187f6] focus-within:ring-2 focus-within:ring-[#3157f6]/10">
               <textarea
+                ref={composerRef}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => {
@@ -1357,31 +1537,96 @@ export function ChattingClient({
               <p className="text-xs font-bold">AI 상담 코치</p>
             </div>
             <div className="rounded-xl border border-[#e0e4ed] bg-white p-3.5 shadow-[0_4px_14px_rgba(42,54,102,0.04)]">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-[#747b8f]">
-                  <Bot className="size-3.5 text-[#6657e9]" /> 상담 요약
-                </span>
-                <span className="rounded-full bg-[#eef8f3] px-2 py-1 text-xs font-bold text-[#1d9b60]">
-                  <BadgeCheck className="mr-1 inline size-2.5" />
-                  분석 완료
-                </span>
-              </div>
-              <p className="text-xs leading-[1.65] text-[#5a6175]">
-                고객이 {currentRoom.customer.tags.at(-1) ?? "시술"} 상담과 예약
-                가능 시간을 문의했습니다. 고객 언어에 맞춰 일정 선택지를 안내해
-                주세요.
-              </p>
-              <button
-                type="button"
-                onClick={() =>
-                  setDraft(
-                    "문의 주신 내용을 확인했습니다. 예약 가능한 시간을 확인해 바로 안내드리겠습니다.",
-                  )
-                }
-                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#edf2ff] py-2 text-xs font-bold text-[#3157f6]"
-              >
-                <WandSparkles className="size-3" /> 답변에 사용
-              </button>
+              {!autoRespond ? (
+                <div className="py-4 text-center">
+                  <Bot className="mx-auto size-6 text-[#a1a8b8]" />
+                  <p className="mt-2 text-xs font-semibold text-[#697084]">
+                    자동 응대를 켜면 고객의 마지막 응답을 분석합니다.
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-[#959bac]">
+                    치료태그와 상담백과사전을 참고해 응대 가이드와 답변 예시를
+                    생성합니다.
+                  </p>
+                </div>
+              ) : coachStatus === "loading" ? (
+                <div className="flex min-h-32 flex-col items-center justify-center text-center">
+                  <LoaderCircle className="size-5 animate-spin text-[#3157f6]" />
+                  <p className="mt-2 text-xs font-semibold text-[#697084]">
+                    응대 가이드를 생성하고 있습니다.
+                  </p>
+                </div>
+              ) : coachStatus === "error" ? (
+                <div className="py-3 text-center">
+                  <CircleAlert className="mx-auto size-5 text-[#d8465b]" />
+                  <p className="mt-2 text-xs leading-5 text-[#8a5260]">
+                    {coachError}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!coachSuggestionKey) return;
+                      setCoachFailure(null);
+                      setCoachRetryToken((current) => current + 1);
+                    }}
+                    className="mt-3 rounded-lg bg-[#fff0f2] px-3 py-2 text-xs font-bold text-[#d8465b]"
+                  >
+                    다시 생성
+                  </button>
+                </div>
+              ) : currentCoachSuggestion ? (
+                <>
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-[#747b8f]">
+                      <Bot className="size-3.5 text-[#6657e9]" /> 응대 가이드
+                    </span>
+                    <span className="rounded-full bg-[#eef8f3] px-2 py-1 text-xs font-bold text-[#1d9b60]">
+                      <BadgeCheck className="mr-1 inline size-2.5" />
+                      생성 완료
+                    </span>
+                  </div>
+                  <p className="whitespace-pre-wrap text-xs leading-[1.7] text-[#555d72]">
+                    {currentCoachSuggestion.responseGuide}
+                  </p>
+
+                  <div className="my-4 h-px bg-[#e5e8ef]" />
+
+                  <p className="mb-2 text-xs font-bold text-[#3157f6]">
+                    답변 예시
+                  </p>
+                  <p className="whitespace-pre-wrap rounded-xl bg-[#eaf0ff] p-3 text-xs leading-[1.75] text-[#4e5d83]">
+                    {currentCoachSuggestion.answerExample}
+                  </p>
+
+                  {currentCoachSuggestion.sources.length > 0 ? (
+                    <p className="mt-3 text-xs leading-5 text-[#8b92a5]">
+                      참고 문서 ·{" "}
+                      {currentCoachSuggestion.sources
+                        .map((source) => source.title)
+                        .join(", ")}
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-xs leading-5 text-[#a07845]">
+                      일치하는 상담백과사전 문서가 없어 일반 응대 원칙만
+                      반영했습니다.
+                    </p>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={applyCoachAnswer}
+                    className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#edf2ff] py-2 text-xs font-bold text-[#3157f6]"
+                  >
+                    <WandSparkles className="size-3" /> 답변에 사용
+                  </button>
+                </>
+              ) : (
+                <div className="py-4 text-center">
+                  <Bot className="mx-auto size-6 text-[#a1a8b8]" />
+                  <p className="mt-2 text-xs font-semibold text-[#697084]">
+                    분석할 고객 메시지가 없습니다.
+                  </p>
+                </div>
+              )}
             </div>
           </section>
         </div>

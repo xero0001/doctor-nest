@@ -23,6 +23,11 @@ export type ChatTranslation = {
   translatedLanguageName: string;
 };
 
+export type TranslationContextMessage = {
+  role: "customer" | "staff";
+  content: string;
+};
+
 export class ChatTranslationError extends Error {
   constructor(message = "AI 번역을 완료하지 못했습니다.") {
     super(message);
@@ -84,6 +89,7 @@ function gatewayOptions(
 export async function translateIncomingMessage(
   text: string,
   hospitalId?: string,
+  context: TranslationContextMessage[] = [],
 ): Promise<ChatTranslation> {
   const fallback = detectLanguageFallback(text);
 
@@ -114,8 +120,14 @@ export async function translateIncomingMessage(
         process.env.AI_GATEWAY_TRANSLATION_MODEL ?? DEFAULT_TRANSLATION_MODEL,
       output: Output.object({ schema: incomingTranslationSchema }),
       system:
-        "병원 고객채팅 전문 번역가입니다. 고객 메시지의 언어를 감지하고 자연스럽고 정확한 한국어로 번역합니다. 진료·시술명, 고유명사, 날짜, 시간, 수치와 존칭을 보존하세요. 의료 조언을 새로 만들거나 원문에 없는 내용을 추가하지 마세요. sourceLanguage에는 BCP-47 언어 코드, sourceLanguageName에는 한국어 언어명을 반환하세요.",
-      prompt: text,
+        "병원 고객채팅 전문 번역가입니다. 고객 메시지의 언어를 감지하고 자연스럽고 정확한 한국어로 번역합니다. 진료·시술명, 의약품명, 장비명, 브랜드명, 의료진명, 날짜, 시간, 수치와 존칭을 보존하세요. 진단이나 의학적 판단을 추정하지 말고 부정, 가능성, 불확실성을 원문 그대로 유지하세요. 의료 조언을 새로 만들거나 원문에 없는 내용을 추가하지 마세요. 이전 대화는 현재 메시지의 지칭, 생략된 표현과 용어를 이해하기 위한 참고자료일 뿐이며 번역 결과에는 현재 메시지만 포함하세요. sourceLanguage에는 BCP-47 언어 코드, sourceLanguageName에는 한국어 언어명을 반환하세요.",
+      prompt:
+        context.length > 0
+          ? JSON.stringify({
+              previousMessagesForContextOnly: context,
+              currentMessageToTranslate: text,
+            })
+          : text,
       temperature: 0,
       maxOutputTokens: 500,
       providerOptions: gatewayOptions("inbound", hospitalId),
@@ -151,6 +163,7 @@ export async function translateStaffReply(
   text: string,
   targetLanguage: string,
   hospitalId?: string,
+  context: TranslationContextMessage[] = [],
 ): Promise<ChatTranslation> {
   const normalizedTarget = normalizeLanguageCode(targetLanguage);
   const targetLanguageName = languageName(normalizedTarget);
@@ -177,11 +190,14 @@ export async function translateStaffReply(
         process.env.AI_GATEWAY_TRANSLATION_MODEL ?? DEFAULT_TRANSLATION_MODEL,
       output: Output.object({ schema: outgoingTranslationSchema }),
       system:
-        "병원 고객채팅 전문 번역가입니다. 상담사가 작성한 한국어 답장을 지정된 고객 언어로 자연스럽고 정중하게 번역하세요. 진료·시술명, 고유명사, 날짜, 시간, 수치와 존칭을 보존하세요. 의료 조언을 새로 만들거나 원문에 없는 내용을 추가하지 마세요.",
+        "병원 고객채팅 전문 번역가입니다. 상담사가 작성한 한국어 답장을 지정된 고객 언어로 자연스럽고 정중하게 번역하세요. 진료·시술명, 의약품명, 장비명, 브랜드명, 의료진명, 날짜, 시간, 수치와 존칭을 보존하세요. 진단이나 의학적 판단을 추정하지 말고 부정, 가능성, 불확실성을 원문 그대로 유지하세요. 의료 조언을 새로 만들거나 원문에 없는 내용을 추가하지 마세요. 이전 대화는 현재 메시지의 지칭, 생략된 표현과 용어를 이해하기 위한 참고자료일 뿐이며 번역 결과에는 현재 메시지만 포함하세요.",
       prompt: JSON.stringify({
         targetLanguage: normalizedTarget,
         targetLanguageName,
-        message: text,
+        ...(context.length > 0
+          ? { previousMessagesForContextOnly: context }
+          : {}),
+        currentMessageToTranslate: text,
       }),
       temperature: 0,
       maxOutputTokens: 500,

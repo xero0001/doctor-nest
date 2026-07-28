@@ -67,3 +67,13 @@ export type ConversationItem = {
   };
   messages: ConversationMessage[];
 };
+
+export type ChatCoachSuggestion = {
+  generatedForMessageId: string;
+  responseGuide: string;
+  answerExample: string;
+  sources: Array<{
+    id: string;
+    title: string;
+  }>;
+};

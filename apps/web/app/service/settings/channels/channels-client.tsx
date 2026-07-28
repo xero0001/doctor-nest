@@ -12,9 +12,11 @@ import {
   ExternalLink,
   KeyRound,
   Link2,
+  Languages,
   LoaderCircle,
   MessageCircleMore,
   RotateCcw,
+  Save,
   Settings,
   ShieldCheck,
   Webhook,
@@ -173,17 +175,24 @@ const statusMeta: Record<
   ERROR: { label: "확인 필요", className: "bg-[#fff0f2] text-[#d8465b]" },
 };
 
-const settingTabs = ["병원 정보", "사용자", "채널", "AI 상담", "보안"];
+const settingTabs = ["병원 정보", "사용자", "채널", "AI 상담", "보안"] as const;
+type SettingTab = (typeof settingTabs)[number];
 
 export function ChannelsClient({
   connections: initialConnections,
   organizationName,
   appUrl,
+  translationSettings,
 }: {
   connections: Connection[];
   organizationName: string;
   appUrl: string;
+  translationSettings: {
+    contextEnabled: boolean;
+    contextMessageCount: number;
+  };
 }) {
+  const [activeTab, setActiveTab] = useState<SettingTab>("채널");
   const [connections, setConnections] = useState(initialConnections);
   const [selectedChannel, setSelectedChannel] = useState<ChannelType | null>(
     null,
@@ -196,6 +205,16 @@ export function ChannelsClient({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [translationContextEnabled, setTranslationContextEnabled] = useState(
+    translationSettings.contextEnabled,
+  );
+  const [translationContextMessageCount, setTranslationContextMessageCount] =
+    useState(translationSettings.contextMessageCount);
+  const [isSavingTranslationSettings, setIsSavingTranslationSettings] =
+    useState(false);
+  const [translationSettingsError, setTranslationSettingsError] = useState("");
+  const [translationSettingsSaved, setTranslationSettingsSaved] =
+    useState(false);
 
   const selectedConnection = useMemo(
     () =>
@@ -230,9 +249,7 @@ export function ChannelsClient({
     try {
       const hasNewLineCredentials =
         selectedChannel === "LINE" &&
-        Boolean(
-          lineChannelId || lineChannelSecret || lineChannelAccessToken,
-        );
+        Boolean(lineChannelId || lineChannelSecret || lineChannelAccessToken);
       const response = await fetch(
         `/api/channel-connections/${selectedChannel}`,
         {
@@ -327,6 +344,48 @@ export function ChannelsClient({
     }
   }
 
+  async function saveTranslationSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSavingTranslationSettings(true);
+    setTranslationSettingsError("");
+    setTranslationSettingsSaved(false);
+
+    try {
+      const response = await fetch("/api/settings/ai-translation", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          translationContextEnabled,
+          translationContextMessageCount,
+        }),
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        translationContextEnabled?: boolean;
+        translationContextMessageCount?: number;
+      };
+
+      if (
+        !response.ok ||
+        typeof result.translationContextEnabled !== "boolean" ||
+        typeof result.translationContextMessageCount !== "number"
+      ) {
+        setTranslationSettingsError(
+          result.error ?? "번역 설정을 저장하지 못했습니다.",
+        );
+        return;
+      }
+
+      setTranslationContextEnabled(result.translationContextEnabled);
+      setTranslationContextMessageCount(result.translationContextMessageCount);
+      setTranslationSettingsSaved(true);
+    } catch {
+      setTranslationSettingsError("번역 설정 저장 중 문제가 발생했습니다.");
+    } finally {
+      setIsSavingTranslationSettings(false);
+    }
+  }
+
   const connectedCount = connections.filter(
     (connection) => connection.status === "CONNECTED",
   ).length;
@@ -352,11 +411,12 @@ export function ChannelsClient({
                 환경설정
               </div>
               <h1 className="mt-2 text-2xl font-bold tracking-[-0.04em]">
-                채널 연동
+                {activeTab === "AI 상담" ? "AI 상담" : "채널 연동"}
               </h1>
               <p className="mt-2 text-sm text-[#777f93]">
-                {organizationName}으로 들어오는 모든 고객 문의를 닥터네스트에서
-                관리하세요.
+                {activeTab === "AI 상담"
+                  ? "고객 메시지 번역에 사용할 대화 문맥 범위를 관리하세요."
+                  : `${organizationName}으로 들어오는 모든 고객 문의를 닥터네스트에서 관리하세요.`}
               </p>
             </div>
             <div className="flex items-center gap-3 rounded-2xl border border-[#e0e5f0] bg-[#fafbfe] px-4 py-3">
@@ -373,158 +433,287 @@ export function ChannelsClient({
           </div>
 
           <nav className="mt-7 flex gap-7" aria-label="환경설정 탭">
-            {settingTabs.map((tab) => (
-              <button
-                type="button"
-                key={tab}
-                disabled={tab !== "채널"}
-                className={`relative pb-3 text-xs font-semibold ${
-                  tab === "채널"
-                    ? "text-[#3157f6]"
-                    : "cursor-not-allowed text-[#a0a6b5]"
-                }`}
-              >
-                {tab}
-                {tab === "채널" ? (
-                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-[#3157f6]" />
-                ) : null}
-              </button>
-            ))}
+            {settingTabs.map((tab) => {
+              const available = tab === "채널" || tab === "AI 상담";
+              const active = tab === activeTab;
+
+              return (
+                <button
+                  type="button"
+                  key={tab}
+                  disabled={!available}
+                  onClick={() => {
+                    if (available) setActiveTab(tab);
+                  }}
+                  className={`relative pb-3 text-xs font-semibold ${
+                    active
+                      ? "text-[#3157f6]"
+                      : available
+                        ? "text-[#72798d] hover:text-[#3157f6]"
+                        : "cursor-not-allowed text-[#a0a6b5]"
+                  }`}
+                >
+                  {tab}
+                  {active ? (
+                    <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-[#3157f6]" />
+                  ) : null}
+                </button>
+              );
+            })}
           </nav>
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1180px] px-8 py-7">
-        <section className="mb-6 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-[#e1e5ef] bg-white p-4">
-            <p className="text-[10px] font-semibold text-[#8d94a6]">
-              지원 채널
-            </p>
-            <p className="mt-2 text-2xl font-bold">6개</p>
+      {activeTab === "채널" ? (
+        <div className="mx-auto max-w-[1180px] px-8 py-7">
+          <section className="mb-6 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-[#e1e5ef] bg-white p-4">
+              <p className="text-[10px] font-semibold text-[#8d94a6]">
+                지원 채널
+              </p>
+              <p className="mt-2 text-2xl font-bold">6개</p>
+            </div>
+            <div className="rounded-2xl border border-[#e1e5ef] bg-white p-4">
+              <p className="text-[10px] font-semibold text-[#8d94a6]">
+                연동 완료
+              </p>
+              <p className="mt-2 text-2xl font-bold text-[#15945a]">
+                {connectedCount}개
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[#e1e5ef] bg-white p-4">
+              <p className="text-[10px] font-semibold text-[#8d94a6]">
+                설정 진행 중
+              </p>
+              <p className="mt-2 text-2xl font-bold text-[#a66c00]">
+                {configuringCount}개
+              </p>
+            </div>
+          </section>
+
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-bold">고객 상담 채널</h2>
+              <p className="mt-1 text-[11px] text-[#8b92a5]">
+                운영 채널은 각 병원 명의 계정으로 연결됩니다.
+              </p>
+            </div>
+            <span className="flex items-center gap-1.5 rounded-full bg-[#edf8f2] px-3 py-1.5 text-[9px] font-bold text-[#1b965c]">
+              <ShieldCheck className="size-3" /> 병원별 데이터 분리
+            </span>
           </div>
-          <div className="rounded-2xl border border-[#e1e5ef] bg-white p-4">
-            <p className="text-[10px] font-semibold text-[#8d94a6]">
-              연동 완료
-            </p>
-            <p className="mt-2 text-2xl font-bold text-[#15945a]">
-              {connectedCount}개
-            </p>
-          </div>
-          <div className="rounded-2xl border border-[#e1e5ef] bg-white p-4">
-            <p className="text-[10px] font-semibold text-[#8d94a6]">
-              설정 진행 중
-            </p>
-            <p className="mt-2 text-2xl font-bold text-[#a66c00]">
-              {configuringCount}개
-            </p>
-          </div>
-        </section>
 
-        <div className="mb-5 flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-bold">고객 상담 채널</h2>
-            <p className="mt-1 text-[11px] text-[#8b92a5]">
-              운영 채널은 각 병원 명의 계정으로 연결됩니다.
-            </p>
-          </div>
-          <span className="flex items-center gap-1.5 rounded-full bg-[#edf8f2] px-3 py-1.5 text-[9px] font-bold text-[#1b965c]">
-            <ShieldCheck className="size-3" /> 병원별 데이터 분리
-          </span>
-        </div>
+          <section className="grid gap-4 lg:grid-cols-2">
+            {channelOrder.map((channel) => {
+              const definition = definitions[channel];
+              const connection = connections.find(
+                (item) => item.channel === channel,
+              )!;
+              const status = statusMeta[connection.status];
 
-        <section className="grid gap-4 lg:grid-cols-2">
-          {channelOrder.map((channel) => {
-            const definition = definitions[channel];
-            const connection = connections.find(
-              (item) => item.channel === channel,
-            )!;
-            const status = statusMeta[connection.status];
-
-            return (
-              <article
-                key={channel}
-                className="rounded-2xl border border-[#dfe4ef] bg-white p-5 shadow-[0_8px_30px_rgba(36,47,95,0.04)]"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex min-w-0 items-center gap-3">
-                    {channel === "LINE" ? (
-                      <LineChannelIcon size={44} />
-                    ) : (
-                      <span
-                        className={`flex size-11 shrink-0 items-center justify-center rounded-2xl text-xs font-extrabold shadow-sm ${definition.badgeClass}`}
-                      >
-                        {definition.badge}
-                      </span>
-                    )}
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-bold">
-                          {definition.label}
-                        </h3>
-                        <span
-                          className={`rounded-full px-2 py-1 text-[8px] font-bold ${status.className}`}
-                        >
-                          {status.label}
-                        </span>
-                      </div>
-                      <p className="mt-1 truncate text-[10px] text-[#8c93a5]">
-                        {connection.externalAccountId ?? definition.owner}
-                      </p>
-                    </div>
-                  </div>
-                  {connection.status !== "DISCONNECTED" ? (
-                    <CircleCheck className="size-5 shrink-0 text-[#1aa464]" />
-                  ) : (
-                    <Link2 className="size-5 shrink-0 text-[#b2b7c4]" />
-                  )}
-                </div>
-
-                <p className="mt-4 min-h-10 text-[11px] leading-5 text-[#6e768b]">
-                  {definition.summary}
-                </p>
-
-                <div className="mt-4 flex flex-wrap gap-1.5">
-                  {definition.requirements.map((requirement) => (
-                    <span
-                      key={requirement}
-                      className="rounded-md bg-[#f2f4f8] px-2 py-1 text-[8.5px] font-semibold text-[#72798d]"
-                    >
-                      {requirement}
-                    </span>
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => openConnection(channel)}
-                  className={`mt-5 flex h-9 w-full items-center justify-center gap-2 rounded-xl text-[10px] font-bold ${
-                    connection.status === "DISCONNECTED"
-                      ? "bg-[#3157f6] text-white"
-                      : "border border-[#dce1eb] bg-white text-[#59617a] hover:bg-[#f8f9fc]"
-                  }`}
+              return (
+                <article
+                  key={channel}
+                  className="rounded-2xl border border-[#dfe4ef] bg-white p-5 shadow-[0_8px_30px_rgba(36,47,95,0.04)]"
                 >
-                  {connection.status === "DISCONNECTED"
-                    ? "연동 시작"
-                    : "연동 설정 보기"}
-                  <ArrowRight className="size-3.5" />
-                </button>
-              </article>
-            );
-          })}
-        </section>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex min-w-0 items-center gap-3">
+                      {channel === "LINE" ? (
+                        <LineChannelIcon size={44} />
+                      ) : (
+                        <span
+                          className={`flex size-11 shrink-0 items-center justify-center rounded-2xl text-xs font-extrabold shadow-sm ${definition.badgeClass}`}
+                        >
+                          {definition.badge}
+                        </span>
+                      )}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-bold">
+                            {definition.label}
+                          </h3>
+                          <span
+                            className={`rounded-full px-2 py-1 text-[8px] font-bold ${status.className}`}
+                          >
+                            {status.label}
+                          </span>
+                        </div>
+                        <p className="mt-1 truncate text-[10px] text-[#8c93a5]">
+                          {connection.externalAccountId ?? definition.owner}
+                        </p>
+                      </div>
+                    </div>
+                    {connection.status !== "DISCONNECTED" ? (
+                      <CircleCheck className="size-5 shrink-0 text-[#1aa464]" />
+                    ) : (
+                      <Link2 className="size-5 shrink-0 text-[#b2b7c4]" />
+                    )}
+                  </div>
 
-        <div className="mt-6 flex items-start gap-3 rounded-2xl border border-[#dce3f7] bg-[#f2f5ff] p-4">
-          <CircleAlert className="mt-0.5 size-4 shrink-0 text-[#526ce4]" />
-          <div className="text-[10px] leading-5 text-[#66708a]">
-            <p className="font-bold text-[#4054b7]">외부 채널 승인 안내</p>
-            <p>
-              계정 식별자와 웹훅을 저장하면 설정 중 상태가 됩니다. 실제 메시지
-              송수신은 각 플랫폼의 앱 심사, 사업자 인증 및 API 자격증명 검증이
-              완료된 뒤 활성화됩니다.
-            </p>
+                  <p className="mt-4 min-h-10 text-[11px] leading-5 text-[#6e768b]">
+                    {definition.summary}
+                  </p>
+
+                  <div className="mt-4 flex flex-wrap gap-1.5">
+                    {definition.requirements.map((requirement) => (
+                      <span
+                        key={requirement}
+                        className="rounded-md bg-[#f2f4f8] px-2 py-1 text-[8.5px] font-semibold text-[#72798d]"
+                      >
+                        {requirement}
+                      </span>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => openConnection(channel)}
+                    className={`mt-5 flex h-9 w-full items-center justify-center gap-2 rounded-xl text-[10px] font-bold ${
+                      connection.status === "DISCONNECTED"
+                        ? "bg-[#3157f6] text-white"
+                        : "border border-[#dce1eb] bg-white text-[#59617a] hover:bg-[#f8f9fc]"
+                    }`}
+                  >
+                    {connection.status === "DISCONNECTED"
+                      ? "연동 시작"
+                      : "연동 설정 보기"}
+                    <ArrowRight className="size-3.5" />
+                  </button>
+                </article>
+              );
+            })}
+          </section>
+
+          <div className="mt-6 flex items-start gap-3 rounded-2xl border border-[#dce3f7] bg-[#f2f5ff] p-4">
+            <CircleAlert className="mt-0.5 size-4 shrink-0 text-[#526ce4]" />
+            <div className="text-[10px] leading-5 text-[#66708a]">
+              <p className="font-bold text-[#4054b7]">외부 채널 승인 안내</p>
+              <p>
+                계정 식별자와 웹훅을 저장하면 설정 중 상태가 됩니다. 실제 메시지
+                송수신은 각 플랫폼의 앱 심사, 사업자 인증 및 API 자격증명 검증이
+                완료된 뒤 활성화됩니다.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="mx-auto max-w-[1180px] px-8 py-7">
+          <form
+            onSubmit={saveTranslationSettings}
+            className="max-w-[760px] rounded-2xl border border-[#dfe4ef] bg-white p-6 shadow-[0_8px_30px_rgba(36,47,95,0.04)]"
+          >
+            <div className="flex items-start justify-between gap-6">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#edf1ff] text-[#3157f6]">
+                  <Languages className="size-5" />
+                </span>
+                <div>
+                  <h2 className="text-base font-bold text-[#2d3448]">
+                    번역시 컨텍스트 참고
+                  </h2>
+                  <p className="mt-1 text-sm leading-6 text-[#777f93]">
+                    번역할 메시지 앞의 대화를 함께 확인해 시술명, 일정과 생략된
+                    표현을 더 정확하게 번역합니다.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={translationContextEnabled}
+                aria-label="번역시 컨텍스트 참고"
+                onClick={() => {
+                  setTranslationContextEnabled((current) => !current);
+                  setTranslationSettingsSaved(false);
+                }}
+                className={`relative mt-1 h-7 w-12 shrink-0 rounded-full transition-colors ${
+                  translationContextEnabled ? "bg-[#3157f6]" : "bg-[#cbd1dc]"
+                }`}
+              >
+                <span
+                  className={`absolute top-1 size-5 rounded-full bg-white shadow-sm transition-transform ${
+                    translationContextEnabled
+                      ? "translate-x-6"
+                      : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div
+              className={`mt-6 rounded-2xl border p-5 transition-colors ${
+                translationContextEnabled
+                  ? "border-[#dce3f7] bg-[#f7f9ff]"
+                  : "border-[#e5e8ef] bg-[#f8f9fb]"
+              }`}
+            >
+              <label className="block max-w-[300px]">
+                <span className="text-sm font-bold text-[#596177]">
+                  참고할 최근 메시지 수
+                </span>
+                <div className="mt-2 flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    step={1}
+                    disabled={!translationContextEnabled}
+                    value={translationContextMessageCount}
+                    onChange={(event) => {
+                      setTranslationContextMessageCount(
+                        Number(event.target.value),
+                      );
+                      setTranslationSettingsSaved(false);
+                    }}
+                    className="h-11 w-28 rounded-xl border border-[#d9deea] bg-white px-3 text-sm font-semibold outline-none focus:border-[#6f83f2] focus:ring-3 focus:ring-[#3157f6]/10 disabled:cursor-not-allowed disabled:bg-[#eef0f4] disabled:text-[#9ba1af]"
+                  />
+                  <span className="text-sm text-[#777f93]">개</span>
+                </div>
+              </label>
+              <p className="mt-3 text-xs leading-5 text-[#8b92a5]">
+                1~50개까지 설정할 수 있습니다. 고객과 병원 직원이 주고받은
+                메시지만 참고하며, 번역 결과에는 새 메시지만 포함됩니다.
+              </p>
+            </div>
+
+            {translationSettingsError ? (
+              <p
+                role="alert"
+                className="mt-4 rounded-xl bg-[#fff0f2] px-4 py-3 text-sm font-semibold text-[#d8465b]"
+              >
+                {translationSettingsError}
+              </p>
+            ) : null}
+
+            {translationSettingsSaved ? (
+              <p className="mt-4 rounded-xl bg-[#edf8f2] px-4 py-3 text-sm font-semibold text-[#178c56]">
+                번역 설정을 저장했습니다.
+              </p>
+            ) : null}
+
+            <div className="mt-6 flex justify-end">
+              <button
+                type="submit"
+                disabled={
+                  isSavingTranslationSettings ||
+                  !Number.isInteger(translationContextMessageCount) ||
+                  translationContextMessageCount < 1 ||
+                  translationContextMessageCount > 50
+                }
+                className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#3157f6] px-5 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {isSavingTranslationSettings ? (
+                  <LoaderCircle className="size-4 animate-spin" />
+                ) : (
+                  <Save className="size-4" />
+                )}
+                설정 저장
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {selectedChannel && selectedDefinition && selectedConnection ? (
         <div className="fixed inset-0 z-50 flex justify-end bg-[#13182c]/30 backdrop-blur-[2px]">

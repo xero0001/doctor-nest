@@ -46,6 +46,8 @@ import type {
 type ChatTab = "OPEN" | "CLOSED" | "IMPORTANT";
 type ManualDocumentItem = ManualFolderItem["documents"][number];
 
+const CHAT_POLL_INTERVAL_MS = 5_000;
+
 const knowledgeTabs = [
   { value: "원내매뉴얼", label: "원내매뉴얼" },
   { value: "콘텐츠", label: "콘텐츠" },
@@ -809,46 +811,96 @@ export function ChattingClient({
   ]);
 
   useEffect(() => {
-    if (!autoRespond || !selectedRoomId) return;
-
     let fetching = false;
     const abortController = new AbortController();
 
-    async function refreshCurrentConversation() {
+    async function refreshChats() {
       if (fetching || document.visibilityState === "hidden") return;
       fetching = true;
 
       try {
-        const response = await fetch(`/api/conversations/${selectedRoomId}`, {
-          cache: "no-store",
-          signal: abortController.signal,
-        });
-        const result = (await response.json()) as {
-          conversation?: ConversationItem;
+        const [listResponse, detailResponse] = await Promise.all([
+          fetch("/api/conversations", {
+            cache: "no-store",
+            signal: abortController.signal,
+          }),
+          selectedRoomId
+            ? fetch(`/api/conversations/${selectedRoomId}`, {
+                cache: "no-store",
+                signal: abortController.signal,
+              })
+            : Promise.resolve(null),
+        ]);
+        const listResult = (await listResponse.json()) as {
+          conversations?: ConversationItem[];
         };
+        let refreshedConversation: ConversationItem | undefined;
 
-        if (!response.ok || !result.conversation) return;
+        if (detailResponse?.ok) {
+          const detailResult = (await detailResponse.json()) as {
+            conversation?: ConversationItem;
+          };
+          refreshedConversation = detailResult.conversation;
 
-        setRooms((current) =>
-          current.map((room) =>
-            room.id === selectedRoomId ? result.conversation! : room,
-          ),
-        );
+          if (refreshedConversation?.unreadCount) {
+            const readResponse = await fetch(
+              `/api/conversations/${selectedRoomId}`,
+              {
+                method: "PATCH",
+                cache: "no-store",
+                signal: abortController.signal,
+              },
+            );
+
+            if (readResponse.ok) {
+              const readResult = (await readResponse.json()) as {
+                conversation?: ConversationItem;
+              };
+              refreshedConversation =
+                readResult.conversation ?? refreshedConversation;
+            }
+          }
+        }
+
+        if (listResponse.ok && listResult.conversations) {
+          if (!selectedRoomId && listResult.conversations[0]) {
+            setSelectedRoomId(listResult.conversations[0].id);
+          }
+
+          setRooms(
+            listResult.conversations.map((room) =>
+              room.id === selectedRoomId && refreshedConversation
+                ? refreshedConversation
+                : room,
+            ),
+          );
+        } else if (refreshedConversation) {
+          setRooms((current) =>
+            current.map((room) =>
+              room.id === selectedRoomId ? refreshedConversation : room,
+            ),
+          );
+        }
+      } catch (error) {
+        if (abortController.signal.aborted) return;
+        console.error("채팅 폴링 중 문제가 발생했습니다.", error);
       } finally {
         fetching = false;
       }
     }
 
+    void refreshChats();
+
     const intervalId = window.setInterval(
-      () => void refreshCurrentConversation(),
-      5_000,
+      () => void refreshChats(),
+      CHAT_POLL_INTERVAL_MS,
     );
 
     return () => {
       window.clearInterval(intervalId);
       abortController.abort();
     };
-  }, [autoRespond, selectedRoomId]);
+  }, [selectedRoomId]);
 
   function applyCoachAnswer() {
     if (!currentCoachSuggestion) return;

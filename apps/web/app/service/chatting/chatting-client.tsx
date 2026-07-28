@@ -226,7 +226,7 @@ function ManualDocumentContent({ document }: { document: ManualDocumentItem }) {
         {document.tags.map((tag) => (
           <span
             key={tag.id}
-            className="rounded-md px-2 py-1 text-[9px] font-bold"
+            className="rounded-md px-2 py-1 text-xs font-bold"
             style={{
               backgroundColor: `${tag.color}18`,
               color: tag.color,
@@ -348,7 +348,7 @@ function ManualFolderBranch({
             return (
               <div key={document.id}>
                 <div
-                  className={`flex w-full items-center py-2.5 pr-4 text-[10.5px] font-semibold ${
+                  className={`flex w-full items-center py-2.5 pr-4 text-xs font-semibold ${
                     selected
                       ? "bg-[#f0ebff] text-[#6657e9]"
                       : "text-[#646b7f] hover:bg-[#f8f9fc]"

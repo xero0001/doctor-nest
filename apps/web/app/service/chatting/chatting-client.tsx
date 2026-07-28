@@ -686,7 +686,7 @@ export function ChattingClient({
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2">
                     <ChannelBadge channel={room.channel} />
-                    <span className="truncate text-xs font-bold text-[#2f3449]">
+                    <span className="truncate text-base font-bold text-[#2f3449]">
                       {room.customer.name}
                     </span>
                     {room.unreadCount > 0 ? (
@@ -703,10 +703,12 @@ export function ChattingClient({
                     }`}
                   />
                 </div>
-                <div className="mt-2 flex items-end justify-between gap-3 pl-[30px]">
-                  <p className="min-w-0 truncate text-[10.5px] text-[#767d91]">
-                    {latestMessageContent}
-                  </p>
+                <div className="mt-2 flex h-10 items-end justify-between gap-3 pl-[30px]">
+                  <div className="flex h-full min-w-0 flex-1 items-center">
+                    <p className="line-clamp-2 text-sm leading-relaxed text-[#767d91]">
+                      {latestMessageContent}
+                    </p>
+                  </div>
                   <span className="shrink-0 text-[9px] text-[#a8adba]">
                     {formatListTime(room.lastMessageAt)}
                   </span>
@@ -876,7 +878,7 @@ export function ChattingClient({
                   </span>
                 ) : null}
               </div>
-              <p className="mt-0.5 text-[9.5px] text-[#9298a8]">
+              <p className="mt-0.5 text-sm text-[#9298a8]">
                 {currentMeta.label} ·{" "}
                 {currentRoom.customer.phone ?? "연락처 미등록"}
               </p>
@@ -906,20 +908,20 @@ export function ChattingClient({
 
         <div className="flex items-center justify-between border-b border-[#e5e8f0] bg-white px-5 py-2">
           <div className="flex items-center gap-1.5">
-            <span className="mr-1 text-[9px] font-semibold text-[#858c9e]">
+            <span className="mr-1 text-xs font-semibold text-[#858c9e]">
               치료태그
             </span>
             {currentRoom.customer.tags.map((tag) => (
               <span
                 key={tag}
-                className="rounded-md bg-[#edf1ff] px-2 py-1 text-[9px] font-bold text-[#3157f6]"
+                className="rounded-md bg-[#edf1ff] px-2 py-1 text-xs font-bold text-[#3157f6]"
               >
                 {tag}
               </span>
             ))}
           </div>
-          <span className="flex items-center gap-1 text-[9px] text-[#858c9e]">
-            <Languages className="size-3" />
+          <span className="flex items-center gap-1 text-xs text-[#858c9e]">
+            <Languages className="size-3.5" />
             {languageLabels[currentRoom.customer.language] ??
               currentRoom.customer.language}
           </span>

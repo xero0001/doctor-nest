@@ -87,6 +87,16 @@ export async function translateIncomingMessage(
 ): Promise<ChatTranslation> {
   const fallback = detectLanguageFallback(text);
 
+  if (isKoreanLanguage(fallback.code)) {
+    return {
+      sourceLanguage: KOREAN_CODE,
+      sourceLanguageName: KOREAN_NAME,
+      translatedContent: text,
+      translatedLanguage: KOREAN_CODE,
+      translatedLanguageName: KOREAN_NAME,
+    };
+  }
+
   if (!process.env.AI_GATEWAY_API_KEY) {
     console.warn("AI_GATEWAY_API_KEY가 없어 수신 메시지 번역을 건너뜁니다.");
     return {

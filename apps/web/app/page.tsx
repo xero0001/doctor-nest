@@ -615,6 +615,12 @@ export default function HomePage() {
               <a href="mailto:doctornest.ai@gmail.com" className="hover:text-foreground">
                 이메일 문의
               </a>
+              <a href="/docs/privacy-policy" className="hover:text-foreground">
+                개인정보처리방침
+              </a>
+              <a href="/docs/terms-of-service" className="hover:text-foreground">
+                이용약관
+              </a>
             </div>
           </div>
 

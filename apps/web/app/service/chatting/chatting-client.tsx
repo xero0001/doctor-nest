@@ -126,6 +126,20 @@ function formatMessageTime(value: string) {
   }).format(new Date(value));
 }
 
+function getPrimaryMessageContent(
+  message: ConversationItem["messages"][number],
+) {
+  if (
+    message.direction === "INBOUND" &&
+    message.translatedContent &&
+    message.translatedContent !== message.content
+  ) {
+    return message.translatedContent;
+  }
+
+  return message.content;
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("ko-KR", {
     year: "numeric",
@@ -357,7 +371,7 @@ export function ChattingClient({
     const normalizedQuery = query.trim().toLowerCase();
 
     return rooms.filter((conversation) => {
-      const latestMessage = conversation.messages.at(-1)?.content ?? "";
+      const latestMessage = conversation.messages.at(-1);
       const matchesTab =
         chatTab === "IMPORTANT"
           ? conversation.important
@@ -366,7 +380,7 @@ export function ChattingClient({
         channelFilter === "ALL" || conversation.channel === channelFilter;
       const matchesQuery =
         !normalizedQuery ||
-        `${conversation.customer.name} ${conversation.customer.phone ?? ""} ${latestMessage}`
+        `${conversation.customer.name} ${conversation.customer.phone ?? ""} ${latestMessage?.content ?? ""} ${latestMessage?.translatedContent ?? ""}`
           .toLowerCase()
           .includes(normalizedQuery);
 
@@ -651,8 +665,10 @@ export function ChattingClient({
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {visibleRooms.map((room) => {
-            const latestMessage =
-              room.messages.at(-1)?.content ?? "새로운 대화";
+            const latestMessage = room.messages.at(-1);
+            const latestMessageContent = latestMessage
+              ? getPrimaryMessageContent(latestMessage)
+              : "새로운 대화";
             const selected = currentRoom.id === room.id;
 
             return (
@@ -689,7 +705,7 @@ export function ChattingClient({
                 </div>
                 <div className="mt-2 flex items-end justify-between gap-3 pl-[30px]">
                   <p className="min-w-0 truncate text-[10.5px] text-[#767d91]">
-                    {latestMessage}
+                    {latestMessageContent}
                   </p>
                   <span className="shrink-0 text-[9px] text-[#a8adba]">
                     {formatListTime(room.lastMessageAt)}
@@ -935,6 +951,16 @@ export function ChattingClient({
           <div className="mx-auto max-w-[720px]">
             {currentRoom.messages.map((message) => {
               const inbound = message.direction === "INBOUND";
+              const hasTranslation =
+                Boolean(message.translatedContent) &&
+                message.translatedContent !== message.content;
+              const primaryContent = getPrimaryMessageContent(message);
+              const secondaryContent = inbound
+                ? message.content
+                : message.translatedContent;
+              const translationLabel = inbound
+                ? `원문 · ${message.sourceLanguageName || message.sourceLanguage}`
+                : `발송 · ${message.translatedLanguageName || message.translatedLanguage}`;
 
               if (message.sender === "SYSTEM") {
                 return (
@@ -963,13 +989,37 @@ export function ChattingClient({
                       </p>
                     ) : null}
                     <div
-                      className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-left text-base leading-[1.7] shadow-sm ${
+                      className={`rounded-2xl px-4 py-3 text-left text-base leading-[1.7] shadow-sm ${
                         inbound
                           ? "rounded-tl-[5px] border border-[#dfe3ec] bg-white text-[#454b5e]"
                           : "rounded-br-[5px] bg-gradient-to-br from-[#3157f6] to-[#6657e9] text-white"
                       }`}
                     >
-                      {message.content}
+                      <p className="whitespace-pre-wrap break-words">
+                        {primaryContent}
+                      </p>
+                      {hasTranslation ? (
+                        <div
+                          className={`mt-3 border-t pt-2.5 text-sm leading-relaxed ${
+                            inbound
+                              ? "border-[#e4e7ef] text-[#737b8f]"
+                              : "border-white/20 text-white/85"
+                          }`}
+                        >
+                          <span
+                            className={`mb-1 inline-flex rounded px-1.5 py-0.5 text-xs font-semibold ${
+                              inbound
+                                ? "bg-[#eef2ff] text-[#526be0]"
+                                : "bg-white/15 text-white"
+                            }`}
+                          >
+                            {translationLabel}
+                          </span>
+                          <p className="whitespace-pre-wrap break-words">
+                            {secondaryContent}
+                          </p>
+                        </div>
+                      ) : null}
                     </div>
                     <p
                       className={`mt-1 text-[8px] text-[#a0a6b4] ${inbound ? "text-left" : "text-right"}`}

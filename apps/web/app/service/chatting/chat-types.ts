@@ -6,6 +6,11 @@ export type ConversationMessage = {
   direction: "INBOUND" | "OUTBOUND";
   sender: "CUSTOMER" | "STAFF" | "AI" | "SYSTEM";
   content: string;
+  sourceLanguage: string;
+  sourceLanguageName: string;
+  translatedContent: string;
+  translatedLanguage: string;
+  translatedLanguageName: string;
   sentAt: string;
 };
 

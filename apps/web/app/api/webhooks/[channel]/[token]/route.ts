@@ -1,7 +1,9 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 
 import { getDatabase } from "@doctornest/database";
+import { after } from "next/server";
 
+import { translateIncomingMessage } from "@/lib/ai-translation";
 import { decryptLineCredentials } from "@/lib/channel-credentials";
 
 const supportedChannels = [
@@ -56,6 +58,15 @@ type WebhookConnection = {
   id: string;
   hospitalId: string;
   credentialsEncrypted: string | null;
+};
+
+type PersistedInboundEvent = {
+  patientId: string;
+  patientChannelId: string;
+  conversationId: string;
+  messageId: string;
+  matchedBy: "CHANNEL" | "CHART_NUMBER" | "PHONE" | "NEW";
+  duplicate: boolean;
 };
 
 function isSupportedChannel(channel: string): channel is SupportedChannel {
@@ -124,7 +135,7 @@ async function persistInboundEvent(
   connection: WebhookConnection,
   channel: SupportedChannel,
   event: InboundEvent,
-) {
+): Promise<PersistedInboundEvent> {
   const externalCustomerId = event.externalCustomerId?.trim();
   const message = event.message?.trim();
 
@@ -134,8 +145,7 @@ async function persistInboundEvent(
     );
   }
 
-  const externalThreadId =
-    event.externalThreadId?.trim() || externalCustomerId;
+  const externalThreadId = event.externalThreadId?.trim() || externalCustomerId;
   const sentAt = event.sentAt ? new Date(event.sentAt) : new Date();
   const birthDate = event.birthDate ? new Date(event.birthDate) : null;
 
@@ -283,6 +293,7 @@ async function persistInboundEvent(
           conversationId: existingConversation.id,
           messageId: existingMessage.id,
           matchedBy,
+          duplicate: true,
         };
       }
     }
@@ -325,7 +336,48 @@ async function persistInboundEvent(
       conversationId: conversation.id,
       messageId: storedMessage.id,
       matchedBy,
+      duplicate: false,
     };
+  });
+}
+
+function scheduleInboundTranslation(
+  connection: WebhookConnection,
+  result: PersistedInboundEvent,
+  content: string,
+) {
+  if (result.duplicate) return;
+
+  after(async () => {
+    const translation = await translateIncomingMessage(
+      content,
+      connection.hospitalId,
+    );
+    const shouldUpdatePatientLanguage =
+      translation.sourceLanguage &&
+      translation.sourceLanguage.toLowerCase() !== "und";
+    const database = getDatabase();
+
+    await database.$transaction([
+      database.message.update({
+        where: { id: result.messageId },
+        data: {
+          sourceLanguage: translation.sourceLanguage,
+          sourceLanguageName: translation.sourceLanguageName,
+          translatedContent: translation.translatedContent,
+          translatedLanguage: translation.translatedLanguage,
+          translatedLanguageName: translation.translatedLanguageName,
+        },
+      }),
+      ...(shouldUpdatePatientLanguage
+        ? [
+            database.patient.update({
+              where: { id: result.patientId },
+              data: { language: translation.sourceLanguage },
+            }),
+          ]
+        : []),
+    ]);
   });
 }
 
@@ -400,19 +452,18 @@ export async function POST(request: Request, { params }: RouteContext) {
         lineEvent.source.userId,
         credentials.channelAccessToken,
       );
-      results.push(
-        await persistInboundEvent(connection, channel, {
-          externalCustomerId: lineEvent.source.userId,
-          externalThreadId: lineEvent.source.userId,
-          externalMessageId:
-            lineEvent.message.id ?? lineEvent.webhookEventId,
-          customerName,
-          message: lineEvent.message.text,
-          sentAt: lineEvent.timestamp
-            ? new Date(lineEvent.timestamp).toISOString()
-            : undefined,
-        }),
-      );
+      const result = await persistInboundEvent(connection, channel, {
+        externalCustomerId: lineEvent.source.userId,
+        externalThreadId: lineEvent.source.userId,
+        externalMessageId: lineEvent.message.id ?? lineEvent.webhookEventId,
+        customerName,
+        message: lineEvent.message.text,
+        sentAt: lineEvent.timestamp
+          ? new Date(lineEvent.timestamp).toISOString()
+          : undefined,
+      });
+      results.push(result);
+      scheduleInboundTranslation(connection, result, lineEvent.message.text);
     }
 
     await getDatabase().channelConnection.update({
@@ -436,6 +487,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   try {
     const result = await persistInboundEvent(connection, channel, event);
+    scheduleInboundTranslation(connection, result, event.message!.trim());
     return Response.json({ received: true, ...result }, { status: 202 });
   } catch (error) {
     return Response.json(

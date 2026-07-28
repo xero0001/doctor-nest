@@ -1,5 +1,9 @@
 import { getDatabase } from "@doctornest/database";
 
+import {
+  ChatTranslationError,
+  translateStaffReply,
+} from "@/lib/ai-translation";
 import { getCurrentUser } from "@/lib/auth";
 import { decryptLineCredentials } from "@/lib/channel-credentials";
 
@@ -49,6 +53,11 @@ function serializeConversation(
       direction: message.direction,
       sender: message.sender,
       content: message.content,
+      sourceLanguage: message.sourceLanguage,
+      sourceLanguageName: message.sourceLanguageName,
+      translatedContent: message.translatedContent,
+      translatedLanguage: message.translatedLanguage,
+      translatedLanguageName: message.translatedLanguageName,
       sentAt: message.sentAt.toISOString(),
     })),
   };
@@ -193,6 +202,11 @@ export async function POST(request: Request, { params }: RouteContext) {
     select: {
       id: true,
       channel: true,
+      patient: {
+        select: {
+          language: true,
+        },
+      },
       patientChannel: {
         select: {
           externalCustomerId: true,
@@ -207,6 +221,27 @@ export async function POST(request: Request, { params }: RouteContext) {
       { status: 404 },
     );
   }
+
+  let translation;
+  try {
+    translation = await translateStaffReply(
+      content,
+      conversation.patient.language,
+      user.hospitalId,
+    );
+  } catch (error) {
+    return Response.json(
+      {
+        error:
+          error instanceof ChatTranslationError
+            ? error.message
+            : "고객 언어로 번역하지 못했습니다.",
+      },
+      { status: 502 },
+    );
+  }
+
+  const deliveredContent = translation.translatedContent || content;
 
   if (conversation.channel === "LINE") {
     const connection = await database.channelConnection.findUnique({
@@ -253,7 +288,7 @@ export async function POST(request: Request, { params }: RouteContext) {
         },
         body: JSON.stringify({
           to: conversation.patientChannel.externalCustomerId,
-          messages: [{ type: "text", text: content }],
+          messages: [{ type: "text", text: deliveredContent }],
         }),
         cache: "no-store",
       },
@@ -275,6 +310,11 @@ export async function POST(request: Request, { params }: RouteContext) {
         direction: "OUTBOUND",
         sender: "STAFF",
         content,
+        sourceLanguage: translation.sourceLanguage,
+        sourceLanguageName: translation.sourceLanguageName,
+        translatedContent: translation.translatedContent,
+        translatedLanguage: translation.translatedLanguage,
+        translatedLanguageName: translation.translatedLanguageName,
         sentAt,
       },
     });
@@ -294,6 +334,11 @@ export async function POST(request: Request, { params }: RouteContext) {
         direction: message.direction,
         sender: message.sender,
         content: message.content,
+        sourceLanguage: message.sourceLanguage,
+        sourceLanguageName: message.sourceLanguageName,
+        translatedContent: message.translatedContent,
+        translatedLanguage: message.translatedLanguage,
+        translatedLanguageName: message.translatedLanguageName,
         sentAt: message.sentAt.toISOString(),
       },
     },

@@ -5,6 +5,7 @@ import {
   decryptInstagramCredentials,
   encryptChannelCredentials,
   type LineCredentials,
+  type NaverTalkCredentials,
 } from "@/lib/channel-credentials";
 import { unsubscribeInstagramWebhooks } from "@/lib/instagram-api";
 
@@ -42,6 +43,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     displayName?: string;
     externalAccountId?: string;
     lineCredentials?: Partial<LineCredentials>;
+    naverTalkCredentials?: Partial<NaverTalkCredentials>;
   } | null;
 
   if (body?.action === "disconnect") {
@@ -160,6 +162,36 @@ export async function POST(request: Request, { params }: RouteContext) {
       channelSecret,
       channelAccessToken,
     });
+  }
+
+  if (channel === "NAVER_TALK") {
+    const authorization =
+      body?.naverTalkCredentials?.authorization?.trim();
+
+    if (authorization) {
+      credentialsEncrypted = encryptChannelCredentials({ authorization });
+    } else {
+      const existingConnection =
+        await getDatabase().channelConnection.findUnique({
+          where: {
+            hospitalId_channel: {
+              hospitalId: user.hospitalId,
+              channel: "NAVER_TALK",
+            },
+          },
+          select: { credentialsEncrypted: true },
+        });
+
+      if (!existingConnection?.credentialsEncrypted) {
+        return Response.json(
+          {
+            error:
+              "네이버 톡톡 챗봇 API에서 발급한 Authorization 키를 입력해 주세요.",
+          },
+          { status: 400 },
+        );
+      }
+    }
   }
 
   const connection = await getDatabase().channelConnection.upsert({

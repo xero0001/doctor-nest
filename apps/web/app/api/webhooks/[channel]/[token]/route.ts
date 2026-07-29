@@ -51,6 +51,20 @@ type LineWebhookPayload = {
   events?: LineWebhookEvent[];
 };
 
+type NaverTalkWebhookEvent = {
+  event?: string;
+  user?: string;
+  messageId?: string;
+  textContent?: {
+    text?: string;
+    code?: string;
+    inputType?: string;
+  };
+  imageContent?: {
+    imageUrl?: string;
+  };
+};
+
 type RouteContext = {
   params: Promise<{ channel: string; token: string }>;
 };
@@ -482,6 +496,62 @@ export async function POST(request: Request, { params }: RouteContext) {
     });
 
     return Response.json({ received: true, processed: results.length });
+  }
+
+  if (channel === "NAVER_TALK") {
+    const event = parseJson<NaverTalkWebhookEvent>(rawBody);
+
+    if (!event?.event || !event.user) {
+      return Response.json(
+        { error: "올바른 네이버 톡톡 이벤트가 필요합니다." },
+        { status: 400 },
+      );
+    }
+
+    await getDatabase().channelConnection.update({
+      where: { id: connection.id },
+      data: {
+        status: "CONNECTED",
+        connectedAt: new Date(),
+      },
+    });
+
+    if (event.event !== "send") {
+      return Response.json({ received: true, processed: 0 });
+    }
+
+    const text = event.textContent?.text?.trim();
+    const imageUrl = event.imageContent?.imageUrl?.trim();
+    const message = text || (imageUrl ? `이미지: ${imageUrl}` : "");
+
+    if (!message) {
+      return Response.json({ received: true, processed: 0 });
+    }
+
+    try {
+      const result = await persistInboundEvent(connection, channel, {
+        externalCustomerId: event.user,
+        externalThreadId: event.user,
+        externalMessageId: event.messageId,
+        customerName: "네이버 톡톡 고객",
+        message,
+      });
+      scheduleInboundTranslation(connection, result, message);
+      return Response.json({
+        received: true,
+        processed: result.duplicate ? 0 : 1,
+      });
+    } catch (error) {
+      return Response.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "네이버 톡톡 이벤트를 처리하지 못했습니다.",
+        },
+        { status: 500 },
+      );
+    }
   }
 
   const event = parseJson<InboundEvent>(rawBody);

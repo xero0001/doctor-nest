@@ -18,6 +18,10 @@ export type InstagramCredentials = {
   expiresAt: string | null;
 };
 
+export type NaverTalkCredentials = {
+  authorization: string;
+};
+
 const credentialVersion = "v1";
 
 function getCredentialKey() {
@@ -34,7 +38,10 @@ function getCredentialKey() {
 }
 
 export function encryptChannelCredentials(
-  credentials: LineCredentials | InstagramCredentials,
+  credentials:
+    | LineCredentials
+    | InstagramCredentials
+    | NaverTalkCredentials,
 ) {
   const initializationVector = randomBytes(12);
   const cipher = createCipheriv(
@@ -121,5 +128,21 @@ export function decryptInstagramCredentials(
     username: parsed.username,
     accessToken: parsed.accessToken,
     expiresAt: parsed.expiresAt ?? null,
+  };
+}
+
+export function decryptNaverTalkCredentials(
+  value: string,
+): NaverTalkCredentials {
+  const parsed = decryptChannelCredentials(
+    value,
+  ) as Partial<NaverTalkCredentials>;
+
+  if (!parsed.authorization) {
+    throw new Error("네이버 톡톡 자격증명 값이 완전하지 않습니다.");
+  }
+
+  return {
+    authorization: parsed.authorization,
   };
 }

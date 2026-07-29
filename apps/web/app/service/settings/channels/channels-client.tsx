@@ -107,11 +107,11 @@ const definitions: Record<ChannelType, ChannelDefinition> = {
     badgeClass: "bg-[#03c75a] text-white",
     requirements: ["톡톡 파트너 계정", "챗봇 API", "Authorization"],
     steps: [
-      "병원 톡톡 계정 생성",
-      "챗봇 API 사용 신청",
-      "Authorization과 이벤트 URL 설정",
+      "챗봇 API 사용 신청 및 약관 동의",
+      "이벤트 받을 URL에 닥터네스트 웹훅 입력",
+      "보내기 API Authorization 키 발급",
     ],
-    guideUrl: "https://partner.talk.naver.com/",
+    guideUrl: "https://github.com/navertalk/chatbot-api",
   },
   WECHAT: {
     label: "WeChat",
@@ -207,6 +207,7 @@ export function ChannelsClient({
   const [lineChannelId, setLineChannelId] = useState("");
   const [lineChannelSecret, setLineChannelSecret] = useState("");
   const [lineChannelAccessToken, setLineChannelAccessToken] = useState("");
+  const [naverTalkAuthorization, setNaverTalkAuthorization] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -240,6 +241,7 @@ export function ChannelsClient({
     setLineChannelId("");
     setLineChannelSecret("");
     setLineChannelAccessToken("");
+    setNaverTalkAuthorization("");
     setError("");
     setCopied(false);
   }
@@ -255,6 +257,9 @@ export function ChannelsClient({
       const hasNewLineCredentials =
         selectedChannel === "LINE" &&
         Boolean(lineChannelId || lineChannelSecret || lineChannelAccessToken);
+      const hasNewNaverTalkCredentials =
+        selectedChannel === "NAVER_TALK" &&
+        Boolean(naverTalkAuthorization);
       const response = await fetch(
         `/api/channel-connections/${selectedChannel}`,
         {
@@ -270,6 +275,9 @@ export function ChannelsClient({
                   channelSecret: lineChannelSecret,
                   channelAccessToken: lineChannelAccessToken,
                 }
+              : undefined,
+            naverTalkCredentials: hasNewNaverTalkCredentials
+              ? { authorization: naverTalkAuthorization }
               : undefined,
           }),
         },
@@ -972,6 +980,49 @@ export function ChannelsClient({
                         }
                       />
                     </label>
+                  </div>
+                ) : null}
+
+                {selectedChannel === "NAVER_TALK" ? (
+                  <div className="space-y-4 rounded-2xl border border-[#dfe5f0] bg-[#fafbfe] p-4">
+                    <div>
+                      <p className="text-sm font-bold text-[#4f576d]">
+                        챗봇 보내기 API 자격증명
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-[#858c9e]">
+                        톡톡 파트너센터의 챗봇API 설정에서 발급한
+                        Authorization 키를 입력하세요.
+                        {selectedConnection.hasCredentials
+                          ? " 현재 키가 암호화되어 등록되어 있으며, 변경할 때만 다시 입력하면 됩니다."
+                          : ""}
+                      </p>
+                    </div>
+
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-bold text-[#596177]">
+                        Authorization
+                      </span>
+                      <input
+                        type="password"
+                        value={naverTalkAuthorization}
+                        onChange={(event) =>
+                          setNaverTalkAuthorization(event.target.value)
+                        }
+                        autoComplete="new-password"
+                        className="h-11 w-full rounded-xl border border-[#dde2ec] bg-white px-3 font-mono text-xs outline-none focus:border-[#6f83f2] focus:ring-3 focus:ring-[#3157f6]/10"
+                        placeholder={
+                          selectedConnection.hasCredentials
+                            ? "등록됨 · 변경할 때만 입력"
+                            : "ct_..."
+                        }
+                      />
+                    </label>
+
+                    <p className="flex items-start gap-1.5 text-xs leading-5 text-[#858c9e]">
+                      <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
+                      키는 병원별로 암호화 저장되며 저장 후 다시 표시되지
+                      않습니다.
+                    </p>
                   </div>
                 ) : null}
 

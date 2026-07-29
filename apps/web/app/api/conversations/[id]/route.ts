@@ -9,8 +9,10 @@ import { serializeChatCoachGeneration } from "@/lib/chat-coach-generation";
 import {
   decryptInstagramCredentials,
   decryptLineCredentials,
+  decryptNaverTalkCredentials,
 } from "@/lib/channel-credentials";
 import { sendInstagramTextMessage } from "@/lib/instagram-api";
+import { sendNaverTalkTextMessage } from "@/lib/naver-talk-api";
 import { getTranslationContext } from "@/lib/translation-context";
 
 type RouteContext = {
@@ -371,6 +373,58 @@ export async function POST(request: Request, { params }: RouteContext) {
     if (!lineResponse?.ok) {
       return Response.json(
         { error: "LINE 메시지를 발송하지 못했습니다." },
+        { status: 502 },
+      );
+    }
+  }
+
+  if (conversation.channel === "NAVER_TALK") {
+    const connection = await database.channelConnection.findUnique({
+      where: {
+        hospitalId_channel: {
+          hospitalId: user.hospitalId,
+          channel: "NAVER_TALK",
+        },
+      },
+      select: {
+        credentialsEncrypted: true,
+      },
+    });
+
+    if (
+      !connection?.credentialsEncrypted ||
+      !conversation.patientChannel?.externalCustomerId
+    ) {
+      return Response.json(
+        { error: "네이버 톡톡 챗봇 API 연동을 먼저 완료해 주세요." },
+        { status: 409 },
+      );
+    }
+
+    let authorization: string;
+    try {
+      authorization = decryptNaverTalkCredentials(
+        connection.credentialsEncrypted,
+      ).authorization;
+    } catch {
+      return Response.json(
+        { error: "네이버 톡톡 자격증명을 읽지 못했습니다." },
+        { status: 500 },
+      );
+    }
+
+    try {
+      await sendNaverTalkTextMessage({
+        authorization,
+        userId: conversation.patientChannel.externalCustomerId,
+        text: deliveredContent,
+      });
+    } catch {
+      return Response.json(
+        {
+          error:
+            "네이버 톡톡 메시지를 발송하지 못했습니다. Authorization 키와 챗봇 API 상태를 확인해 주세요.",
+        },
         { status: 502 },
       );
     }

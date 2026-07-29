@@ -204,7 +204,9 @@ export function ChannelsClient({
   const [lineChannelAccessToken, setLineChannelAccessToken] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [copiedField, setCopiedField] = useState<
+    "webhookUrl" | "verifyToken" | null
+  >(null);
   const [translationContextEnabled, setTranslationContextEnabled] = useState(
     translationSettings.contextEnabled,
   );
@@ -236,7 +238,7 @@ export function ChannelsClient({
     setLineChannelSecret("");
     setLineChannelAccessToken("");
     setError("");
-    setCopied(false);
+    setCopiedField(null);
   }
 
   async function saveConnection(event: FormEvent<HTMLFormElement>) {
@@ -399,6 +401,9 @@ export function ChannelsClient({
     selectedChannel && selectedConnection
       ? `${appUrl}/api/webhooks/${selectedChannel}/${selectedConnection.webhookToken}`
       : "";
+  const webhookVerifyToken = selectedConnection?.webhookToken ?? "";
+  const usesMetaWebhook =
+    selectedChannel === "WHATSAPP" || selectedChannel === "INSTAGRAM";
 
   return (
     <div className="h-full overflow-y-auto bg-[#f5f7fb]">
@@ -899,16 +904,16 @@ export function ChannelsClient({
                       type="button"
                       onClick={async () => {
                         await navigator.clipboard.writeText(webhookUrl);
-                        setCopied(true);
+                        setCopiedField("webhookUrl");
                       }}
                       className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[#dce1eb] bg-white px-2.5 text-xs font-bold text-[#59617a]"
                     >
-                      {copied ? (
+                      {copiedField === "webhookUrl" ? (
                         <Check className="size-3 text-[#1aa464]" />
                       ) : (
                         <Clipboard className="size-3" />
                       )}
-                      {copied ? "복사됨" : "복사"}
+                      {copiedField === "webhookUrl" ? "복사됨" : "복사"}
                     </button>
                   </div>
                   <p className="mt-2 flex items-center gap-1.5 text-xs text-[#9298a8]">
@@ -916,6 +921,41 @@ export function ChannelsClient({
                     채널 개발자 콘솔의 이벤트 수신 URL에 입력합니다.
                   </p>
                 </div>
+
+                {usesMetaWebhook ? (
+                  <div>
+                    <span className="mb-2 block text-sm font-bold text-[#596177]">
+                      Meta Webhook 인증 토큰
+                    </span>
+                    <div className="flex items-center gap-2 rounded-xl border border-[#dde2ec] bg-[#f8f9fc] p-2">
+                      <code className="min-w-0 flex-1 truncate px-1 text-xs text-[#697186]">
+                        {webhookVerifyToken}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(
+                            webhookVerifyToken,
+                          );
+                          setCopiedField("verifyToken");
+                        }}
+                        className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[#dce1eb] bg-white px-2.5 text-xs font-bold text-[#59617a]"
+                      >
+                        {copiedField === "verifyToken" ? (
+                          <Check className="size-3 text-[#1aa464]" />
+                        ) : (
+                          <Clipboard className="size-3" />
+                        )}
+                        {copiedField === "verifyToken" ? "복사됨" : "복사"}
+                      </button>
+                    </div>
+                    <p className="mt-2 flex items-center gap-1.5 text-xs text-[#9298a8]">
+                      <ShieldCheck className="size-3" />
+                      Meta의 인증 토큰 입력란에 사용하며 Access Token과는
+                      다른 값입니다.
+                    </p>
+                  </div>
+                ) : null}
               </div>
 
               {error ? (

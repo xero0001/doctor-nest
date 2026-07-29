@@ -74,6 +74,12 @@ function isSupportedChannel(channel: string): channel is SupportedChannel {
   return supportedChannels.some((supported) => supported === channel);
 }
 
+function isMetaWebhookChannel(
+  channel: SupportedChannel,
+): channel is "WHATSAPP" | "INSTAGRAM" {
+  return channel === "WHATSAPP" || channel === "INSTAGRAM";
+}
+
 function normalizePhone(phone: string | undefined) {
   if (!phone) return null;
 
@@ -385,6 +391,48 @@ function scheduleInboundTranslation(
           ]
         : []),
     ]);
+  });
+}
+
+export async function GET(request: Request, { params }: RouteContext) {
+  const { channel, token } = await params;
+
+  if (!isSupportedChannel(channel) || !isMetaWebhookChannel(channel)) {
+    return Response.json({ error: "Unknown Meta webhook" }, { status: 404 });
+  }
+
+  const connection = await getDatabase().channelConnection.findFirst({
+    where: {
+      channel,
+      webhookToken: token,
+    },
+    select: {
+      webhookToken: true,
+    },
+  });
+
+  if (!connection) {
+    return Response.json({ error: "Unknown webhook" }, { status: 404 });
+  }
+
+  const searchParams = new URL(request.url).searchParams;
+  const mode = searchParams.get("hub.mode");
+  const verifyToken = searchParams.get("hub.verify_token");
+  const challenge = searchParams.get("hub.challenge");
+
+  if (
+    mode !== "subscribe" ||
+    verifyToken !== connection.webhookToken ||
+    !challenge
+  ) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
+  return new Response(challenge, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+    },
   });
 }
 

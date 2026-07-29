@@ -35,6 +35,8 @@ import {
 
 import { LineChannelIcon } from "@/features/channels/components/line-channel-icon";
 import { InstagramChannelIcon } from "@/features/channels/components/instagram-channel-icon";
+import { KakaoChannelIcon } from "@/features/channels/components/kakao-channel-icon";
+import { NaverTalkChannelIcon } from "@/features/channels/components/naver-talk-channel-icon";
 import { SectionTabs } from "@/features/chatting/components/section-tabs";
 
 import type {
@@ -419,8 +421,16 @@ function ChannelBadge({
   const meta = channelMeta[channel];
   const size = large ? 36 : 22;
 
+  if (channel === "KAKAO") {
+    return <KakaoChannelIcon size={size} />;
+  }
+
   if (channel === "LINE") {
     return <LineChannelIcon size={size} />;
+  }
+
+  if (channel === "NAVER_TALK") {
+    return <NaverTalkChannelIcon size={size} />;
   }
 
   if (channel === "INSTAGRAM") {
@@ -1258,8 +1268,12 @@ export function ChattingClient({
             <span>연결 채널 6개</span>
             <div className="flex -space-x-1">
               {(Object.keys(channelMeta) as ChatChannel[]).map((channel) => (
-                channel === "LINE" ? (
+                channel === "KAKAO" ? (
+                  <KakaoChannelIcon key={channel} size={20} />
+                ) : channel === "LINE" ? (
                   <LineChannelIcon key={channel} size={20} />
+                ) : channel === "NAVER_TALK" ? (
+                  <NaverTalkChannelIcon key={channel} size={20} />
                 ) : channel === "INSTAGRAM" ? (
                   <InstagramChannelIcon key={channel} size={20} />
                 ) : (
@@ -1722,8 +1736,18 @@ export function ChattingClient({
                 <span className="shrink-0">연결 채널</span>
                 <span className="flex min-w-0 flex-wrap gap-1">
                   {currentRoom.customer.channels.map((patientChannel) => (
-                    patientChannel.channel === "LINE" ? (
+                    patientChannel.channel === "KAKAO" ? (
+                      <KakaoChannelIcon
+                        key={patientChannel.id}
+                        size={24}
+                      />
+                    ) : patientChannel.channel === "LINE" ? (
                       <LineChannelIcon key={patientChannel.id} size={24} />
+                    ) : patientChannel.channel === "NAVER_TALK" ? (
+                      <NaverTalkChannelIcon
+                        key={patientChannel.id}
+                        size={24}
+                      />
                     ) : patientChannel.channel === "INSTAGRAM" ? (
                       <InstagramChannelIcon key={patientChannel.id} size={24} />
                     ) : (

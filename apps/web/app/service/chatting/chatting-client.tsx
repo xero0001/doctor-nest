@@ -37,6 +37,8 @@ import { LineChannelIcon } from "@/features/channels/components/line-channel-ico
 import { InstagramChannelIcon } from "@/features/channels/components/instagram-channel-icon";
 import { KakaoChannelIcon } from "@/features/channels/components/kakao-channel-icon";
 import { NaverTalkChannelIcon } from "@/features/channels/components/naver-talk-channel-icon";
+import { WeChatChannelIcon } from "@/features/channels/components/wechat-channel-icon";
+import { WhatsAppChannelIcon } from "@/features/channels/components/whatsapp-channel-icon";
 import { SectionTabs } from "@/features/chatting/components/section-tabs";
 
 import type {
@@ -433,6 +435,14 @@ function ChannelBadge({
     return <NaverTalkChannelIcon size={size} />;
   }
 
+  if (channel === "WECHAT") {
+    return <WeChatChannelIcon size={size} />;
+  }
+
+  if (channel === "WHATSAPP") {
+    return <WhatsAppChannelIcon size={size} />;
+  }
+
   if (channel === "INSTAGRAM") {
     return <InstagramChannelIcon size={size} />;
   }
@@ -579,7 +589,7 @@ export function ChattingClient({
         )
       : undefined;
   const currentCoachSuggestion = coachSuggestionKey
-    ? coachSuggestions[coachSuggestionKey] ?? persistedCoachSuggestion
+    ? (coachSuggestions[coachSuggestionKey] ?? persistedCoachSuggestion)
     : undefined;
   const coachStatus =
     !autoRespond || !coachSuggestionKey
@@ -691,8 +701,7 @@ export function ChattingClient({
     } catch (error) {
       setRooms((current) =>
         current.map((conversation) =>
-          conversation.id === id &&
-          conversation.important === nextImportant
+          conversation.id === id && conversation.important === nextImportant
             ? { ...conversation, important: previousImportant }
             : conversation,
         ),
@@ -1006,9 +1015,7 @@ export function ChattingClient({
         throw new Error(result.error ?? "채팅 설정을 저장하지 못했습니다.");
       }
 
-      if (
-        conversationSettingRequestIds.current.get(requestKey) !== requestId
-      ) {
+      if (conversationSettingRequestIds.current.get(requestKey) !== requestId) {
         return;
       }
 
@@ -1018,9 +1025,7 @@ export function ChattingClient({
         ),
       );
     } catch (error) {
-      if (
-        conversationSettingRequestIds.current.get(requestKey) !== requestId
-      ) {
+      if (conversationSettingRequestIds.current.get(requestKey) !== requestId) {
         return;
       }
 
@@ -1267,25 +1272,21 @@ export function ChattingClient({
           <div className="flex items-center justify-between text-[10px] text-[#7d8497]">
             <span>연결 채널 6개</span>
             <div className="flex -space-x-1">
-              {(Object.keys(channelMeta) as ChatChannel[]).map((channel) => (
+              {(Object.keys(channelMeta) as ChatChannel[]).map((channel) =>
                 channel === "KAKAO" ? (
                   <KakaoChannelIcon key={channel} size={20} />
                 ) : channel === "LINE" ? (
                   <LineChannelIcon key={channel} size={20} />
                 ) : channel === "NAVER_TALK" ? (
                   <NaverTalkChannelIcon key={channel} size={20} />
-                ) : channel === "INSTAGRAM" ? (
-                  <InstagramChannelIcon key={channel} size={20} />
+                ) : channel === "WECHAT" ? (
+                  <WeChatChannelIcon key={channel} size={20} />
+                ) : channel === "WHATSAPP" ? (
+                  <WhatsAppChannelIcon key={channel} size={20} />
                 ) : (
-                  <span
-                    key={channel}
-                    title={channelMeta[channel].label}
-                    className={`flex size-5 items-center justify-center rounded-full border-2 border-white text-[7px] font-black ${channelMeta[channel].badgeClass}`}
-                  >
-                    {channelMeta[channel].compactLabel}
-                  </span>
-                )
-              ))}
+                  <InstagramChannelIcon key={channel} size={20} />
+                ),
+              )}
             </div>
           </div>
         </div>
@@ -1735,34 +1736,21 @@ export function ChattingClient({
                 <MessageCircleMore className="size-3.5 text-[#9ca2b3]" />
                 <span className="shrink-0">연결 채널</span>
                 <span className="flex min-w-0 flex-wrap gap-1">
-                  {currentRoom.customer.channels.map((patientChannel) => (
+                  {currentRoom.customer.channels.map((patientChannel) =>
                     patientChannel.channel === "KAKAO" ? (
-                      <KakaoChannelIcon
-                        key={patientChannel.id}
-                        size={24}
-                      />
+                      <KakaoChannelIcon key={patientChannel.id} size={24} />
                     ) : patientChannel.channel === "LINE" ? (
                       <LineChannelIcon key={patientChannel.id} size={24} />
                     ) : patientChannel.channel === "NAVER_TALK" ? (
-                      <NaverTalkChannelIcon
-                        key={patientChannel.id}
-                        size={24}
-                      />
-                    ) : patientChannel.channel === "INSTAGRAM" ? (
-                      <InstagramChannelIcon key={patientChannel.id} size={24} />
+                      <NaverTalkChannelIcon key={patientChannel.id} size={24} />
+                    ) : patientChannel.channel === "WECHAT" ? (
+                      <WeChatChannelIcon key={patientChannel.id} size={24} />
+                    ) : patientChannel.channel === "WHATSAPP" ? (
+                      <WhatsAppChannelIcon key={patientChannel.id} size={24} />
                     ) : (
-                      <span
-                        key={patientChannel.id}
-                        title={
-                          patientChannel.displayName ??
-                          channelMeta[patientChannel.channel].label
-                        }
-                        className={`flex size-6 items-center justify-center rounded-md text-xs font-black ${channelMeta[patientChannel.channel].badgeClass}`}
-                      >
-                        {channelMeta[patientChannel.channel].compactLabel}
-                      </span>
-                    )
-                  ))}
+                      <InstagramChannelIcon key={patientChannel.id} size={24} />
+                    ),
+                  )}
                 </span>
               </div>
             </div>

@@ -27,6 +27,8 @@ import { LineChannelIcon } from "@/features/channels/components/line-channel-ico
 import { InstagramChannelIcon } from "@/features/channels/components/instagram-channel-icon";
 import { KakaoChannelIcon } from "@/features/channels/components/kakao-channel-icon";
 import { NaverTalkChannelIcon } from "@/features/channels/components/naver-talk-channel-icon";
+import { WeChatChannelIcon } from "@/features/channels/components/wechat-channel-icon";
+import { WhatsAppChannelIcon } from "@/features/channels/components/whatsapp-channel-icon";
 
 type ChannelType =
   "KAKAO" | "LINE" | "NAVER_TALK" | "WECHAT" | "WHATSAPP" | "INSTAGRAM";
@@ -260,8 +262,7 @@ export function ChannelsClient({
         selectedChannel === "LINE" &&
         Boolean(lineChannelId || lineChannelSecret || lineChannelAccessToken);
       const hasNewNaverTalkCredentials =
-        selectedChannel === "NAVER_TALK" &&
-        Boolean(naverTalkAuthorization);
+        selectedChannel === "NAVER_TALK" && Boolean(naverTalkAuthorization);
       const response = await fetch(
         `/api/channel-connections/${selectedChannel}`,
         {
@@ -521,15 +522,11 @@ export function ChannelsClient({
           ) : null}
           <section className="mb-6 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-[#e1e5ef] bg-white p-4">
-              <p className="text-xs font-semibold text-[#8d94a6]">
-                지원 채널
-              </p>
+              <p className="text-xs font-semibold text-[#8d94a6]">지원 채널</p>
               <p className="mt-2 text-2xl font-bold">6개</p>
             </div>
             <div className="rounded-2xl border border-[#e1e5ef] bg-white p-4">
-              <p className="text-xs font-semibold text-[#8d94a6]">
-                연동 완료
-              </p>
+              <p className="text-xs font-semibold text-[#8d94a6]">연동 완료</p>
               <p className="mt-2 text-2xl font-bold text-[#15945a]">
                 {connectedCount}개
               </p>
@@ -577,6 +574,10 @@ export function ChannelsClient({
                         <LineChannelIcon size={44} />
                       ) : channel === "NAVER_TALK" ? (
                         <NaverTalkChannelIcon size={44} />
+                      ) : channel === "WECHAT" ? (
+                        <WeChatChannelIcon size={44} />
+                      ) : channel === "WHATSAPP" ? (
+                        <WhatsAppChannelIcon size={44} />
                       ) : channel === "INSTAGRAM" ? (
                         <InstagramChannelIcon size={44} />
                       ) : (
@@ -791,6 +792,10 @@ export function ChannelsClient({
                   <LineChannelIcon size={40} />
                 ) : selectedChannel === "NAVER_TALK" ? (
                   <NaverTalkChannelIcon size={40} />
+                ) : selectedChannel === "WECHAT" ? (
+                  <WeChatChannelIcon size={40} />
+                ) : selectedChannel === "WHATSAPP" ? (
+                  <WhatsAppChannelIcon size={40} />
                 ) : selectedChannel === "INSTAGRAM" ? (
                   <InstagramChannelIcon size={40} />
                 ) : (
@@ -1000,8 +1005,8 @@ export function ChannelsClient({
                         챗봇 보내기 API 자격증명
                       </p>
                       <p className="mt-1 text-xs leading-5 text-[#858c9e]">
-                        톡톡 파트너센터의 챗봇API 설정에서 발급한
-                        Authorization 키를 입력하세요.
+                        톡톡 파트너센터의 챗봇API 설정에서 발급한 Authorization
+                        키를 입력하세요.
                         {selectedConnection.hasCredentials
                           ? " 현재 키가 암호화되어 등록되어 있으며, 변경할 때만 다시 입력하면 됩니다."
                           : ""}

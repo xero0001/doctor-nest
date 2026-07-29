@@ -26,6 +26,11 @@ export default async function ChannelSettingsPage({
       select: {
         translationContextEnabled: true,
         translationContextMessageCount: true,
+        chatCoachContextEnabled: true,
+        chatCoachContextMessageCount: true,
+        autoResponseContextEnabled: true,
+        autoResponseContextMessageCount: true,
+        autoResponseDelayMinutes: true,
       },
     }),
   ]);
@@ -39,9 +44,15 @@ export default async function ChannelSettingsPage({
         process.env.META_INSTAGRAM_APP_ID &&
         process.env.META_INSTAGRAM_APP_SECRET,
       )}
-      translationSettings={{
-        contextEnabled: hospital.translationContextEnabled,
-        contextMessageCount: hospital.translationContextMessageCount,
+      aiSettings={{
+        translationContextEnabled: hospital.translationContextEnabled,
+        translationContextMessageCount: hospital.translationContextMessageCount,
+        chatCoachContextEnabled: hospital.chatCoachContextEnabled,
+        chatCoachContextMessageCount: hospital.chatCoachContextMessageCount,
+        autoResponseContextEnabled: hospital.autoResponseContextEnabled,
+        autoResponseContextMessageCount:
+          hospital.autoResponseContextMessageCount,
+        autoResponseDelayMinutes: hospital.autoResponseDelayMinutes,
       }}
       connections={connections.map((connection) => ({
         channel: connection.channel,

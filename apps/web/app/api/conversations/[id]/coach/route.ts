@@ -4,18 +4,16 @@ import {
   generateChatCoachSuggestion,
   getChatCoachModel,
 } from "@/lib/ai-chat-coach";
+import { getAISettings } from "@/lib/ai-settings";
 import { getCurrentUser } from "@/lib/auth";
 import { serializeChatCoachGeneration } from "@/lib/chat-coach-generation";
+import {
+  buildKnowledgeContext,
+  retrieveKnowledgeDocuments,
+} from "@/lib/chat-knowledge";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
-};
-
-type KnowledgeDocument = {
-  id: string;
-  title: string;
-  contentMarkdown: string;
-  tags: Array<{ tag: { name: string } }>;
 };
 
 const PENDING_GENERATION_TIMEOUT_MS = 2 * 60 * 1_000;
@@ -36,67 +34,6 @@ function generationResponse(generation: {
   });
 }
 
-function normalizeForSearch(value: string) {
-  return value.toLocaleLowerCase().replace(/[^a-z0-9가-힣]+/g, "");
-}
-
-function extractSearchTerms(value: string) {
-  return Array.from(
-    new Set(
-      value
-        .toLocaleLowerCase()
-        .match(/[a-z0-9가-힣]{2,}/g)
-        ?.filter((term) => term.length >= 2) ?? [],
-    ),
-  ).slice(0, 30);
-}
-
-function retrieveKnowledgeDocuments(
-  documents: KnowledgeDocument[],
-  treatmentTags: string[],
-  message: string,
-) {
-  const normalizedTreatmentTags = treatmentTags.map(normalizeForSearch);
-  const searchTerms = extractSearchTerms(
-    `${treatmentTags.join(" ")} ${message}`,
-  );
-
-  return documents
-    .map((document) => {
-      const title = normalizeForSearch(document.title);
-      const content = normalizeForSearch(document.contentMarkdown);
-      const documentTags = document.tags.map(({ tag }) =>
-        normalizeForSearch(tag.name),
-      );
-      let score = 0;
-
-      for (const treatmentTag of normalizedTreatmentTags) {
-        if (documentTags.includes(treatmentTag)) score += 20;
-        if (title.includes(treatmentTag)) score += 12;
-        if (content.includes(treatmentTag)) score += 4;
-      }
-
-      for (const term of searchTerms) {
-        const normalizedTerm = normalizeForSearch(term);
-        if (!normalizedTerm) continue;
-        if (documentTags.some((tag) => tag.includes(normalizedTerm)))
-          score += 8;
-        if (title.includes(normalizedTerm)) score += 5;
-        if (content.includes(normalizedTerm)) score += 1;
-      }
-
-      return { document, score };
-    })
-    .filter(({ score }) => score > 0)
-    .sort(
-      (left, right) =>
-        right.score - left.score ||
-        left.document.title.localeCompare(right.document.title, "ko"),
-    )
-    .slice(0, 3)
-    .map(({ document }) => document);
-}
-
 export async function POST(_request: Request, { params }: RouteContext) {
   const user = await getCurrentUser();
 
@@ -113,6 +50,7 @@ export async function POST(_request: Request, { params }: RouteContext) {
 
   const { id } = await params;
   const database = getDatabase();
+  const aiSettings = await getAISettings(user.hospitalId);
   const [conversation, allDocuments] = await Promise.all([
     database.conversation.findFirst({
       where: {
@@ -130,7 +68,7 @@ export async function POST(_request: Request, { params }: RouteContext) {
           },
         },
         messages: {
-          where: { sender: { in: ["CUSTOMER", "STAFF"] } },
+          where: { sender: { in: ["CUSTOMER", "STAFF", "AI"] } },
           select: {
             id: true,
             sender: true,
@@ -138,7 +76,9 @@ export async function POST(_request: Request, { params }: RouteContext) {
             translatedContent: true,
           },
           orderBy: [{ sentAt: "desc" }, { id: "desc" }],
-          take: 10,
+          take: aiSettings.chatCoachContextEnabled
+            ? aiSettings.chatCoachContextMessageCount
+            : 1,
         },
       },
     }),
@@ -181,10 +121,9 @@ export async function POST(_request: Request, { params }: RouteContext) {
       sourceMessageId: lastCustomerMessage.id,
     },
   };
-  const existingGeneration =
-    await database.chatCoachGeneration.findUnique({
-      where: generationKey,
-    });
+  const existingGeneration = await database.chatCoachGeneration.findUnique({
+    where: generationKey,
+  });
 
   if (
     existingGeneration?.status === "COMPLETED" &&
@@ -215,19 +154,7 @@ export async function POST(_request: Request, { params }: RouteContext) {
     treatmentTags,
     customerMessage,
   );
-  let remainingKnowledgeCharacters = 12_000;
-  const knowledgeDocuments = retrievedDocuments.map((document) => {
-    const content = document.contentMarkdown.slice(
-      0,
-      Math.max(0, remainingKnowledgeCharacters),
-    );
-    remainingKnowledgeCharacters -= content.length;
-
-    return {
-      title: document.title,
-      content,
-    };
-  });
+  const knowledgeDocuments = buildKnowledgeContext(retrievedDocuments);
   const recentConversation = conversation.messages
     .slice()
     .reverse()
@@ -308,20 +235,19 @@ export async function POST(_request: Request, { params }: RouteContext) {
       lastCustomerMessage: customerMessage,
       knowledgeDocuments,
     });
-    const completedGeneration =
-      await database.chatCoachGeneration.update({
-        where: { id: generationId },
-        data: {
-          status: "COMPLETED",
-          model: result.model,
-          responseGuide: result.output.responseGuide.trim(),
-          answerExample: result.output.answerExample.trim(),
-          inputTokens: result.usage.inputTokens,
-          outputTokens: result.usage.outputTokens,
-          totalTokens: result.usage.totalTokens,
-          errorMessage: null,
-        },
-      });
+    const completedGeneration = await database.chatCoachGeneration.update({
+      where: { id: generationId },
+      data: {
+        status: "COMPLETED",
+        model: result.model,
+        responseGuide: result.output.responseGuide.trim(),
+        answerExample: result.output.answerExample.trim(),
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+        totalTokens: result.usage.totalTokens,
+        errorMessage: null,
+      },
+    });
 
     return generationResponse(completedGeneration);
   } catch (error) {

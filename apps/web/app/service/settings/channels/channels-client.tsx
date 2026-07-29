@@ -4,11 +4,13 @@ import { FormEvent, useMemo, useState } from "react";
 import {
   ArrowRight,
   BadgeCheck,
+  Bot,
   Building2,
   Check,
   CircleAlert,
   CircleCheck,
   Clipboard,
+  Clock3,
   ExternalLink,
   KeyRound,
   Link2,
@@ -183,23 +185,30 @@ const statusMeta: Record<
 const settingTabs = ["병원 정보", "사용자", "채널", "AI 상담", "보안"] as const;
 type SettingTab = (typeof settingTabs)[number];
 
+type AISettings = {
+  translationContextEnabled: boolean;
+  translationContextMessageCount: number;
+  chatCoachContextEnabled: boolean;
+  chatCoachContextMessageCount: number;
+  autoResponseContextEnabled: boolean;
+  autoResponseContextMessageCount: number;
+  autoResponseDelayMinutes: number;
+};
+
 export function ChannelsClient({
   connections: initialConnections,
   organizationName,
   appUrl,
   instagramResult,
   instagramOAuthConfigured,
-  translationSettings,
+  aiSettings,
 }: {
   connections: Connection[];
   organizationName: string;
   appUrl: string;
   instagramResult: string | null;
   instagramOAuthConfigured: boolean;
-  translationSettings: {
-    contextEnabled: boolean;
-    contextMessageCount: number;
-  };
+  aiSettings: AISettings;
 }) {
   const [activeTab, setActiveTab] = useState<SettingTab>("채널");
   const [connections, setConnections] = useState(initialConnections);
@@ -216,15 +225,26 @@ export function ChannelsClient({
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [translationContextEnabled, setTranslationContextEnabled] = useState(
-    translationSettings.contextEnabled,
+    aiSettings.translationContextEnabled,
   );
   const [translationContextMessageCount, setTranslationContextMessageCount] =
-    useState(translationSettings.contextMessageCount);
-  const [isSavingTranslationSettings, setIsSavingTranslationSettings] =
-    useState(false);
-  const [translationSettingsError, setTranslationSettingsError] = useState("");
-  const [translationSettingsSaved, setTranslationSettingsSaved] =
-    useState(false);
+    useState(aiSettings.translationContextMessageCount);
+  const [chatCoachContextEnabled, setChatCoachContextEnabled] = useState(
+    aiSettings.chatCoachContextEnabled,
+  );
+  const [chatCoachContextMessageCount, setChatCoachContextMessageCount] =
+    useState(aiSettings.chatCoachContextMessageCount);
+  const [autoResponseContextEnabled, setAutoResponseContextEnabled] = useState(
+    aiSettings.autoResponseContextEnabled,
+  );
+  const [autoResponseContextMessageCount, setAutoResponseContextMessageCount] =
+    useState(aiSettings.autoResponseContextMessageCount);
+  const [autoResponseDelayMinutes, setAutoResponseDelayMinutes] = useState(
+    aiSettings.autoResponseDelayMinutes,
+  );
+  const [isSavingAISettings, setIsSavingAISettings] = useState(false);
+  const [aiSettingsError, setAISettingsError] = useState("");
+  const [aiSettingsSaved, setAISettingsSaved] = useState(false);
 
   const selectedConnection = useMemo(
     () =>
@@ -360,45 +380,60 @@ export function ChannelsClient({
     }
   }
 
-  async function saveTranslationSettings(event: FormEvent<HTMLFormElement>) {
+  async function saveAISettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setIsSavingTranslationSettings(true);
-    setTranslationSettingsError("");
-    setTranslationSettingsSaved(false);
+    setIsSavingAISettings(true);
+    setAISettingsError("");
+    setAISettingsSaved(false);
 
     try {
-      const response = await fetch("/api/settings/ai-translation", {
+      const response = await fetch("/api/settings/ai", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           translationContextEnabled,
           translationContextMessageCount,
+          chatCoachContextEnabled,
+          chatCoachContextMessageCount,
+          autoResponseContextEnabled,
+          autoResponseContextMessageCount,
+          autoResponseDelayMinutes,
         }),
       });
-      const result = (await response.json()) as {
+      const result = (await response.json()) as Partial<AISettings> & {
         error?: string;
-        translationContextEnabled?: boolean;
-        translationContextMessageCount?: number;
       };
 
       if (
         !response.ok ||
         typeof result.translationContextEnabled !== "boolean" ||
-        typeof result.translationContextMessageCount !== "number"
+        typeof result.translationContextMessageCount !== "number" ||
+        typeof result.chatCoachContextEnabled !== "boolean" ||
+        typeof result.chatCoachContextMessageCount !== "number" ||
+        typeof result.autoResponseContextEnabled !== "boolean" ||
+        typeof result.autoResponseContextMessageCount !== "number" ||
+        typeof result.autoResponseDelayMinutes !== "number"
       ) {
-        setTranslationSettingsError(
-          result.error ?? "번역 설정을 저장하지 못했습니다.",
+        setAISettingsError(
+          result.error ?? "AI 상담 설정을 저장하지 못했습니다.",
         );
         return;
       }
 
       setTranslationContextEnabled(result.translationContextEnabled);
       setTranslationContextMessageCount(result.translationContextMessageCount);
-      setTranslationSettingsSaved(true);
+      setChatCoachContextEnabled(result.chatCoachContextEnabled);
+      setChatCoachContextMessageCount(result.chatCoachContextMessageCount);
+      setAutoResponseContextEnabled(result.autoResponseContextEnabled);
+      setAutoResponseContextMessageCount(
+        result.autoResponseContextMessageCount,
+      );
+      setAutoResponseDelayMinutes(result.autoResponseDelayMinutes);
+      setAISettingsSaved(true);
     } catch {
-      setTranslationSettingsError("번역 설정 저장 중 문제가 발생했습니다.");
+      setAISettingsError("AI 상담 설정 저장 중 문제가 발생했습니다.");
     } finally {
-      setIsSavingTranslationSettings(false);
+      setIsSavingAISettings(false);
     }
   }
 
@@ -452,7 +487,7 @@ export function ChannelsClient({
               </h1>
               <p className="mt-2 text-sm text-[#777f93]">
                 {activeTab === "AI 상담"
-                  ? "고객 메시지 번역에 사용할 대화 문맥 범위를 관리하세요."
+                  ? "번역, AI 상담 코칭과 자동 응대에 사용할 대화 문맥과 응답 시간을 관리하세요."
                   : `${organizationName}으로 들어오는 모든 고객 문의를 닥터네스트에서 관리하세요.`}
               </p>
             </div>
@@ -658,112 +693,292 @@ export function ChannelsClient({
         </div>
       ) : (
         <div className="mx-auto max-w-[1180px] px-8 py-7">
-          <form
-            onSubmit={saveTranslationSettings}
-            className="max-w-[760px] rounded-2xl border border-[#dfe4ef] bg-white p-6 shadow-[0_8px_30px_rgba(36,47,95,0.04)]"
-          >
-            <div className="flex items-start justify-between gap-6">
-              <div className="flex min-w-0 items-start gap-3">
-                <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#edf1ff] text-[#3157f6]">
-                  <Languages className="size-5" />
-                </span>
-                <div>
-                  <h2 className="text-base font-bold text-[#2d3448]">
-                    번역시 컨텍스트 참고
-                  </h2>
-                  <p className="mt-1 text-sm leading-6 text-[#777f93]">
-                    번역할 메시지 앞의 대화를 함께 확인해 시술명, 일정과 생략된
-                    표현을 더 정확하게 번역합니다.
-                  </p>
+          <form onSubmit={saveAISettings} className="max-w-[860px] space-y-5">
+            <section className="rounded-2xl border border-[#dfe4ef] bg-white p-6 shadow-[0_8px_30px_rgba(36,47,95,0.04)]">
+              <div className="flex items-start justify-between gap-6">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#edf1ff] text-[#3157f6]">
+                    <Languages className="size-5" />
+                  </span>
+                  <div>
+                    <h2 className="text-base font-bold text-[#2d3448]">
+                      번역시 컨텍스트 참고
+                    </h2>
+                    <p className="mt-1 text-sm leading-6 text-[#777f93]">
+                      번역할 메시지 앞의 대화를 함께 확인해 시술명, 일정과
+                      생략된 표현을 더 정확하게 번역합니다.
+                    </p>
+                  </div>
                 </div>
+
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={translationContextEnabled}
+                  aria-label="번역시 컨텍스트 참고"
+                  onClick={() => {
+                    setTranslationContextEnabled((current) => !current);
+                    setAISettingsSaved(false);
+                  }}
+                  className={`relative mt-1 h-7 w-12 shrink-0 rounded-full transition-colors ${
+                    translationContextEnabled ? "bg-[#3157f6]" : "bg-[#cbd1dc]"
+                  }`}
+                >
+                  <span
+                    className={`absolute left-1 top-1 size-5 rounded-full bg-white shadow-sm transition-transform ${
+                      translationContextEnabled
+                        ? "translate-x-5"
+                        : "translate-x-0"
+                    }`}
+                  />
+                </button>
               </div>
 
-              <button
-                type="button"
-                role="switch"
-                aria-checked={translationContextEnabled}
-                aria-label="번역시 컨텍스트 참고"
-                onClick={() => {
-                  setTranslationContextEnabled((current) => !current);
-                  setTranslationSettingsSaved(false);
-                }}
-                className={`relative mt-1 h-7 w-12 shrink-0 rounded-full transition-colors ${
-                  translationContextEnabled ? "bg-[#3157f6]" : "bg-[#cbd1dc]"
+              <div
+                className={`mt-6 rounded-2xl border p-5 transition-colors ${
+                  translationContextEnabled
+                    ? "border-[#dce3f7] bg-[#f7f9ff]"
+                    : "border-[#e5e8ef] bg-[#f8f9fb]"
                 }`}
               >
-                <span
-                  className={`absolute left-1 top-1 size-5 rounded-full bg-white shadow-sm transition-transform ${
-                    translationContextEnabled
-                      ? "translate-x-5"
-                      : "translate-x-0"
-                  }`}
-                />
-              </button>
-            </div>
+                <label className="block max-w-[320px]">
+                  <span className="text-sm font-bold text-[#596177]">
+                    참고할 최근 메시지 수
+                  </span>
+                  <div className="mt-2 flex items-center gap-3">
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      step={1}
+                      disabled={!translationContextEnabled}
+                      value={translationContextMessageCount}
+                      onChange={(event) => {
+                        setTranslationContextMessageCount(
+                          Number(event.target.value),
+                        );
+                        setAISettingsSaved(false);
+                      }}
+                      className="h-11 w-28 rounded-xl border border-[#d9deea] bg-white px-3 text-sm font-semibold outline-none focus:border-[#6f83f2] focus:ring-3 focus:ring-[#3157f6]/10 disabled:cursor-not-allowed disabled:bg-[#eef0f4] disabled:text-[#9ba1af]"
+                    />
+                    <span className="text-sm text-[#777f93]">개</span>
+                  </div>
+                </label>
+                <p className="mt-3 text-xs leading-5 text-[#8b92a5]">
+                  번역 결과에는 새 메시지만 포함되며, 이전 메시지는 표현과
+                  용어를 이해하는 데만 사용합니다.
+                </p>
+              </div>
+            </section>
 
-            <div
-              className={`mt-6 rounded-2xl border p-5 transition-colors ${
-                translationContextEnabled
-                  ? "border-[#dce3f7] bg-[#f7f9ff]"
-                  : "border-[#e5e8ef] bg-[#f8f9fb]"
-              }`}
-            >
-              <label className="block max-w-[300px]">
-                <span className="text-sm font-bold text-[#596177]">
-                  참고할 최근 메시지 수
-                </span>
-                <div className="mt-2 flex items-center gap-3">
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    step={1}
-                    disabled={!translationContextEnabled}
-                    value={translationContextMessageCount}
-                    onChange={(event) => {
-                      setTranslationContextMessageCount(
-                        Number(event.target.value),
-                      );
-                      setTranslationSettingsSaved(false);
-                    }}
-                    className="h-11 w-28 rounded-xl border border-[#d9deea] bg-white px-3 text-sm font-semibold outline-none focus:border-[#6f83f2] focus:ring-3 focus:ring-[#3157f6]/10 disabled:cursor-not-allowed disabled:bg-[#eef0f4] disabled:text-[#9ba1af]"
-                  />
-                  <span className="text-sm text-[#777f93]">개</span>
+            <section className="rounded-2xl border border-[#dfe4ef] bg-white p-6 shadow-[0_8px_30px_rgba(36,47,95,0.04)]">
+              <div className="flex items-start justify-between gap-6">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#f0edff] text-[#6b55df]">
+                    <MessageCircleMore className="size-5" />
+                  </span>
+                  <div>
+                    <h2 className="text-base font-bold text-[#2d3448]">
+                      AI 상담 코칭시 컨텍스트 참고
+                    </h2>
+                    <p className="mt-1 text-sm leading-6 text-[#777f93]">
+                      응대 가이드와 답변 예시를 만들 때 최근 대화를 함께
+                      확인합니다.
+                    </p>
+                  </div>
                 </div>
-              </label>
-              <p className="mt-3 text-xs leading-5 text-[#8b92a5]">
-                1~50개까지 설정할 수 있습니다. 고객과 병원 직원이 주고받은
-                메시지만 참고하며, 번역 결과에는 새 메시지만 포함됩니다.
-              </p>
-            </div>
 
-            {translationSettingsError ? (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={chatCoachContextEnabled}
+                  aria-label="AI 상담 코칭시 컨텍스트 참고"
+                  onClick={() => {
+                    setChatCoachContextEnabled((current) => !current);
+                    setAISettingsSaved(false);
+                  }}
+                  className={`relative mt-1 h-7 w-12 shrink-0 rounded-full transition-colors ${
+                    chatCoachContextEnabled ? "bg-[#6b55df]" : "bg-[#cbd1dc]"
+                  }`}
+                >
+                  <span
+                    className={`absolute left-1 top-1 size-5 rounded-full bg-white shadow-sm transition-transform ${
+                      chatCoachContextEnabled
+                        ? "translate-x-5"
+                        : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div
+                className={`mt-6 rounded-2xl border p-5 transition-colors ${
+                  chatCoachContextEnabled
+                    ? "border-[#e2dcfb] bg-[#faf8ff]"
+                    : "border-[#e5e8ef] bg-[#f8f9fb]"
+                }`}
+              >
+                <label className="block max-w-[320px]">
+                  <span className="text-sm font-bold text-[#596177]">
+                    코칭에 참고할 최근 메시지 수
+                  </span>
+                  <div className="mt-2 flex items-center gap-3">
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      step={1}
+                      disabled={!chatCoachContextEnabled}
+                      value={chatCoachContextMessageCount}
+                      onChange={(event) => {
+                        setChatCoachContextMessageCount(
+                          Number(event.target.value),
+                        );
+                        setAISettingsSaved(false);
+                      }}
+                      className="h-11 w-28 rounded-xl border border-[#d9deea] bg-white px-3 text-sm font-semibold outline-none focus:border-[#8d78ea] focus:ring-3 focus:ring-[#6b55df]/10 disabled:cursor-not-allowed disabled:bg-[#eef0f4] disabled:text-[#9ba1af]"
+                    />
+                    <span className="text-sm text-[#777f93]">개</span>
+                  </div>
+                </label>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-[#dfe4ef] bg-white p-6 shadow-[0_8px_30px_rgba(36,47,95,0.04)]">
+              <div className="flex items-start justify-between gap-6">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#eaf8f1] text-[#15945a]">
+                    <Bot className="size-5" />
+                  </span>
+                  <div>
+                    <h2 className="text-base font-bold text-[#2d3448]">
+                      자동 응대 설정
+                    </h2>
+                    <p className="mt-1 text-sm leading-6 text-[#777f93]">
+                      자동 응대가 켜진 채팅은 마지막 고객 메시지 이후 설정한
+                      시간이 지나면 AI가 답변을 생성해 발송합니다.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={autoResponseContextEnabled}
+                  aria-label="자동 응대시 컨텍스트 참고"
+                  onClick={() => {
+                    setAutoResponseContextEnabled((current) => !current);
+                    setAISettingsSaved(false);
+                  }}
+                  className={`relative mt-1 h-7 w-12 shrink-0 rounded-full transition-colors ${
+                    autoResponseContextEnabled ? "bg-[#15945a]" : "bg-[#cbd1dc]"
+                  }`}
+                >
+                  <span
+                    className={`absolute left-1 top-1 size-5 rounded-full bg-white shadow-sm transition-transform ${
+                      autoResponseContextEnabled
+                        ? "translate-x-5"
+                        : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="mt-6 grid gap-4 rounded-2xl border border-[#d7ede2] bg-[#f5fbf8] p-5 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-sm font-bold text-[#596177]">
+                    자동 응대시 참고할 최근 메시지 수
+                  </span>
+                  <div className="mt-2 flex items-center gap-3">
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      step={1}
+                      disabled={!autoResponseContextEnabled}
+                      value={autoResponseContextMessageCount}
+                      onChange={(event) => {
+                        setAutoResponseContextMessageCount(
+                          Number(event.target.value),
+                        );
+                        setAISettingsSaved(false);
+                      }}
+                      className="h-11 w-28 rounded-xl border border-[#d9deea] bg-white px-3 text-sm font-semibold outline-none focus:border-[#62b68c] focus:ring-3 focus:ring-[#15945a]/10 disabled:cursor-not-allowed disabled:bg-[#eef0f4] disabled:text-[#9ba1af]"
+                    />
+                    <span className="text-sm text-[#777f93]">개</span>
+                  </div>
+                </label>
+
+                <label className="block">
+                  <span className="flex items-center gap-1.5 text-sm font-bold text-[#596177]">
+                    <Clock3 className="size-4 text-[#15945a]" />
+                    답변 전 대기시간
+                  </span>
+                  <div className="mt-2 flex items-center gap-3">
+                    <input
+                      type="number"
+                      min={1}
+                      max={1440}
+                      step={1}
+                      value={autoResponseDelayMinutes}
+                      onChange={(event) => {
+                        setAutoResponseDelayMinutes(Number(event.target.value));
+                        setAISettingsSaved(false);
+                      }}
+                      className="h-11 w-28 rounded-xl border border-[#d9deea] bg-white px-3 text-sm font-semibold outline-none focus:border-[#62b68c] focus:ring-3 focus:ring-[#15945a]/10"
+                    />
+                    <span className="text-sm text-[#777f93]">분</span>
+                  </div>
+                </label>
+              </div>
+
+              <p className="mt-3 text-xs leading-5 text-[#8b92a5]">
+                직원이나 AI가 먼저 답변했거나 대기 중 새 메시지가 도착하면 이전
+                메시지에 대한 자동 응대는 발송하지 않습니다. Cron은 1분마다
+                대상을 확인합니다.
+              </p>
+              <p className="mt-2 text-xs leading-5 text-[#8b92a5]">
+                현재 실제 자동 발송은 LINE, 네이버 톡톡, Instagram 중 발신 API가
+                연결된 채널에서 동작합니다.
+              </p>
+            </section>
+
+            {aiSettingsError ? (
               <p
                 role="alert"
-                className="mt-4 rounded-xl bg-[#fff0f2] px-4 py-3 text-sm font-semibold text-[#d8465b]"
+                className="rounded-xl bg-[#fff0f2] px-4 py-3 text-sm font-semibold text-[#d8465b]"
               >
-                {translationSettingsError}
+                {aiSettingsError}
               </p>
             ) : null}
 
-            {translationSettingsSaved ? (
-              <p className="mt-4 rounded-xl bg-[#edf8f2] px-4 py-3 text-sm font-semibold text-[#178c56]">
-                번역 설정을 저장했습니다.
+            {aiSettingsSaved ? (
+              <p className="rounded-xl bg-[#edf8f2] px-4 py-3 text-sm font-semibold text-[#178c56]">
+                AI 상담 설정을 저장했습니다.
               </p>
             ) : null}
 
-            <div className="mt-6 flex justify-end">
+            <div className="flex justify-end">
               <button
                 type="submit"
                 disabled={
-                  isSavingTranslationSettings ||
+                  isSavingAISettings ||
                   !Number.isInteger(translationContextMessageCount) ||
                   translationContextMessageCount < 1 ||
-                  translationContextMessageCount > 50
+                  translationContextMessageCount > 50 ||
+                  !Number.isInteger(chatCoachContextMessageCount) ||
+                  chatCoachContextMessageCount < 1 ||
+                  chatCoachContextMessageCount > 50 ||
+                  !Number.isInteger(autoResponseContextMessageCount) ||
+                  autoResponseContextMessageCount < 1 ||
+                  autoResponseContextMessageCount > 50 ||
+                  !Number.isInteger(autoResponseDelayMinutes) ||
+                  autoResponseDelayMinutes < 1 ||
+                  autoResponseDelayMinutes > 1440
                 }
                 className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#3157f6] px-5 text-sm font-bold text-white disabled:opacity-50"
               >
-                {isSavingTranslationSettings ? (
+                {isSavingAISettings ? (
                   <LoaderCircle className="size-4 animate-spin" />
                 ) : (
                   <Save className="size-4" />

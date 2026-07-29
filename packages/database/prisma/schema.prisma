@@ -8,25 +8,31 @@ datasource db {
 }
 
 model Hospital {
-  id                             String                @id @default(cuid())
-  name                           String
-  slug                           String                @unique
-  translationContextEnabled      Boolean               @default(true)
-  translationContextMessageCount Int                   @default(10)
-  users                          User[]
-  authUsers                      AuthUser[]
-  channelConnections             ChannelConnection[]
-  patients                       Patient[]
-  patientTags                    PatientTag[]
-  conversations                  Conversation[]
-  appointments                   Appointment[]
-  manualFolders                  ManualFolder[]
-  manualTags                     ManualTag[]
-  manualDocuments                ManualDocument[]
-  chatCoachGenerations           ChatCoachGeneration[]
-  createdAt                      DateTime              @default(now())
-  updatedAt                      DateTime              @updatedAt
-  patientChannels                PatientChannel[]
+  id                              String                   @id @default(cuid())
+  name                            String
+  slug                            String                   @unique
+  translationContextEnabled       Boolean                  @default(true)
+  translationContextMessageCount  Int                      @default(10)
+  chatCoachContextEnabled         Boolean                  @default(true)
+  chatCoachContextMessageCount    Int                      @default(10)
+  autoResponseContextEnabled      Boolean                  @default(true)
+  autoResponseContextMessageCount Int                      @default(10)
+  autoResponseDelayMinutes        Int                      @default(5)
+  users                           User[]
+  authUsers                       AuthUser[]
+  channelConnections              ChannelConnection[]
+  patients                        Patient[]
+  patientTags                     PatientTag[]
+  conversations                   Conversation[]
+  appointments                    Appointment[]
+  manualFolders                   ManualFolder[]
+  manualTags                      ManualTag[]
+  manualDocuments                 ManualDocument[]
+  chatCoachGenerations            ChatCoachGeneration[]
+  autoResponseGenerations         AutoResponseGeneration[]
+  createdAt                       DateTime                 @default(now())
+  updatedAt                       DateTime                 @updatedAt
+  patientChannels                 PatientChannel[]
 
   @@map("Organization")
 }
@@ -246,25 +252,26 @@ enum ConversationStatus {
 }
 
 model Conversation {
-  id                   String                @id @default(cuid())
-  hospitalId           String                @map("organizationId")
-  patientId            String                @map("customerId")
-  patientChannelId     String?
-  channel              ChatChannel
-  externalThreadId     String?
-  status               ConversationStatus    @default(OPEN)
-  important            Boolean               @default(false)
-  autoRespondEnabled   Boolean               @default(false)
-  autoTranslateEnabled Boolean               @default(true)
-  unreadCount          Int                   @default(0)
-  lastMessageAt        DateTime              @default(now())
-  hospital             Hospital              @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  patientChannel       PatientChannel?       @relation(fields: [patientChannelId], references: [id], onDelete: SetNull)
-  messages             Message[]
-  chatCoachGenerations ChatCoachGeneration[]
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
+  id                      String                   @id @default(cuid())
+  hospitalId              String                   @map("organizationId")
+  patientId               String                   @map("customerId")
+  patientChannelId        String?
+  channel                 ChatChannel
+  externalThreadId        String?
+  status                  ConversationStatus       @default(OPEN)
+  important               Boolean                  @default(false)
+  autoRespondEnabled      Boolean                  @default(false)
+  autoTranslateEnabled    Boolean                  @default(true)
+  unreadCount             Int                      @default(0)
+  lastMessageAt           DateTime                 @default(now())
+  hospital                Hospital                 @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patient                 Patient                  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientChannel          PatientChannel?          @relation(fields: [patientChannelId], references: [id], onDelete: SetNull)
+  messages                Message[]
+  chatCoachGenerations    ChatCoachGeneration[]
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  autoResponseGenerations AutoResponseGeneration[]
 
   @@unique([hospitalId, channel, externalThreadId])
   @@index([hospitalId, status, lastMessageAt])
@@ -284,20 +291,21 @@ enum MessageSender {
 }
 
 model Message {
-  id                     String                @id @default(cuid())
-  conversationId         String
-  externalMessageId      String?
-  direction              MessageDirection
-  sender                 MessageSender
-  content                String
-  sourceLanguage         String                @default("")
-  sourceLanguageName     String                @default("")
-  translatedContent      String                @default("")
-  translatedLanguage     String                @default("")
-  translatedLanguageName String                @default("")
-  sentAt                 DateTime              @default(now())
-  conversation           Conversation          @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  chatCoachGenerations   ChatCoachGeneration[]
+  id                      String                   @id @default(cuid())
+  conversationId          String
+  externalMessageId       String?
+  direction               MessageDirection
+  sender                  MessageSender
+  content                 String
+  sourceLanguage          String                   @default("")
+  sourceLanguageName      String                   @default("")
+  translatedContent       String                   @default("")
+  translatedLanguage      String                   @default("")
+  translatedLanguageName  String                   @default("")
+  sentAt                  DateTime                 @default(now())
+  conversation            Conversation             @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  chatCoachGenerations    ChatCoachGeneration[]
+  autoResponseGenerations AutoResponseGeneration[]
 
   @@unique([conversationId, externalMessageId])
   @@index([conversationId, sentAt])
@@ -335,6 +343,47 @@ model ChatCoachGeneration {
 
   @@unique([conversationId, sourceMessageId])
   @@index([hospitalId, createdAt])
+  @@index([conversationId, createdAt])
+}
+
+enum AutoResponseGenerationStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model AutoResponseGeneration {
+  id                     String                       @id @default(cuid())
+  hospitalId             String
+  conversationId         String
+  sourceMessageId        String
+  model                  String
+  status                 AutoResponseGenerationStatus @default(PENDING)
+  sourceSnapshot         String
+  contextMessageCount    Int                          @default(0)
+  treatmentTags          String[]                     @default([])
+  knowledgeDocumentIds   String[]                     @default([])
+  sources                Json?
+  generatedContent       String?
+  deliveredContent       String?
+  translatedLanguage     String                       @default("ko")
+  translatedLanguageName String                       @default("한국어")
+  externalMessageId      String?
+  inputTokens            Int?
+  outputTokens           Int?
+  totalTokens            Int?
+  attemptCount           Int                          @default(1)
+  errorMessage           String?
+  sentAt                 DateTime?
+  hospital               Hospital                     @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  conversation           Conversation                 @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sourceMessage          Message                      @relation(fields: [sourceMessageId], references: [id], onDelete: Cascade)
+  createdAt              DateTime                     @default(now())
+  updatedAt              DateTime                     @updatedAt
+
+  @@unique([conversationId, sourceMessageId])
+  @@index([hospitalId, status, updatedAt])
   @@index([conversationId, createdAt])
 }
 

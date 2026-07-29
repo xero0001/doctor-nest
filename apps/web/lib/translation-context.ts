@@ -1,44 +1,21 @@
 import { getDatabase } from "@doctornest/database";
 
 import type { TranslationContextMessage } from "@/lib/ai-translation";
-
-export const DEFAULT_TRANSLATION_CONTEXT_MESSAGE_COUNT = 10;
-export const MIN_TRANSLATION_CONTEXT_MESSAGE_COUNT = 1;
-export const MAX_TRANSLATION_CONTEXT_MESSAGE_COUNT = 50;
+import { getAISettings } from "@/lib/ai-settings";
 
 export type TranslationContextSettings = {
   enabled: boolean;
   messageCount: number;
 };
 
-function normalizeMessageCount(value: number) {
-  if (!Number.isInteger(value)) {
-    return DEFAULT_TRANSLATION_CONTEXT_MESSAGE_COUNT;
-  }
-
-  return Math.min(
-    MAX_TRANSLATION_CONTEXT_MESSAGE_COUNT,
-    Math.max(MIN_TRANSLATION_CONTEXT_MESSAGE_COUNT, value),
-  );
-}
-
 export async function getTranslationContextSettings(
   hospitalId: string,
 ): Promise<TranslationContextSettings> {
-  const hospital = await getDatabase().hospital.findUnique({
-    where: { id: hospitalId },
-    select: {
-      translationContextEnabled: true,
-      translationContextMessageCount: true,
-    },
-  });
+  const settings = await getAISettings(hospitalId);
 
   return {
-    enabled: hospital?.translationContextEnabled ?? true,
-    messageCount: normalizeMessageCount(
-      hospital?.translationContextMessageCount ??
-        DEFAULT_TRANSLATION_CONTEXT_MESSAGE_COUNT,
-    ),
+    enabled: settings.translationContextEnabled,
+    messageCount: settings.translationContextMessageCount,
   };
 }
 

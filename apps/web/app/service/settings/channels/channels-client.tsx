@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { LineChannelIcon } from "@/features/channels/components/line-channel-icon";
+import { InstagramChannelIcon } from "@/features/channels/components/instagram-channel-icon";
 
 type ChannelType =
   "KAKAO" | "LINE" | "NAVER_TALK" | "WECHAT" | "WHATSAPP" | "INSTAGRAM";
@@ -431,7 +432,7 @@ export function ChannelsClient({
         <div className="mx-auto max-w-[1180px]">
           <div className="flex items-start justify-between gap-6">
             <div>
-              <div className="flex items-center gap-2 text-[11px] font-semibold text-[#8b92a5]">
+              <div className="flex items-center gap-2 text-xs font-semibold text-[#8b92a5]">
                 <Settings className="size-3.5" />
                 환경설정
               </div>
@@ -449,7 +450,7 @@ export function ChannelsClient({
                 <Building2 className="size-4" />
               </span>
               <div>
-                <p className="text-[9px] font-semibold text-[#9198aa]">
+                <p className="text-xs font-semibold text-[#9198aa]">
                   현재 병원
                 </p>
                 <p className="mt-0.5 text-xs font-bold">{organizationName}</p>
@@ -510,13 +511,13 @@ export function ChannelsClient({
           ) : null}
           <section className="mb-6 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-[#e1e5ef] bg-white p-4">
-              <p className="text-[10px] font-semibold text-[#8d94a6]">
+              <p className="text-xs font-semibold text-[#8d94a6]">
                 지원 채널
               </p>
               <p className="mt-2 text-2xl font-bold">6개</p>
             </div>
             <div className="rounded-2xl border border-[#e1e5ef] bg-white p-4">
-              <p className="text-[10px] font-semibold text-[#8d94a6]">
+              <p className="text-xs font-semibold text-[#8d94a6]">
                 연동 완료
               </p>
               <p className="mt-2 text-2xl font-bold text-[#15945a]">
@@ -524,7 +525,7 @@ export function ChannelsClient({
               </p>
             </div>
             <div className="rounded-2xl border border-[#e1e5ef] bg-white p-4">
-              <p className="text-[10px] font-semibold text-[#8d94a6]">
+              <p className="text-xs font-semibold text-[#8d94a6]">
                 설정 진행 중
               </p>
               <p className="mt-2 text-2xl font-bold text-[#a66c00]">
@@ -535,12 +536,12 @@ export function ChannelsClient({
 
           <div className="mb-5 flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-bold">고객 상담 채널</h2>
-              <p className="mt-1 text-[11px] text-[#8b92a5]">
+              <h2 className="text-base font-bold">고객 상담 채널</h2>
+              <p className="mt-1 text-sm text-[#8b92a5]">
                 운영 채널은 각 병원 명의 계정으로 연결됩니다.
               </p>
             </div>
-            <span className="flex items-center gap-1.5 rounded-full bg-[#edf8f2] px-3 py-1.5 text-[9px] font-bold text-[#1b965c]">
+            <span className="flex items-center gap-1.5 rounded-full bg-[#edf8f2] px-3 py-1.5 text-xs font-bold text-[#1b965c]">
               <ShieldCheck className="size-3" /> 병원별 데이터 분리
             </span>
           </div>
@@ -562,6 +563,8 @@ export function ChannelsClient({
                     <div className="flex min-w-0 items-center gap-3">
                       {channel === "LINE" ? (
                         <LineChannelIcon size={44} />
+                      ) : channel === "INSTAGRAM" ? (
+                        <InstagramChannelIcon size={44} />
                       ) : (
                         <span
                           className={`flex size-11 shrink-0 items-center justify-center rounded-2xl text-xs font-extrabold shadow-sm ${definition.badgeClass}`}
@@ -571,16 +574,16 @@ export function ChannelsClient({
                       )}
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <h3 className="text-sm font-bold">
+                          <h3 className="text-base font-bold">
                             {definition.label}
                           </h3>
                           <span
-                            className={`rounded-full px-2 py-1 text-[8px] font-bold ${status.className}`}
+                            className={`rounded-full px-2 py-1 text-xs font-bold ${status.className}`}
                           >
                             {status.label}
                           </span>
                         </div>
-                        <p className="mt-1 truncate text-[10px] text-[#8c93a5]">
+                        <p className="mt-1 truncate text-xs text-[#8c93a5]">
                           {connection.externalAccountId ?? definition.owner}
                         </p>
                       </div>
@@ -592,7 +595,7 @@ export function ChannelsClient({
                     )}
                   </div>
 
-                  <p className="mt-4 min-h-10 text-[11px] leading-5 text-[#6e768b]">
+                  <p className="mt-4 min-h-10 text-sm leading-6 text-[#6e768b]">
                     {definition.summary}
                   </p>
 
@@ -600,7 +603,7 @@ export function ChannelsClient({
                     {definition.requirements.map((requirement) => (
                       <span
                         key={requirement}
-                        className="rounded-md bg-[#f2f4f8] px-2 py-1 text-[8.5px] font-semibold text-[#72798d]"
+                        className="rounded-md bg-[#f2f4f8] px-2 py-1 text-xs font-semibold text-[#72798d]"
                       >
                         {requirement}
                       </span>
@@ -610,7 +613,7 @@ export function ChannelsClient({
                   <button
                     type="button"
                     onClick={() => openConnection(channel)}
-                    className={`mt-5 flex h-9 w-full items-center justify-center gap-2 rounded-xl text-[10px] font-bold ${
+                    className={`mt-5 flex h-10 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold ${
                       connection.status === "DISCONNECTED"
                         ? "bg-[#3157f6] text-white"
                         : "border border-[#dce1eb] bg-white text-[#59617a] hover:bg-[#f8f9fc]"
@@ -628,7 +631,7 @@ export function ChannelsClient({
 
           <div className="mt-6 flex items-start gap-3 rounded-2xl border border-[#dce3f7] bg-[#f2f5ff] p-4">
             <CircleAlert className="mt-0.5 size-4 shrink-0 text-[#526ce4]" />
-            <div className="text-[10px] leading-5 text-[#66708a]">
+            <div className="text-sm leading-6 text-[#66708a]">
               <p className="font-bold text-[#4054b7]">외부 채널 승인 안내</p>
               <p>
                 계정 식별자와 웹훅을 저장하면 설정 중 상태가 됩니다. 실제 메시지
@@ -770,6 +773,8 @@ export function ChannelsClient({
               <div className="flex items-center gap-3">
                 {selectedChannel === "LINE" ? (
                   <LineChannelIcon size={40} />
+                ) : selectedChannel === "INSTAGRAM" ? (
+                  <InstagramChannelIcon size={40} />
                 ) : (
                   <span
                     className={`flex size-10 items-center justify-center rounded-xl text-xs font-extrabold ${selectedDefinition.badgeClass}`}

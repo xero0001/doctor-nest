@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 
 import { LineChannelIcon } from "@/features/channels/components/line-channel-icon";
+import { InstagramChannelIcon } from "@/features/channels/components/instagram-channel-icon";
 import { SectionTabs } from "@/features/chatting/components/section-tabs";
 
 import type {
@@ -420,6 +421,10 @@ function ChannelBadge({
 
   if (channel === "LINE") {
     return <LineChannelIcon size={size} />;
+  }
+
+  if (channel === "INSTAGRAM") {
+    return <InstagramChannelIcon size={size} />;
   }
 
   return (
@@ -1255,6 +1260,8 @@ export function ChattingClient({
               {(Object.keys(channelMeta) as ChatChannel[]).map((channel) => (
                 channel === "LINE" ? (
                   <LineChannelIcon key={channel} size={20} />
+                ) : channel === "INSTAGRAM" ? (
+                  <InstagramChannelIcon key={channel} size={20} />
                 ) : (
                   <span
                     key={channel}
@@ -1717,6 +1724,8 @@ export function ChattingClient({
                   {currentRoom.customer.channels.map((patientChannel) => (
                     patientChannel.channel === "LINE" ? (
                       <LineChannelIcon key={patientChannel.id} size={24} />
+                    ) : patientChannel.channel === "INSTAGRAM" ? (
+                      <InstagramChannelIcon key={patientChannel.id} size={24} />
                     ) : (
                       <span
                         key={patientChannel.id}

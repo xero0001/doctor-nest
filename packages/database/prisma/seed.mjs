@@ -1,5 +1,3 @@
-/* global Buffer, console */
-
 import { promisify } from "node:util";
 import { scrypt as scryptCallback, randomBytes } from "node:crypto";
 

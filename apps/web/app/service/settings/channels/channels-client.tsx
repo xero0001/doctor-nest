@@ -204,9 +204,7 @@ export function ChannelsClient({
   const [lineChannelAccessToken, setLineChannelAccessToken] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
-  const [copiedField, setCopiedField] = useState<
-    "webhookUrl" | "verifyToken" | null
-  >(null);
+  const [copied, setCopied] = useState(false);
   const [translationContextEnabled, setTranslationContextEnabled] = useState(
     translationSettings.contextEnabled,
   );
@@ -238,7 +236,7 @@ export function ChannelsClient({
     setLineChannelSecret("");
     setLineChannelAccessToken("");
     setError("");
-    setCopiedField(null);
+    setCopied(false);
   }
 
   async function saveConnection(event: FormEvent<HTMLFormElement>) {
@@ -401,7 +399,6 @@ export function ChannelsClient({
     selectedChannel && selectedConnection
       ? `${appUrl}/api/webhooks/${selectedChannel}/${selectedConnection.webhookToken}`
       : "";
-  const webhookVerifyToken = selectedConnection?.webhookToken ?? "";
   const usesMetaWebhook =
     selectedChannel === "WHATSAPP" || selectedChannel === "INSTAGRAM";
 
@@ -892,67 +889,34 @@ export function ChannelsClient({
                   </div>
                 ) : null}
 
-                <div>
-                  <span className="mb-2 block text-sm font-bold text-[#596177]">
-                    닥터네스트 웹훅 URL
-                  </span>
-                  <div className="flex items-center gap-2 rounded-xl border border-[#dde2ec] bg-[#f8f9fc] p-2">
-                    <code className="min-w-0 flex-1 truncate px-1 text-xs text-[#697186]">
-                      {webhookUrl}
-                    </code>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await navigator.clipboard.writeText(webhookUrl);
-                        setCopiedField("webhookUrl");
-                      }}
-                      className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[#dce1eb] bg-white px-2.5 text-xs font-bold text-[#59617a]"
-                    >
-                      {copiedField === "webhookUrl" ? (
-                        <Check className="size-3 text-[#1aa464]" />
-                      ) : (
-                        <Clipboard className="size-3" />
-                      )}
-                      {copiedField === "webhookUrl" ? "복사됨" : "복사"}
-                    </button>
-                  </div>
-                  <p className="mt-2 flex items-center gap-1.5 text-xs text-[#9298a8]">
-                    <Webhook className="size-3" />
-                    채널 개발자 콘솔의 이벤트 수신 URL에 입력합니다.
-                  </p>
-                </div>
-
-                {usesMetaWebhook ? (
+                {!usesMetaWebhook ? (
                   <div>
                     <span className="mb-2 block text-sm font-bold text-[#596177]">
-                      Meta Webhook 인증 토큰
+                      닥터네스트 웹훅 URL
                     </span>
                     <div className="flex items-center gap-2 rounded-xl border border-[#dde2ec] bg-[#f8f9fc] p-2">
                       <code className="min-w-0 flex-1 truncate px-1 text-xs text-[#697186]">
-                        {webhookVerifyToken}
+                        {webhookUrl}
                       </code>
                       <button
                         type="button"
                         onClick={async () => {
-                          await navigator.clipboard.writeText(
-                            webhookVerifyToken,
-                          );
-                          setCopiedField("verifyToken");
+                          await navigator.clipboard.writeText(webhookUrl);
+                          setCopied(true);
                         }}
                         className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[#dce1eb] bg-white px-2.5 text-xs font-bold text-[#59617a]"
                       >
-                        {copiedField === "verifyToken" ? (
+                        {copied ? (
                           <Check className="size-3 text-[#1aa464]" />
                         ) : (
                           <Clipboard className="size-3" />
                         )}
-                        {copiedField === "verifyToken" ? "복사됨" : "복사"}
+                        {copied ? "복사됨" : "복사"}
                       </button>
                     </div>
                     <p className="mt-2 flex items-center gap-1.5 text-xs text-[#9298a8]">
-                      <ShieldCheck className="size-3" />
-                      Meta의 인증 토큰 입력란에 사용하며 Access Token과는
-                      다른 값입니다.
+                      <Webhook className="size-3" />
+                      채널 개발자 콘솔의 이벤트 수신 URL에 입력합니다.
                     </p>
                   </div>
                 ) : null}

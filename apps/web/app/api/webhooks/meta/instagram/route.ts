@@ -1,10 +1,36 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+import { getDatabase } from "@doctornest/database";
+
+import { decryptInstagramCredentials } from "@/lib/channel-credentials";
+import {
+  persistInboundEvent,
+  scheduleInboundTranslation,
+  type WebhookConnection,
+} from "@/lib/inbound-messages";
+import { getInstagramCustomerProfile } from "@/lib/instagram-api";
+
 export const runtime = "nodejs";
+
+type InstagramMessagingEvent = {
+  sender?: { id?: string };
+  recipient?: { id?: string };
+  timestamp?: number;
+  message?: {
+    mid?: string;
+    text?: string;
+    is_echo?: boolean;
+  };
+};
+
+type InstagramWebhookEntry = {
+  id?: string;
+  messaging?: InstagramMessagingEvent[];
+};
 
 type InstagramWebhookPayload = {
   object?: string;
-  entry?: unknown[];
+  entry?: InstagramWebhookEntry[];
 };
 
 function hasValidSignature(
@@ -30,6 +56,93 @@ function hasValidSignature(
   );
 }
 
+async function processEntry(entry: InstagramWebhookEntry) {
+  const instagramUserId = entry.id?.trim();
+  if (!instagramUserId || !Array.isArray(entry.messaging)) return 0;
+
+  const connection = await getDatabase().channelConnection.findFirst({
+    where: {
+      channel: "INSTAGRAM",
+      externalAccountId: instagramUserId,
+      status: "CONNECTED",
+    },
+    select: {
+      id: true,
+      hospitalId: true,
+      credentialsEncrypted: true,
+    },
+  });
+  if (!connection?.credentialsEncrypted) return 0;
+
+  let credentials;
+  try {
+    credentials = decryptInstagramCredentials(connection.credentialsEncrypted);
+  } catch {
+    return 0;
+  }
+
+  let processed = 0;
+  const profileCache = new Map<
+    string,
+    Awaited<ReturnType<typeof getInstagramCustomerProfile>>
+  >();
+
+  for (const messagingEvent of entry.messaging) {
+    const senderId = messagingEvent.sender?.id?.trim();
+    const messageText = messagingEvent.message?.text?.trim();
+    const isBusinessEcho =
+      messagingEvent.message?.is_echo ||
+      senderId === credentials.instagramUserId;
+
+    if (!senderId || !messageText || isBusinessEcho) continue;
+
+    let profile = profileCache.get(senderId);
+    if (profile === undefined) {
+      profile = await getInstagramCustomerProfile(
+        senderId,
+        credentials.accessToken,
+      );
+      profileCache.set(senderId, profile);
+    }
+
+    try {
+      const result = await persistInboundEvent(
+        connection satisfies WebhookConnection,
+        "INSTAGRAM",
+        {
+          externalCustomerId: senderId,
+          externalThreadId: senderId,
+          externalMessageId: messagingEvent.message?.mid,
+          customerName:
+            profile?.name?.trim() ||
+            (profile?.username ? `@${profile.username}` : undefined),
+          message: messageText,
+          sentAt: messagingEvent.timestamp
+            ? new Date(messagingEvent.timestamp).toISOString()
+            : undefined,
+        },
+      );
+      scheduleInboundTranslation(connection, result, messageText);
+      if (!result.duplicate) processed += 1;
+    } catch {
+      // Meta retries the full delivery. Skip malformed individual events while
+      // still acknowledging valid events in the same webhook payload.
+    }
+  }
+
+  if (processed > 0) {
+    await getDatabase().channelConnection.update({
+      where: { id: connection.id },
+      data: {
+        status: "CONNECTED",
+        connectedAt: new Date(),
+      },
+    });
+  }
+
+  return processed;
+}
+
 export async function GET(request: Request) {
   const expectedToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
 
@@ -45,11 +158,7 @@ export async function GET(request: Request) {
   const verifyToken = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
 
-  if (
-    mode !== "subscribe" ||
-    verifyToken !== expectedToken ||
-    !challenge
-  ) {
+  if (mode !== "subscribe" || verifyToken !== expectedToken || !challenge) {
     return new Response("Forbidden", { status: 403 });
   }
 
@@ -95,5 +204,10 @@ export async function POST(request: Request) {
     );
   }
 
-  return Response.json({ received: true });
+  let processed = 0;
+  for (const entry of payload.entry) {
+    processed += await processEntry(entry);
+  }
+
+  return Response.json({ received: true, processed });
 }

@@ -6,7 +6,11 @@ import {
 } from "@/lib/ai-translation";
 import { getCurrentUser } from "@/lib/auth";
 import { serializeChatCoachGeneration } from "@/lib/chat-coach-generation";
-import { decryptLineCredentials } from "@/lib/channel-credentials";
+import {
+  decryptInstagramCredentials,
+  decryptLineCredentials,
+} from "@/lib/channel-credentials";
+import { sendInstagramTextMessage } from "@/lib/instagram-api";
 import { getTranslationContext } from "@/lib/translation-context";
 
 type RouteContext = {
@@ -311,6 +315,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   const deliveredContent = translation.translatedContent || content;
+  let externalMessageId: string | null = null;
 
   if (conversation.channel === "LINE") {
     const connection = await database.channelConnection.findUnique({
@@ -371,11 +376,68 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
   }
 
+  if (conversation.channel === "INSTAGRAM") {
+    const connection = await database.channelConnection.findUnique({
+      where: {
+        hospitalId_channel: {
+          hospitalId: user.hospitalId,
+          channel: "INSTAGRAM",
+        },
+      },
+      select: {
+        status: true,
+        credentialsEncrypted: true,
+      },
+    });
+
+    if (
+      connection?.status !== "CONNECTED" ||
+      !connection.credentialsEncrypted ||
+      !conversation.patientChannel?.externalCustomerId
+    ) {
+      return Response.json(
+        { error: "Instagram 연동을 먼저 완료해 주세요." },
+        { status: 409 },
+      );
+    }
+
+    let credentials;
+    try {
+      credentials = decryptInstagramCredentials(
+        connection.credentialsEncrypted,
+      );
+    } catch {
+      return Response.json(
+        { error: "Instagram 자격증명을 읽지 못했습니다." },
+        { status: 500 },
+      );
+    }
+
+    try {
+      const result = await sendInstagramTextMessage({
+        instagramUserId: credentials.instagramUserId,
+        recipientId: conversation.patientChannel.externalCustomerId,
+        accessToken: credentials.accessToken,
+        text: deliveredContent,
+      });
+      externalMessageId = result?.message_id ?? null;
+    } catch {
+      return Response.json(
+        {
+          error:
+            "Instagram 메시지를 발송하지 못했습니다. 연결 상태와 응답 가능 시간을 확인해 주세요.",
+        },
+        { status: 502 },
+      );
+    }
+  }
+
   const sentAt = new Date();
   const message = await database.$transaction(async (transaction) => {
     const storedMessage = await transaction.message.create({
       data: {
         conversationId: conversation.id,
+        externalMessageId,
         direction: "OUTBOUND",
         sender: "STAFF",
         content,

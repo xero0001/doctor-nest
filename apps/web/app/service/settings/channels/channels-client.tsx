@@ -182,11 +182,15 @@ export function ChannelsClient({
   connections: initialConnections,
   organizationName,
   appUrl,
+  instagramResult,
+  instagramOAuthConfigured,
   translationSettings,
 }: {
   connections: Connection[];
   organizationName: string;
   appUrl: string;
+  instagramResult: string | null;
+  instagramOAuthConfigured: boolean;
   translationSettings: {
     contextEnabled: boolean;
     contextMessageCount: number;
@@ -401,6 +405,25 @@ export function ChannelsClient({
       : "";
   const usesMetaWebhook =
     selectedChannel === "WHATSAPP" || selectedChannel === "INSTAGRAM";
+  const instagramResultMessage =
+    instagramResult === "connected"
+      ? {
+          tone: "success",
+          message: "Instagram 계정 연결과 DM 웹훅 구독을 완료했습니다.",
+        }
+      : instagramResult
+        ? {
+            tone: "error",
+            message:
+              instagramResult === "already_connected"
+                ? "이 Instagram 계정은 이미 다른 병원에 연결되어 있습니다."
+                : instagramResult === "session_expired"
+                  ? "로그인 세션이 만료되었습니다. 다시 로그인한 뒤 연결해 주세요."
+                  : instagramResult === "configuration_error"
+                    ? "Instagram 앱 ID와 앱 시크릿 환경변수를 확인해 주세요."
+                    : "Instagram 계정을 연결하지 못했습니다. 권한 승인 상태를 확인해 주세요.",
+          }
+        : null;
 
   return (
     <div className="h-full overflow-y-auto bg-[#f5f7fb]">
@@ -468,6 +491,23 @@ export function ChannelsClient({
 
       {activeTab === "채널" ? (
         <div className="mx-auto max-w-[1180px] px-8 py-7">
+          {instagramResultMessage ? (
+            <div
+              role="status"
+              className={`mb-5 flex items-center gap-2 rounded-xl border px-4 py-3 text-xs font-semibold ${
+                instagramResultMessage.tone === "success"
+                  ? "border-[#cdebdc] bg-[#eef9f4] text-[#178c56]"
+                  : "border-[#ffd7dd] bg-[#fff3f5] text-[#c33d52]"
+              }`}
+            >
+              {instagramResultMessage.tone === "success" ? (
+                <CircleCheck className="size-4" />
+              ) : (
+                <CircleAlert className="size-4" />
+              )}
+              {instagramResultMessage.message}
+            </div>
+          ) : null}
           <section className="mb-6 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-[#e1e5ef] bg-white p-4">
               <p className="text-[10px] font-semibold text-[#8d94a6]">
@@ -782,37 +822,78 @@ export function ChannelsClient({
               </section>
 
               <div className="mt-6 space-y-4">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-bold text-[#596177]">
-                    채널 표시 이름
-                  </span>
-                  <span className="flex h-11 items-center gap-2 rounded-xl border border-[#dde2ec] px-3 focus-within:border-[#6f83f2] focus-within:ring-3 focus-within:ring-[#3157f6]/10">
-                    <MessageCircleMore className="size-3.5 text-[#989fb1]" />
-                    <input
-                      value={displayName}
-                      onChange={(event) => setDisplayName(event.target.value)}
-                      className="min-w-0 flex-1 bg-transparent text-sm outline-none"
-                      placeholder={`${organizationName} ${selectedDefinition.label}`}
-                    />
-                  </span>
-                </label>
+                {selectedChannel !== "INSTAGRAM" ? (
+                  <>
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-bold text-[#596177]">
+                        채널 표시 이름
+                      </span>
+                      <span className="flex h-11 items-center gap-2 rounded-xl border border-[#dde2ec] px-3 focus-within:border-[#6f83f2] focus-within:ring-3 focus-within:ring-[#3157f6]/10">
+                        <MessageCircleMore className="size-3.5 text-[#989fb1]" />
+                        <input
+                          value={displayName}
+                          onChange={(event) =>
+                            setDisplayName(event.target.value)
+                          }
+                          className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                          placeholder={`${organizationName} ${selectedDefinition.label}`}
+                        />
+                      </span>
+                    </label>
 
-                <label className="block">
-                  <span className="mb-2 block text-sm font-bold text-[#596177]">
-                    {selectedDefinition.accountIdLabel}
-                  </span>
-                  <span className="flex h-11 items-center gap-2 rounded-xl border border-[#dde2ec] px-3 focus-within:border-[#6f83f2] focus-within:ring-3 focus-within:ring-[#3157f6]/10">
-                    <KeyRound className="size-3.5 text-[#989fb1]" />
-                    <input
-                      value={externalAccountId}
-                      onChange={(event) =>
-                        setExternalAccountId(event.target.value)
-                      }
-                      className="min-w-0 flex-1 bg-transparent font-mono text-sm outline-none"
-                      placeholder={selectedDefinition.accountIdPlaceholder}
-                    />
-                  </span>
-                </label>
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-bold text-[#596177]">
+                        {selectedDefinition.accountIdLabel}
+                      </span>
+                      <span className="flex h-11 items-center gap-2 rounded-xl border border-[#dde2ec] px-3 focus-within:border-[#6f83f2] focus-within:ring-3 focus-within:ring-[#3157f6]/10">
+                        <KeyRound className="size-3.5 text-[#989fb1]" />
+                        <input
+                          value={externalAccountId}
+                          onChange={(event) =>
+                            setExternalAccountId(event.target.value)
+                          }
+                          className="min-w-0 flex-1 bg-transparent font-mono text-sm outline-none"
+                          placeholder={selectedDefinition.accountIdPlaceholder}
+                        />
+                      </span>
+                    </label>
+                  </>
+                ) : (
+                  <section className="rounded-2xl border border-[#e0e5ef] bg-[#fafbfe] p-4">
+                    <p className="text-sm font-bold text-[#4f576d]">
+                      Instagram Business Login
+                    </p>
+                    {selectedConnection.status === "CONNECTED" ? (
+                      <div className="mt-3 rounded-xl border border-[#d7eadf] bg-white p-4">
+                        <div className="flex items-center gap-2 text-sm font-bold text-[#178c56]">
+                          <CircleCheck className="size-4" />
+                          {selectedConnection.displayName ?? "Instagram 계정"}
+                        </div>
+                        <p className="mt-2 font-mono text-xs text-[#777f93]">
+                          계정 ID {selectedConnection.externalAccountId}
+                        </p>
+                        <p className="mt-2 text-xs leading-5 text-[#858c9e]">
+                          이 병원으로 들어오는 Instagram DM이 고객채팅에
+                          자동으로 표시됩니다.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="mt-3">
+                        <p className="text-xs leading-5 text-[#777f93]">
+                          병원 Instagram Business 계정으로 로그인하면 DM 권한과
+                          웹훅 구독이 자동으로 설정됩니다. 비밀번호와 액세스
+                          토큰은 화면에 입력하지 않습니다.
+                        </p>
+                        {!instagramOAuthConfigured ? (
+                          <p className="mt-3 rounded-lg bg-[#fff0f2] px-3 py-2 text-xs font-semibold text-[#d8465b]">
+                            서버의 Instagram 앱 ID와 앱 시크릿 설정이
+                            필요합니다.
+                          </p>
+                        ) : null}
+                      </div>
+                    )}
+                  </section>
+                )}
 
                 {selectedChannel === "LINE" ? (
                   <div className="space-y-4 rounded-2xl border border-[#dfe5f0] bg-[#fafbfe] p-4">
@@ -942,18 +1023,40 @@ export function ChannelsClient({
                     <RotateCcw className="size-3.5" /> 연동 해제
                   </button>
                 ) : null}
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#3157f6] text-xs font-bold text-white disabled:opacity-60"
-                >
-                  {isSaving ? (
-                    <LoaderCircle className="size-3.5 animate-spin" />
+                {selectedChannel === "INSTAGRAM" ? (
+                  selectedConnection.status !== "CONNECTED" ? (
+                    <a
+                      href="/api/integrations/meta/instagram/connect"
+                      aria-disabled={!instagramOAuthConfigured}
+                      className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-xs font-bold text-white ${
+                        instagramOAuthConfigured
+                          ? "bg-[#3157f6]"
+                          : "pointer-events-none bg-[#aeb9e8]"
+                      }`}
+                    >
+                      <Link2 className="size-3.5" />
+                      Instagram 계정 연결
+                    </a>
                   ) : (
-                    <BadgeCheck className="size-3.5" />
-                  )}
-                  연동 설정 저장
-                </button>
+                    <div className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#edf8f2] text-xs font-bold text-[#178c56]">
+                      <CircleCheck className="size-3.5" />
+                      DM 연동 중
+                    </div>
+                  )
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#3157f6] text-xs font-bold text-white disabled:opacity-60"
+                  >
+                    {isSaving ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : (
+                      <BadgeCheck className="size-3.5" />
+                    )}
+                    연동 설정 저장
+                  </button>
+                )}
               </div>
 
               <a

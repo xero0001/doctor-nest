@@ -11,6 +11,13 @@ export type LineCredentials = {
   channelAccessToken: string;
 };
 
+export type InstagramCredentials = {
+  instagramUserId: string;
+  username: string;
+  accessToken: string;
+  expiresAt: string | null;
+};
+
 const credentialVersion = "v1";
 
 function getCredentialKey() {
@@ -26,7 +33,9 @@ function getCredentialKey() {
   return createHash("sha256").update(secret).digest();
 }
 
-export function encryptChannelCredentials(credentials: LineCredentials) {
+export function encryptChannelCredentials(
+  credentials: LineCredentials | InstagramCredentials,
+) {
   const initializationVector = randomBytes(12);
   const cipher = createCipheriv(
     "aes-256-gcm",
@@ -47,7 +56,7 @@ export function encryptChannelCredentials(credentials: LineCredentials) {
   ].join(".");
 }
 
-export function decryptLineCredentials(value: string): LineCredentials {
+function decryptChannelCredentials(value: string): unknown {
   const [version, encodedIv, encodedTag, encodedPayload] = value.split(".");
 
   if (
@@ -70,7 +79,11 @@ export function decryptLineCredentials(value: string): LineCredentials {
     decipher.update(Buffer.from(encodedPayload, "base64url")),
     decipher.final(),
   ]);
-  const parsed = JSON.parse(decrypted.toString("utf8")) as Partial<LineCredentials>;
+  return JSON.parse(decrypted.toString("utf8")) as unknown;
+}
+
+export function decryptLineCredentials(value: string): LineCredentials {
+  const parsed = decryptChannelCredentials(value) as Partial<LineCredentials>;
 
   if (
     !parsed.channelId ||
@@ -84,5 +97,29 @@ export function decryptLineCredentials(value: string): LineCredentials {
     channelId: parsed.channelId,
     channelSecret: parsed.channelSecret,
     channelAccessToken: parsed.channelAccessToken,
+  };
+}
+
+export function decryptInstagramCredentials(
+  value: string,
+): InstagramCredentials {
+  const parsed = decryptChannelCredentials(
+    value,
+  ) as Partial<InstagramCredentials>;
+
+  if (
+    !parsed.instagramUserId ||
+    !parsed.username ||
+    !parsed.accessToken ||
+    (parsed.expiresAt !== null && typeof parsed.expiresAt !== "string")
+  ) {
+    throw new Error("Instagram 자격증명 값이 완전하지 않습니다.");
+  }
+
+  return {
+    instagramUserId: parsed.instagramUserId,
+    username: parsed.username,
+    accessToken: parsed.accessToken,
+    expiresAt: parsed.expiresAt ?? null,
   };
 }

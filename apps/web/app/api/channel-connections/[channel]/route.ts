@@ -2,9 +2,11 @@ import { getDatabase } from "@doctornest/database";
 
 import { getCurrentUser } from "@/lib/auth";
 import {
+  decryptInstagramCredentials,
   encryptChannelCredentials,
   type LineCredentials,
 } from "@/lib/channel-credentials";
+import { unsubscribeInstagramWebhooks } from "@/lib/instagram-api";
 
 const supportedChannels = new Set([
   "KAKAO",
@@ -43,6 +45,33 @@ export async function POST(request: Request, { params }: RouteContext) {
   } | null;
 
   if (body?.action === "disconnect") {
+    if (channel === "INSTAGRAM") {
+      const existingConnection =
+        await getDatabase().channelConnection.findUnique({
+          where: {
+            hospitalId_channel: {
+              hospitalId: user.hospitalId,
+              channel: "INSTAGRAM",
+            },
+          },
+          select: { credentialsEncrypted: true },
+        });
+
+      if (existingConnection?.credentialsEncrypted) {
+        try {
+          const credentials = decryptInstagramCredentials(
+            existingConnection.credentialsEncrypted,
+          );
+          await unsubscribeInstagramWebhooks(
+            credentials.instagramUserId,
+            credentials.accessToken,
+          );
+        } catch {
+          // Clear inaccessible local credentials even if Meta cannot be reached.
+        }
+      }
+    }
+
     const connection = await getDatabase().channelConnection.update({
       where: {
         hospitalId_channel: {
@@ -86,8 +115,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   if (channel === "LINE" && body?.lineCredentials) {
     const channelId = body.lineCredentials.channelId?.trim();
     const channelSecret = body.lineCredentials.channelSecret?.trim();
-    const channelAccessToken =
-      body.lineCredentials.channelAccessToken?.trim();
+    const channelAccessToken = body.lineCredentials.channelAccessToken?.trim();
 
     if (!channelId || !channelSecret || !channelAccessToken) {
       return Response.json(

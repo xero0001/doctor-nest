@@ -11,14 +11,14 @@ export function WhatsAppChannelIcon({
     <span
       aria-label="WhatsApp"
       title="WhatsApp"
-      className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[22%] p-[17%] ${className}`}
-      style={{ width: size, height: size, backgroundColor: "#25D366" }}
+      className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[22%] ${className}`}
+      style={{ width: size, height: size }}
     >
       <Image
-        src="/images/channels/whatsapp-glyph-white.svg"
+        src="/images/channels/whatsapp-app-icon.png"
         alt=""
-        width={720}
-        height={720}
+        width={400}
+        height={400}
         className="h-full w-full object-contain"
       />
     </span>

@@ -11,14 +11,14 @@ export function WeChatChannelIcon({
     <span
       aria-label="WeChat"
       title="WeChat"
-      className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[22%] p-[18%] ${className}`}
-      style={{ width: size, height: size, backgroundColor: "#07C160" }}
+      className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[22%] ${className}`}
+      style={{ width: size, height: size }}
     >
       <Image
-        src="/images/channels/wechat-glyph-white.svg"
+        src="/images/channels/wechat-app-icon.png"
         alt=""
-        width={24}
-        height={24}
+        width={400}
+        height={400}
         className="h-full w-full object-contain"
       />
     </span>

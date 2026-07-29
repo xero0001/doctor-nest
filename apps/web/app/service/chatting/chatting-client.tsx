@@ -52,6 +52,10 @@ type ChatTab = "OPEN" | "CLOSED" | "IMPORTANT";
 type ManualDocumentItem = ManualFolderItem["documents"][number];
 
 const CHAT_POLL_INTERVAL_MS = 5_000;
+const CUSTOMER_NOTES_SAVE_DELAY_MS = 1_000;
+const MAX_PATIENT_NOTES_LENGTH = 5_000;
+
+type CustomerNotesSaveStatus = "idle" | "saving" | "saved" | "error";
 
 const knowledgeTabs = [
   { value: "원내매뉴얼", label: "원내매뉴얼" },
@@ -462,6 +466,183 @@ function ChannelBadge({
   );
 }
 
+function normalizeCustomerNotes(value: string) {
+  return value.trim();
+}
+
+function CustomerNotesEditor({
+  conversationId,
+  patientId,
+  chartNumber,
+  initialNotes,
+  onSaved,
+  onError,
+}: {
+  conversationId: string;
+  patientId: string;
+  chartNumber: string;
+  initialNotes: string | null;
+  onSaved: (patientId: string, notes: string | null) => void;
+  onError: (message: string) => void;
+}) {
+  const initialValue = initialNotes ?? "";
+  const [draftNotes, setDraftNotes] = useState(initialValue);
+  const [saveStatus, setSaveStatus] = useState<CustomerNotesSaveStatus>("idle");
+  const draftNotesRef = useRef(initialValue);
+  const savedNotesRef = useRef(normalizeCustomerNotes(initialValue));
+  const pendingNotesRef = useRef<string | null>(null);
+  const isSavingRef = useRef(false);
+
+  const persistNotes = useCallback(
+    async (value: string) => {
+      const normalizedNotes = normalizeCustomerNotes(value);
+
+      if (normalizedNotes === savedNotesRef.current && !isSavingRef.current) {
+        setSaveStatus("idle");
+        return;
+      }
+
+      pendingNotesRef.current = normalizedNotes;
+      if (isSavingRef.current) return;
+
+      isSavingRef.current = true;
+      let failed = false;
+
+      while (pendingNotesRef.current !== null) {
+        const notesToSave = pendingNotesRef.current;
+        pendingNotesRef.current = null;
+
+        if (notesToSave === savedNotesRef.current) continue;
+
+        setSaveStatus("saving");
+        onError("");
+
+        try {
+          const response = await fetch(`/api/conversations/${conversationId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ notes: notesToSave }),
+            cache: "no-store",
+          });
+          const result = (await response.json()) as {
+            conversation?: ConversationItem;
+            error?: string;
+          };
+
+          if (!response.ok || !result.conversation) {
+            throw new Error(result.error ?? "상담 메모를 저장하지 못했습니다.");
+          }
+
+          const persistedNotes = result.conversation.customer.notes ?? "";
+          savedNotesRef.current = persistedNotes;
+          onSaved(patientId, result.conversation.customer.notes);
+
+          if (normalizeCustomerNotes(draftNotesRef.current) === notesToSave) {
+            draftNotesRef.current = persistedNotes;
+            setDraftNotes(persistedNotes);
+          }
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "상담 메모를 저장하지 못했습니다.";
+
+          failed = true;
+          pendingNotesRef.current = null;
+          setSaveStatus("error");
+          onError(message);
+        }
+      }
+
+      isSavingRef.current = false;
+      if (!failed) setSaveStatus("saved");
+    },
+    [conversationId, onError, onSaved, patientId],
+  );
+
+  useEffect(() => {
+    const nextNotes = initialNotes ?? "";
+    const hasUnsavedChanges =
+      normalizeCustomerNotes(draftNotesRef.current) !== savedNotesRef.current;
+
+    if (isSavingRef.current || hasUnsavedChanges) return;
+
+    savedNotesRef.current = nextNotes;
+    draftNotesRef.current = nextNotes;
+    setDraftNotes(nextNotes);
+  }, [initialNotes]);
+
+  useEffect(() => {
+    if (
+      normalizeCustomerNotes(draftNotes) === savedNotesRef.current ||
+      isSavingRef.current
+    ) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void persistNotes(draftNotesRef.current);
+    }, CUSTOMER_NOTES_SAVE_DELAY_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [draftNotes, persistNotes]);
+
+  return (
+    <>
+      <textarea
+        aria-label={`${chartNumber} 상담 메모`}
+        value={draftNotes}
+        maxLength={MAX_PATIENT_NOTES_LENGTH}
+        rows={4}
+        placeholder="상담 메모를 입력하세요."
+        onChange={(event) => {
+          const nextNotes = event.target.value;
+          draftNotesRef.current = nextNotes;
+          if (isSavingRef.current) {
+            pendingNotesRef.current = normalizeCustomerNotes(nextNotes);
+          }
+          setDraftNotes(nextNotes);
+          if (!isSavingRef.current) setSaveStatus("idle");
+        }}
+        onBlur={() => void persistNotes(draftNotesRef.current)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            event.currentTarget.blur();
+          }
+        }}
+        className="min-h-24 w-full resize-y rounded-xl border border-[#e1e5ed] bg-white p-3 text-xs leading-[1.65] text-[#62697c] outline-none transition placeholder:text-[#a5aaba] focus:border-[#aebcf5] focus:ring-2 focus:ring-[#3157f6]/10"
+      />
+      <div className="mt-1.5 flex min-h-5 items-center justify-between gap-3 text-xs text-[#9298aa]">
+        <span className="flex items-center gap-1">
+          {saveStatus === "saving" ? (
+            <>
+              <LoaderCircle className="size-3.5 animate-spin" />
+              저장 중
+            </>
+          ) : saveStatus === "saved" ? (
+            <>
+              <Check className="size-3.5 text-[#15945d]" />
+              저장됨
+            </>
+          ) : saveStatus === "error" ? (
+            <>
+              <CircleAlert className="size-3.5 text-[#d8465b]" />
+              저장 실패
+            </>
+          ) : (
+            "1초 후 자동 저장"
+          )}
+        </span>
+        <span className="shrink-0">
+          {draftNotes.length.toLocaleString("ko-KR")} /{" "}
+          {MAX_PATIENT_NOTES_LENGTH.toLocaleString("ko-KR")}
+        </span>
+      </div>
+    </>
+  );
+}
+
 export function ChattingClient({
   conversations,
   manualFolders,
@@ -558,6 +739,25 @@ export function ChattingClient({
     rooms.find((conversation) => conversation.id === selectedRoomId) ??
     rooms[0];
   const autoRespond = currentRoom?.autoRespondEnabled ?? false;
+
+  const handleCustomerNotesSaved = useCallback(
+    (patientId: string, notes: string | null) => {
+      setRooms((current) =>
+        current.map((room) =>
+          room.customer.id === patientId
+            ? {
+                ...room,
+                customer: {
+                  ...room.customer,
+                  notes,
+                },
+              }
+            : room,
+        ),
+      );
+    },
+    [],
+  );
   const autoTranslate = currentRoom?.autoTranslateEnabled ?? true;
   const normalizedManualQuery = manualQuery.trim().toLowerCase();
   const filteredManualFolders = useMemo(
@@ -1828,9 +2028,15 @@ export function ChattingClient({
               <UserRound className="size-4 text-[#6657e9]" />
               <h3 className="text-xs font-bold">상담 메모</h3>
             </div>
-            <p className="rounded-xl border border-[#e1e5ed] bg-white p-3 text-xs leading-[1.65] text-[#62697c]">
-              {currentRoom.customer.notes ?? "등록된 고객 메모가 없습니다."}
-            </p>
+            <CustomerNotesEditor
+              key={currentRoom.id}
+              conversationId={currentRoom.id}
+              patientId={currentRoom.customer.id}
+              chartNumber={currentRoom.customer.chartNumber}
+              initialNotes={currentRoom.customer.notes}
+              onSaved={handleCustomerNotesSaved}
+              onError={setDetailError}
+            />
           </section>
 
           <section className="p-4">

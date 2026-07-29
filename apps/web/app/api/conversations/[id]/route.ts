@@ -19,6 +19,8 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+const MAX_PATIENT_NOTES_LENGTH = 5_000;
+
 function serializeConversation(
   conversation: NonNullable<
     Awaited<ReturnType<typeof findConversationForHospital>>
@@ -148,6 +150,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     important?: unknown;
     autoRespondEnabled?: unknown;
     autoTranslateEnabled?: unknown;
+    notes?: unknown;
   } | null;
 
   const invalidSetting =
@@ -159,11 +162,17 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       typeof body.autoRespondEnabled !== "boolean") ||
     (body &&
       Object.hasOwn(body, "autoTranslateEnabled") &&
-      typeof body.autoTranslateEnabled !== "boolean");
+      typeof body.autoTranslateEnabled !== "boolean") ||
+    (body &&
+      Object.hasOwn(body, "notes") &&
+      (typeof body.notes !== "string" ||
+        body.notes.length > MAX_PATIENT_NOTES_LENGTH));
 
   if (invalidSetting) {
     return Response.json(
-      { error: "채팅 설정 값이 올바르지 않습니다." },
+      {
+        error: `채팅 설정 값이 올바르지 않습니다. 상담 메모는 ${MAX_PATIENT_NOTES_LENGTH.toLocaleString("ko-KR")}자 이내로 입력해 주세요.`,
+      },
       { status: 400 },
     );
   }
@@ -174,7 +183,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       id,
       hospitalId: user.hospitalId,
     },
-    select: { id: true },
+    select: {
+      id: true,
+      patientId: true,
+    },
   });
 
   if (!existingConversation) {
@@ -188,23 +200,42 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     typeof body?.important === "boolean" ||
     typeof body?.autoRespondEnabled === "boolean" ||
     typeof body?.autoTranslateEnabled === "boolean";
+  const hasPatientNotes = typeof body?.notes === "string";
+  const normalizedPatientNotes =
+    typeof body?.notes === "string" ? body.notes.trim() || null : null;
 
-  await database.conversation.update({
-    where: { id: existingConversation.id },
-    data: hasConversationSettings
-      ? {
-          ...(typeof body?.important === "boolean"
-            ? { important: body.important }
-            : {}),
-          ...(typeof body?.autoRespondEnabled === "boolean"
-            ? { autoRespondEnabled: body.autoRespondEnabled }
-            : {}),
-          ...(typeof body?.autoTranslateEnabled === "boolean"
-            ? { autoTranslateEnabled: body.autoTranslateEnabled }
-            : {}),
-        }
-      : { unreadCount: 0 },
-  });
+  await database.$transaction([
+    ...(hasPatientNotes
+      ? [
+          database.patient.update({
+            where: { id: existingConversation.patientId },
+            data: {
+              notes: normalizedPatientNotes,
+            },
+          }),
+        ]
+      : []),
+    ...(hasConversationSettings || !hasPatientNotes
+      ? [
+          database.conversation.update({
+            where: { id: existingConversation.id },
+            data: hasConversationSettings
+              ? {
+                  ...(typeof body?.important === "boolean"
+                    ? { important: body.important }
+                    : {}),
+                  ...(typeof body?.autoRespondEnabled === "boolean"
+                    ? { autoRespondEnabled: body.autoRespondEnabled }
+                    : {}),
+                  ...(typeof body?.autoTranslateEnabled === "boolean"
+                    ? { autoTranslateEnabled: body.autoTranslateEnabled }
+                    : {}),
+                }
+              : { unreadCount: 0 },
+          }),
+        ]
+      : []),
+  ]);
 
   const conversation = await findConversationForHospital(
     existingConversation.id,

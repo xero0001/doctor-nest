@@ -52,16 +52,16 @@ type LineWebhookPayload = {
 };
 
 type NaverTalkWebhookEvent = {
-  event?: string;
-  user?: string;
-  messageId?: string;
+  event?: unknown;
+  user?: unknown;
+  messageId?: unknown;
   textContent?: {
-    text?: string;
-    code?: string;
-    inputType?: string;
+    text?: unknown;
+    code?: unknown;
+    inputType?: unknown;
   };
   imageContent?: {
-    imageUrl?: string;
+    imageUrl?: unknown;
   };
 };
 
@@ -106,6 +106,22 @@ function parseJson<T>(rawBody: string) {
   } catch {
     return null;
   }
+}
+
+function normalizeWebhookString(value: unknown) {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  if (typeof value === "bigint") {
+    return String(value);
+  }
+
+  return "";
 }
 
 function hasValidLineSignature(
@@ -500,8 +516,10 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   if (channel === "NAVER_TALK") {
     const event = parseJson<NaverTalkWebhookEvent>(rawBody);
+    const eventName = normalizeWebhookString(event?.event);
+    const user = normalizeWebhookString(event?.user);
 
-    if (!event?.event || !event.user) {
+    if (!eventName || !user) {
       return Response.json(
         { error: "올바른 네이버 톡톡 이벤트가 필요합니다." },
         { status: 400 },
@@ -516,12 +534,14 @@ export async function POST(request: Request, { params }: RouteContext) {
       },
     });
 
-    if (event.event !== "send") {
+    if (eventName !== "send") {
       return Response.json({ received: true, processed: 0 });
     }
 
-    const text = event.textContent?.text?.trim();
-    const imageUrl = event.imageContent?.imageUrl?.trim();
+    const text = normalizeWebhookString(event?.textContent?.text);
+    const imageUrl = normalizeWebhookString(event?.imageContent?.imageUrl);
+    const externalMessageId =
+      normalizeWebhookString(event?.messageId) || undefined;
     const message = text || (imageUrl ? `이미지: ${imageUrl}` : "");
 
     if (!message) {
@@ -530,9 +550,9 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     try {
       const result = await persistInboundEvent(connection, channel, {
-        externalCustomerId: event.user,
-        externalThreadId: event.user,
-        externalMessageId: event.messageId,
+        externalCustomerId: user,
+        externalThreadId: user,
+        externalMessageId,
         customerName: "네이버 톡톡 고객",
         message,
       });
@@ -542,6 +562,31 @@ export async function POST(request: Request, { params }: RouteContext) {
         processed: result.duplicate ? 0 : 1,
       });
     } catch (error) {
+      const errorCode =
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        typeof error.code === "string"
+          ? error.code
+          : undefined;
+
+      console.error("[naver-talk-webhook] inbound processing failed", {
+        connectionId: connection.id,
+        eventName,
+        valueTypes: {
+          user: typeof event?.user,
+          messageId: typeof event?.messageId,
+          text: typeof event?.textContent?.text,
+          imageUrl: typeof event?.imageContent?.imageUrl,
+        },
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        errorCode,
+        errorMessage:
+          error instanceof Error
+            ? error.message
+            : "네이버 톡톡 이벤트 처리 중 알 수 없는 오류가 발생했습니다.",
+      });
+
       return Response.json(
         {
           error:

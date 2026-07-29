@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Headphones,
   LogOut,
+  Megaphone,
   MessageCircleMore,
   Settings,
   UsersRound,
@@ -120,6 +121,19 @@ export function ServiceShell({ user, children }: ServiceShellProps) {
               </Link>
             );
           })}
+
+          <div
+            className="my-2 h-px w-10 bg-[#e7eaf2]"
+            aria-hidden="true"
+          />
+
+          <Link
+            href="/service/chatting#experience-group"
+            className="group relative flex w-full flex-col items-center gap-1.5 rounded-xl py-2.5 text-[10px] font-medium text-[#969caf] transition-colors hover:bg-[#f6f7fb] hover:text-[#59617a]"
+          >
+            <Megaphone className="size-[18px]" strokeWidth={1.8} />
+            <span>체험단</span>
+          </Link>
         </nav>
 
         <div className="flex flex-col items-center gap-1 px-2 pb-4">

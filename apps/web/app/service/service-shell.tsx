@@ -33,10 +33,10 @@ const navigation = [
     available: true,
   },
   {
-    label: "고객관리",
+    label: "고객입력",
     icon: UsersRound,
-    href: "/service/chatting#customers",
-    available: false,
+    href: "/service/customers",
+    available: true,
   },
   {
     label: "자동화",

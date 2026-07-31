@@ -11,6 +11,7 @@ export type ConversationMessage = {
   translatedContent: string;
   translatedLanguage: string;
   translatedLanguageName: string;
+  bookmarkedAt: string | null;
   sentAt: string;
 };
 
@@ -20,6 +21,21 @@ export type ConversationAppointment = {
   doctorName: string;
   treatment: string | null;
   status: "SCHEDULED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+};
+
+export type PatientSearchResult = {
+  id: string;
+  chartNumber: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  gender: string | null;
+  birthDate: string | null;
+};
+
+export type StaffMember = {
+  id: string;
+  name: string;
 };
 
 export type ManualFolderItem = {
@@ -48,6 +64,7 @@ export type ConversationItem = {
   autoTranslateEnabled: boolean;
   unreadCount: number;
   lastMessageAt: string;
+  assignees: StaffMember[];
   customer: {
     id: string;
     chartNumber: string;
@@ -58,6 +75,7 @@ export type ConversationItem = {
     birthDate: string | null;
     language: string;
     notes: string | null;
+    notesUpdatedAt: string | null;
     tags: string[];
     channels: Array<{
       id: string;

@@ -32,6 +32,14 @@ export async function GET() {
         orderBy: [{ sentAt: "desc" }, { id: "desc" }],
         take: 1,
       },
+      assignees: {
+        include: {
+          user: {
+            select: { id: true, name: true },
+          },
+        },
+        orderBy: { assignedAt: "asc" },
+      },
     },
     orderBy: [{ lastMessageAt: "desc" }, { id: "desc" }],
   });
@@ -47,6 +55,10 @@ export async function GET() {
         autoTranslateEnabled: conversation.autoTranslateEnabled,
         unreadCount: conversation.unreadCount,
         lastMessageAt: conversation.lastMessageAt.toISOString(),
+        assignees: conversation.assignees.map(({ user: assignedUser }) => ({
+          id: assignedUser.id,
+          name: assignedUser.name,
+        })),
         customer: {
           id: conversation.patient.id,
           chartNumber: conversation.patient.chartNumber,
@@ -57,6 +69,8 @@ export async function GET() {
           birthDate: conversation.patient.birthDate?.toISOString() ?? null,
           language: conversation.patient.language,
           notes: conversation.patient.notes,
+          notesUpdatedAt:
+            conversation.patient.notesUpdatedAt?.toISOString() ?? null,
           tags: conversation.patient.tagAssignments.map(({ tag }) => tag.name),
           channels: conversation.patient.channels.map((patientChannel) => ({
             id: patientChannel.id,
@@ -87,6 +101,7 @@ export async function GET() {
             translatedContent: message.translatedContent,
             translatedLanguage: message.translatedLanguage,
             translatedLanguageName: message.translatedLanguageName,
+            bookmarkedAt: message.bookmarkedAt?.toISOString() ?? null,
             sentAt: message.sentAt.toISOString(),
           })),
         coachSuggestions: [],

@@ -35,6 +35,10 @@ function serializeConversation(
     autoTranslateEnabled: conversation.autoTranslateEnabled,
     unreadCount: conversation.unreadCount,
     lastMessageAt: conversation.lastMessageAt.toISOString(),
+    assignees: conversation.assignees.map(({ user: assignedUser }) => ({
+      id: assignedUser.id,
+      name: assignedUser.name,
+    })),
     customer: {
       id: conversation.patient.id,
       chartNumber: conversation.patient.chartNumber,
@@ -45,6 +49,8 @@ function serializeConversation(
       birthDate: conversation.patient.birthDate?.toISOString() ?? null,
       language: conversation.patient.language,
       notes: conversation.patient.notes,
+      notesUpdatedAt:
+        conversation.patient.notesUpdatedAt?.toISOString() ?? null,
       tags: conversation.patient.tagAssignments.map(({ tag }) => tag.name),
       channels: conversation.patient.channels.map((patientChannel) => ({
         id: patientChannel.id,
@@ -70,6 +76,7 @@ function serializeConversation(
       translatedContent: message.translatedContent,
       translatedLanguage: message.translatedLanguage,
       translatedLanguageName: message.translatedLanguageName,
+      bookmarkedAt: message.bookmarkedAt?.toISOString() ?? null,
       sentAt: message.sentAt.toISOString(),
     })),
     coachSuggestions: conversation.chatCoachGenerations.map(
@@ -101,6 +108,14 @@ function findConversationForHospital(id: string, hospitalId: string) {
       },
       messages: {
         orderBy: { sentAt: "asc" },
+      },
+      assignees: {
+        include: {
+          user: {
+            select: { id: true, name: true },
+          },
+        },
+        orderBy: { assignedAt: "asc" },
       },
       chatCoachGenerations: {
         where: { status: "COMPLETED" },
@@ -150,7 +165,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     important?: unknown;
     autoRespondEnabled?: unknown;
     autoTranslateEnabled?: unknown;
+    status?: unknown;
     notes?: unknown;
+    patientId?: unknown;
   } | null;
 
   const invalidSetting =
@@ -164,9 +181,16 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       Object.hasOwn(body, "autoTranslateEnabled") &&
       typeof body.autoTranslateEnabled !== "boolean") ||
     (body &&
+      Object.hasOwn(body, "status") &&
+      body.status !== "OPEN" &&
+      body.status !== "CLOSED") ||
+    (body &&
       Object.hasOwn(body, "notes") &&
       (typeof body.notes !== "string" ||
-        body.notes.length > MAX_PATIENT_NOTES_LENGTH));
+        body.notes.length > MAX_PATIENT_NOTES_LENGTH)) ||
+    (body &&
+      Object.hasOwn(body, "patientId") &&
+      (typeof body.patientId !== "string" || !body.patientId.trim()));
 
   if (invalidSetting) {
     return Response.json(
@@ -186,6 +210,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     select: {
       id: true,
       patientId: true,
+      patientChannelId: true,
     },
   });
 
@@ -199,10 +224,33 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const hasConversationSettings =
     typeof body?.important === "boolean" ||
     typeof body?.autoRespondEnabled === "boolean" ||
-    typeof body?.autoTranslateEnabled === "boolean";
+    typeof body?.autoTranslateEnabled === "boolean" ||
+    body?.status === "OPEN" ||
+    body?.status === "CLOSED";
   const hasPatientNotes = typeof body?.notes === "string";
+  const requestedPatientId =
+    typeof body?.patientId === "string" ? body.patientId.trim() : null;
   const normalizedPatientNotes =
-    typeof body?.notes === "string" ? body.notes.trim() || null : null;
+    typeof body?.notes === "string" && body.notes.trim().length > 0
+      ? body.notes
+      : null;
+
+  if (requestedPatientId) {
+    const targetPatient = await database.patient.findFirst({
+      where: {
+        id: requestedPatientId,
+        hospitalId: user.hospitalId,
+      },
+      select: { id: true },
+    });
+
+    if (!targetPatient) {
+      return Response.json(
+        { error: "연결할 고객을 찾을 수 없습니다." },
+        { status: 404 },
+      );
+    }
+  }
 
   await database.$transaction([
     ...(hasPatientNotes
@@ -211,10 +259,33 @@ export async function PATCH(request: Request, { params }: RouteContext) {
             where: { id: existingConversation.patientId },
             data: {
               notes: normalizedPatientNotes,
+              notesUpdatedAt: new Date(),
             },
           }),
         ]
       : []),
+    ...(requestedPatientId && existingConversation.patientChannelId
+      ? [
+          database.patientChannel.update({
+            where: { id: existingConversation.patientChannelId },
+            data: { patientId: requestedPatientId },
+          }),
+          database.conversation.updateMany({
+            where: {
+              hospitalId: user.hospitalId,
+              patientChannelId: existingConversation.patientChannelId,
+            },
+            data: { patientId: requestedPatientId },
+          }),
+        ]
+      : requestedPatientId
+        ? [
+            database.conversation.update({
+              where: { id: existingConversation.id },
+              data: { patientId: requestedPatientId },
+            }),
+          ]
+        : []),
     ...(hasConversationSettings || !hasPatientNotes
       ? [
           database.conversation.update({
@@ -229,6 +300,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
                     : {}),
                   ...(typeof body?.autoTranslateEnabled === "boolean"
                     ? { autoTranslateEnabled: body.autoTranslateEnabled }
+                    : {}),
+                  ...(body?.status === "OPEN" || body?.status === "CLOSED"
+                    ? { status: body.status }
                     : {}),
                 }
               : { unreadCount: 0 },
@@ -555,6 +629,7 @@ export async function POST(request: Request, { params }: RouteContext) {
         translatedContent: message.translatedContent,
         translatedLanguage: message.translatedLanguage,
         translatedLanguageName: message.translatedLanguageName,
+        bookmarkedAt: message.bookmarkedAt?.toISOString() ?? null,
         sentAt: message.sentAt.toISOString(),
       },
     },

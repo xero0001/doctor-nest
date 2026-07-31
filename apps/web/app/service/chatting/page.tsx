@@ -4,7 +4,11 @@ import { requireUser } from "@/lib/auth";
 import { serializeChatCoachGeneration } from "@/lib/chat-coach-generation";
 
 import { ChattingClient } from "./chatting-client";
-import type { ConversationItem, ManualFolderItem } from "./chat-types";
+import type {
+  ConversationItem,
+  ManualFolderItem,
+  StaffMember,
+} from "./chat-types";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +58,7 @@ function buildManualFolderTree(folders: ManualFolderRecord[]) {
 
 export default async function ChattingPage() {
   const user = await requireUser();
-  const [conversations, manualFolders] = await Promise.all([
+  const [conversations, manualFolders, staffMembers] = await Promise.all([
     getDatabase().conversation.findMany({
       where: {
         hospitalId: user.hospitalId,
@@ -76,6 +80,14 @@ export default async function ChattingPage() {
         },
         messages: {
           orderBy: { sentAt: "asc" },
+        },
+        assignees: {
+          include: {
+            user: {
+              select: { id: true, name: true },
+            },
+          },
+          orderBy: { assignedAt: "asc" },
         },
         chatCoachGenerations: {
           where: { status: "COMPLETED" },
@@ -99,6 +111,11 @@ export default async function ChattingPage() {
       },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
+    getDatabase().authUser.findMany({
+      where: { hospitalId: user.hospitalId },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   const serializedConversations: ConversationItem[] = conversations.map(
@@ -111,6 +128,10 @@ export default async function ChattingPage() {
       autoTranslateEnabled: conversation.autoTranslateEnabled,
       unreadCount: conversation.unreadCount,
       lastMessageAt: conversation.lastMessageAt.toISOString(),
+      assignees: conversation.assignees.map(({ user: assignedUser }) => ({
+        id: assignedUser.id,
+        name: assignedUser.name,
+      })),
       customer: {
         id: conversation.patient.id,
         chartNumber: conversation.patient.chartNumber,
@@ -121,6 +142,8 @@ export default async function ChattingPage() {
         birthDate: conversation.patient.birthDate?.toISOString() ?? null,
         language: conversation.patient.language,
         notes: conversation.patient.notes,
+        notesUpdatedAt:
+          conversation.patient.notesUpdatedAt?.toISOString() ?? null,
         tags: conversation.patient.tagAssignments.map(({ tag }) => tag.name),
         channels: conversation.patient.channels.map((patientChannel) => ({
           id: patientChannel.id,
@@ -146,6 +169,7 @@ export default async function ChattingPage() {
         translatedContent: message.translatedContent,
         translatedLanguage: message.translatedLanguage,
         translatedLanguageName: message.translatedLanguageName,
+        bookmarkedAt: message.bookmarkedAt?.toISOString() ?? null,
         sentAt: message.sentAt.toISOString(),
       })),
       coachSuggestions: conversation.chatCoachGenerations.map(
@@ -157,6 +181,7 @@ export default async function ChattingPage() {
   return (
     <ChattingClient
       conversations={serializedConversations}
+      staffMembers={staffMembers satisfies StaffMember[]}
       manualFolders={buildManualFolderTree(
         manualFolders.map((folder) => ({
           id: folder.id,

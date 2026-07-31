@@ -31,11 +31,11 @@ export async function getCurrentUser() {
   };
 }
 
-export async function requireUser() {
+export async function requireUser(returnTo = "/service/chatting") {
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect("/login?returnTo=/service/chatting");
+    redirect(`/login?returnTo=${encodeURIComponent(returnTo)}`);
   }
 
   return user;

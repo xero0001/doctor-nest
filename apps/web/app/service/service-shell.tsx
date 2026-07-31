@@ -177,7 +177,9 @@ export function ServiceShell({ user, children }: ServiceShellProps) {
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1 overflow-hidden">{children}</main>
+      <main className="h-full min-h-0 min-w-0 flex-1 overflow-hidden">
+        {children}
+      </main>
     </div>
   );
 }

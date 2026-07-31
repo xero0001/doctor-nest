@@ -99,7 +99,9 @@ export function CustomerInputClient({
   const [rows, setRows] = useState(() => createRows(initialPatients));
   const [searchField, setSearchField] = useState<SearchField>("name");
   const [query, setQuery] = useState("");
-  const [isDirty, setIsDirty] = useState(false);
+  const [dirtyRowKeys, setDirtyRowKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [feedback, setFeedback] = useState<{
@@ -138,15 +140,21 @@ export function CustomerInputClient({
         row.key === key ? { ...row, [field]: value } : row,
       ),
     );
-    setIsDirty(true);
+    setDirtyRowKeys((current) => {
+      const next = new Set(current);
+      next.add(key);
+      return next;
+    });
     setFeedback(null);
   }
 
   async function saveRows() {
-    if (!isDirty || isSaving || isUploading) return;
+    if (dirtyRowKeys.size === 0 || isSaving || isUploading) return;
 
     const populatedRows = rows.filter(
-      (row) => row.name.trim() || row.phone.trim() || row.treatmentTags.trim(),
+      (row) =>
+        dirtyRowKeys.has(row.key) &&
+        (row.name.trim() || row.phone.trim() || row.treatmentTags.trim()),
     );
 
     setIsSaving(true);
@@ -179,7 +187,7 @@ export function CustomerInputClient({
         tone: "success",
         message: `${result.savedCount ?? 0}명의 고객정보를 저장했습니다.`,
       });
-      setIsDirty(false);
+      setDirtyRowKeys(new Set());
       window.setTimeout(() => window.location.reload(), 450);
     } catch (error) {
       setFeedback({
@@ -454,7 +462,9 @@ export function CustomerInputClient({
             <button
               type="button"
               onClick={() => void saveRows()}
-              disabled={!isDirty || isSaving || isUploading}
+              disabled={
+                dirtyRowKeys.size === 0 || isSaving || isUploading
+              }
               className="flex h-10 min-w-20 items-center justify-center gap-2 rounded-xl bg-[#3157f6] px-5 text-sm font-bold text-white transition disabled:cursor-not-allowed disabled:bg-[#d8dce6]"
             >
               {isSaving ? (

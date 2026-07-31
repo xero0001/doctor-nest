@@ -64,6 +64,9 @@ export async function POST(request: Request) {
       sortOrder: (lastDocument._max.sortOrder ?? -1) + 1,
     },
     include: {
+      images: {
+        orderBy: { sortOrder: "asc" },
+      },
       tags: {
         include: { tag: true },
         orderBy: { createdAt: "asc" },
@@ -79,12 +82,25 @@ export async function POST(request: Request) {
         title: document.title,
         slug: document.slug,
         contentMarkdown: document.contentMarkdown,
+        cautionMarkdown: document.cautionMarkdown,
+        cautionEnabled: document.cautionEnabled,
+        isActive: document.isActive,
         sortOrder: document.sortOrder,
         updatedAt: document.updatedAt.toISOString(),
         tags: document.tags.map(({ tag }) => ({
           id: tag.id,
           name: tag.name,
           color: tag.color,
+        })),
+        images: document.images.map((image) => ({
+          id: image.id,
+          objectKey: image.objectKey,
+          publicUrl: image.publicUrl,
+          originalName: image.originalName,
+          contentType: image.contentType,
+          sizeBytes: image.sizeBytes,
+          altText: image.altText,
+          sortOrder: image.sortOrder,
         })),
       },
     },

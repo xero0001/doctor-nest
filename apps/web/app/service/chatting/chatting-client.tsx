@@ -9,6 +9,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import ReactMarkdown from "react-markdown";
+import Image from "next/image";
 import {
   BadgeCheck,
   BookOpenText,
@@ -332,6 +333,37 @@ function ManualDocumentContent({ document }: { document: ManualDocumentItem }) {
       >
         {document.contentMarkdown}
       </ReactMarkdown>
+      {document.images.length > 0 ? (
+        <div className="mt-4 grid gap-2">
+          {document.images.map((image) => (
+            <figure
+              key={image.id}
+              className="overflow-hidden rounded-xl border border-[#e1e5ed] bg-white"
+            >
+              <div className="relative aspect-[4/3]">
+                <Image
+                  src={image.publicUrl}
+                  alt={image.altText || image.originalName}
+                  fill
+                  sizes="320px"
+                  className="object-cover"
+                />
+              </div>
+              {image.altText ? (
+                <figcaption className="px-3 py-2 text-[10px] text-[#7d8497]">
+                  {image.altText}
+                </figcaption>
+              ) : null}
+            </figure>
+          ))}
+        </div>
+      ) : null}
+      {document.cautionEnabled && document.cautionMarkdown ? (
+        <div className="mt-4 rounded-xl border border-[#f0d49f] bg-[#fff8e9] px-3 py-3 text-xs leading-6 text-[#755a32]">
+          <p className="font-bold text-[#9a681d]">주의사항</p>
+          <ReactMarkdown>{document.cautionMarkdown}</ReactMarkdown>
+        </div>
+      ) : null}
     </article>
   );
 }

@@ -1,13 +1,16 @@
 "use client";
 
 import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   BookOpenText,
   Check,
   ChevronRight,
   FilePlus2,
-  FileText,
   Folder,
   FolderPlus,
+  ImagePlus,
   LoaderCircle,
   Pencil,
   Save,
@@ -16,13 +19,15 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import Image from "next/image";
+import type { ChangeEvent, FormEvent } from "react";
+import { Fragment, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 
 import { SectionTabs } from "@/components/section-tabs";
 import type {
   ManualDocumentRecord,
+  ManualDocumentImageRecord,
   ManualFolderRecord,
 } from "@/features/manuals/types";
 
@@ -31,6 +36,10 @@ type DocumentDraft = {
   folderId: string;
   tags: string;
   contentMarkdown: string;
+  cautionMarkdown: string;
+  cautionEnabled: boolean;
+  isActive: boolean;
+  images: ManualDocumentImageRecord[];
 };
 
 type FolderDialog =
@@ -51,12 +60,18 @@ const editorTabs = [
   { value: "PREVIEW", label: "미리보기" },
 ] as const;
 
-function createDraft(document: ManualDocumentRecord | undefined): DocumentDraft {
+function createDraft(
+  document: ManualDocumentRecord | undefined,
+): DocumentDraft {
   return {
     title: document?.title ?? "",
     folderId: document?.folderId ?? "",
     tags: document?.tags.map((tag) => tag.name).join(", ") ?? "",
     contentMarkdown: document?.contentMarkdown ?? "",
+    cautionMarkdown: document?.cautionMarkdown ?? "",
+    cautionEnabled: document?.cautionEnabled ?? false,
+    isActive: document?.isActive ?? true,
+    images: document?.images ?? [],
   };
 }
 
@@ -107,11 +122,7 @@ function collectFolderIds(folderId: string, folders: ManualFolderRecord[]) {
     changed = false;
 
     for (const folder of folders) {
-      if (
-        folder.parentId &&
-        ids.has(folder.parentId) &&
-        !ids.has(folder.id)
-      ) {
+      if (folder.parentId && ids.has(folder.parentId) && !ids.has(folder.id)) {
         ids.add(folder.id);
         changed = true;
       }
@@ -119,15 +130,6 @@ function collectFolderIds(folderId: string, folders: ManualFolderRecord[]) {
   }
 
   return ids;
-}
-
-function formatUpdatedAt(value: string) {
-  return new Intl.DateTimeFormat("ko-KR", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
 }
 
 export function ManualsClient({
@@ -156,6 +158,7 @@ export function ManualsClient({
   const [folderDialog, setFolderDialog] = useState<FolderDialog | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
@@ -175,42 +178,38 @@ export function ManualsClient({
 
     return counts;
   }, [documents]);
-  const normalizedQuery = query.trim().toLowerCase();
-  const visibleDocuments = useMemo(
-    () =>
-      documents
-        .filter((document) => {
-          const matchesFolder =
-            normalizedQuery || !selectedFolderId
-              ? true
-              : document.folderId === selectedFolderId;
-          const matchesQuery =
-            !normalizedQuery ||
-            [
-              document.title,
-              document.contentMarkdown,
-              ...document.tags.map((tag) => tag.name),
-            ]
-              .join(" ")
-              .toLowerCase()
-              .includes(normalizedQuery);
+  const documentsByFolder = useMemo(() => {
+    const grouped = new Map<string, ManualDocumentRecord[]>();
 
-          return matchesFolder && matchesQuery;
-        })
-        .sort(
-          (left, right) =>
-            left.sortOrder - right.sortOrder ||
-            left.title.localeCompare(right.title, "ko"),
-        ),
-    [documents, normalizedQuery, selectedFolderId],
-  );
+    for (const document of documents) {
+      grouped.set(document.folderId, [
+        ...(grouped.get(document.folderId) ?? []),
+        document,
+      ]);
+    }
+
+    for (const items of grouped.values()) {
+      items.sort(
+        (left, right) =>
+          left.sortOrder - right.sortOrder ||
+          left.title.localeCompare(right.title, "ko"),
+      );
+    }
+
+    return grouped;
+  }, [documents]);
+  const normalizedQuery = query.trim().toLowerCase();
   const isDirty = Boolean(
     selectedDocument &&
-      (draft.title !== selectedDocument.title ||
-        draft.folderId !== selectedDocument.folderId ||
-        draft.contentMarkdown !== selectedDocument.contentMarkdown ||
-        draft.tags !==
-          selectedDocument.tags.map((tag) => tag.name).join(", ")),
+    (draft.title !== selectedDocument.title ||
+      draft.folderId !== selectedDocument.folderId ||
+      draft.contentMarkdown !== selectedDocument.contentMarkdown ||
+      draft.cautionMarkdown !== selectedDocument.cautionMarkdown ||
+      draft.cautionEnabled !== selectedDocument.cautionEnabled ||
+      draft.isActive !== selectedDocument.isActive ||
+      JSON.stringify(draft.images) !==
+        JSON.stringify(selectedDocument.images) ||
+      draft.tags !== selectedDocument.tags.map((tag) => tag.name).join(", ")),
   );
 
   function resetMessages() {
@@ -310,7 +309,17 @@ export function ManualsClient({
             title: draft.title,
             folderId: draft.folderId,
             contentMarkdown: draft.contentMarkdown,
+            cautionMarkdown: draft.cautionMarkdown,
+            cautionEnabled: draft.cautionEnabled,
+            isActive: draft.isActive,
             tags: draft.tags.split(","),
+            images: draft.images.map((image) => ({
+              objectKey: image.objectKey,
+              originalName: image.originalName,
+              contentType: image.contentType,
+              sizeBytes: image.sizeBytes,
+              altText: image.altText,
+            })),
           }),
         },
       );
@@ -437,7 +446,9 @@ export function ManualsClient({
         setDraft(createDraft(undefined));
       }
       setFolderDialog(null);
-      setNotice(isCreate ? "새 폴더를 만들었습니다." : "폴더 이름을 바꿨습니다.");
+      setNotice(
+        isCreate ? "새 폴더를 만들었습니다." : "폴더 이름을 바꿨습니다.",
+      );
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
@@ -461,10 +472,9 @@ export function ManualsClient({
     resetMessages();
 
     try {
-      let response = await fetch(
-        `/api/manuals/folders/${selectedFolder.id}`,
-        { method: "DELETE" },
-      );
+      let response = await fetch(`/api/manuals/folders/${selectedFolder.id}`, {
+        method: "DELETE",
+      });
       let result = (await response.json()) as {
         deletedFolderId?: string;
         error?: string;
@@ -503,9 +513,7 @@ export function ManualsClient({
 
       setFolders(nextFolders);
       setDocuments(nextDocuments);
-      setSelectedFolderId(
-        nextDocument?.folderId ?? nextFolders[0]?.id ?? "",
-      );
+      setSelectedFolderId(nextDocument?.folderId ?? nextFolders[0]?.id ?? "");
       setSelectedDocumentId(nextDocument?.id ?? "");
       setDraft(createDraft(nextDocument));
       setNotice("폴더를 삭제했습니다.");
@@ -518,6 +526,327 @@ export function ManualsClient({
     } finally {
       setIsWorking(false);
     }
+  }
+
+  async function moveFolder(folder: ManualFolderRecord, direction: -1 | 1) {
+    if (isWorking) return;
+
+    const siblings = folders
+      .filter((item) => item.parentId === folder.parentId)
+      .sort(
+        (left, right) =>
+          left.sortOrder - right.sortOrder ||
+          left.name.localeCompare(right.name, "ko"),
+      );
+    const currentIndex = siblings.findIndex((item) => item.id === folder.id);
+    const targetIndex = currentIndex + direction;
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= siblings.length) {
+      return;
+    }
+
+    const previousFolders = folders;
+    const reordered = [...siblings];
+    [reordered[currentIndex], reordered[targetIndex]] = [
+      reordered[targetIndex],
+      reordered[currentIndex],
+    ];
+    const orderById = new Map(
+      reordered.map((item, sortOrder) => [item.id, sortOrder]),
+    );
+    setFolders((current) =>
+      current.map((item) =>
+        orderById.has(item.id)
+          ? { ...item, sortOrder: orderById.get(item.id)! }
+          : item,
+      ),
+    );
+    setIsWorking(true);
+    resetMessages();
+
+    try {
+      const response = await fetch("/api/manuals/reorder", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "folders",
+          parentId: folder.parentId,
+          orderedIds: reordered.map((item) => item.id),
+        }),
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(result.error ?? "폴더 순서를 바꾸지 못했습니다.");
+      }
+      setNotice("폴더 순서를 저장했습니다.");
+    } catch (caughtError) {
+      setFolders(previousFolders);
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "폴더 순서를 바꾸지 못했습니다.",
+      );
+    } finally {
+      setIsWorking(false);
+    }
+  }
+
+  async function moveDocument(
+    document: ManualDocumentRecord,
+    direction: -1 | 1,
+  ) {
+    if (isWorking) return;
+
+    const siblings = documentsByFolder.get(document.folderId) ?? [];
+    const currentIndex = siblings.findIndex((item) => item.id === document.id);
+    const targetIndex = currentIndex + direction;
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= siblings.length) {
+      return;
+    }
+
+    const previousDocuments = documents;
+    const reordered = [...siblings];
+    [reordered[currentIndex], reordered[targetIndex]] = [
+      reordered[targetIndex],
+      reordered[currentIndex],
+    ];
+    const orderById = new Map(
+      reordered.map((item, sortOrder) => [item.id, sortOrder]),
+    );
+    setDocuments((current) =>
+      current.map((item) =>
+        orderById.has(item.id)
+          ? { ...item, sortOrder: orderById.get(item.id)! }
+          : item,
+      ),
+    );
+    setIsWorking(true);
+    resetMessages();
+
+    try {
+      const response = await fetch("/api/manuals/reorder", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "documents",
+          folderId: document.folderId,
+          orderedIds: reordered.map((item) => item.id),
+        }),
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(result.error ?? "치료태그 순서를 바꾸지 못했습니다.");
+      }
+      setNotice("치료태그 순서를 저장했습니다.");
+    } catch (caughtError) {
+      setDocuments(previousDocuments);
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "치료태그 순서를 바꾸지 못했습니다.",
+      );
+    } finally {
+      setIsWorking(false);
+    }
+  }
+
+  async function toggleFolderActive(folder: ManualFolderRecord) {
+    if (isWorking) return;
+    const nextActive = !folder.isActive;
+    const previousFolders = folders;
+    const affectedFolderIds = collectFolderIds(folder.id, folders);
+    setIsWorking(true);
+    resetMessages();
+    setFolders((current) =>
+      current.map((item) =>
+        affectedFolderIds.has(item.id)
+          ? { ...item, isActive: nextActive }
+          : item,
+      ),
+    );
+
+    try {
+      const response = await fetch(`/api/manuals/folders/${folder.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: nextActive }),
+      });
+      const result = (await response.json()) as {
+        folder?: ManualFolderRecord;
+        affectedFolderIds?: string[];
+        error?: string;
+      };
+      if (!response.ok || !result.folder) {
+        throw new Error(result.error ?? "폴더 사용 여부를 바꾸지 못했습니다.");
+      }
+      const savedAffectedIds = new Set(result.affectedFolderIds ?? [folder.id]);
+      setFolders((current) =>
+        current.map((item) => {
+          if (item.id === folder.id) return result.folder!;
+          return savedAffectedIds.has(item.id)
+            ? { ...item, isActive: nextActive }
+            : item;
+        }),
+      );
+    } catch (caughtError) {
+      setFolders(previousFolders);
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "폴더 사용 여부를 바꾸지 못했습니다.",
+      );
+    } finally {
+      setIsWorking(false);
+    }
+  }
+
+  async function toggleDocumentActive(document: ManualDocumentRecord) {
+    if (isWorking) return;
+    const nextActive = !document.isActive;
+    setIsWorking(true);
+    resetMessages();
+    setDocuments((current) =>
+      current.map((item) =>
+        item.id === document.id ? { ...item, isActive: nextActive } : item,
+      ),
+    );
+    if (selectedDocumentId === document.id) {
+      setDraft((current) => ({ ...current, isActive: nextActive }));
+    }
+
+    try {
+      const response = await fetch(`/api/manuals/documents/${document.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: nextActive }),
+      });
+      const result = (await response.json()) as {
+        document?: ManualDocumentRecord;
+        error?: string;
+      };
+      if (!response.ok || !result.document) {
+        throw new Error(
+          result.error ?? "치료태그 사용 여부를 바꾸지 못했습니다.",
+        );
+      }
+      setDocuments((current) =>
+        current.map((item) =>
+          item.id === document.id ? result.document! : item,
+        ),
+      );
+    } catch (caughtError) {
+      setDocuments((current) =>
+        current.map((item) =>
+          item.id === document.id
+            ? { ...item, isActive: document.isActive }
+            : item,
+        ),
+      );
+      if (selectedDocumentId === document.id) {
+        setDraft((current) => ({ ...current, isActive: document.isActive }));
+      }
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "치료태그 사용 여부를 바꾸지 못했습니다.",
+      );
+    } finally {
+      setIsWorking(false);
+    }
+  }
+
+  async function uploadImages(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (files.length === 0 || isUploadingImages) return;
+
+    if (draft.images.length + files.length > 10) {
+      setError("이미지는 최대 10개까지 등록할 수 있습니다.");
+      return;
+    }
+
+    setIsUploadingImages(true);
+    resetMessages();
+
+    try {
+      const uploadedImages: ManualDocumentImageRecord[] = [];
+
+      for (const file of files) {
+        const signingResponse = await fetch("/api/manuals/images/upload-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: file.name,
+            contentType: file.type,
+            sizeBytes: file.size,
+          }),
+        });
+        const signingResult = (await signingResponse.json()) as {
+          uploadUrl?: string;
+          image?: Omit<
+            ManualDocumentImageRecord,
+            "id" | "altText" | "sortOrder"
+          >;
+          error?: string;
+        };
+
+        if (
+          !signingResponse.ok ||
+          !signingResult.uploadUrl ||
+          !signingResult.image
+        ) {
+          throw new Error(
+            signingResult.error ?? "이미지 업로드를 준비하지 못했습니다.",
+          );
+        }
+
+        const uploadResponse = await fetch(signingResult.uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+        if (!uploadResponse.ok) {
+          throw new Error(`${file.name} 이미지를 업로드하지 못했습니다.`);
+        }
+
+        uploadedImages.push({
+          ...signingResult.image,
+          id: `pending:${signingResult.image.objectKey}`,
+          altText: "",
+          sortOrder: draft.images.length + uploadedImages.length,
+        });
+      }
+
+      setDraft((current) => ({
+        ...current,
+        images: [...current.images, ...uploadedImages],
+      }));
+      setNotice("이미지를 업로드했습니다. 저장 버튼을 눌러 반영해 주세요.");
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "이미지를 업로드하지 못했습니다.",
+      );
+    } finally {
+      setIsUploadingImages(false);
+    }
+  }
+
+  function moveDraftImage(index: number, direction: -1 | 1) {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= draft.images.length) return;
+
+    setDraft((current) => {
+      const images = [...current.images];
+      [images[index], images[targetIndex]] = [
+        images[targetIndex],
+        images[index],
+      ];
+      return {
+        ...current,
+        images: images.map((image, sortOrder) => ({ ...image, sortOrder })),
+      };
+    });
   }
 
   return (
@@ -566,49 +895,240 @@ export function ManualsClient({
             ) : (
               <FilePlus2 className="size-3.5" />
             )}
-            문서 추가
+            치료태그 추가
           </button>
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[250px_280px_minmax(560px,1fr)]">
+      <div className="flex h-11 shrink-0 items-end border-b border-[#e2e6ef] bg-white px-5">
+        <button
+          type="button"
+          aria-current="page"
+          className="h-11 border-b-2 border-[#3157f6] px-4 text-xs font-bold text-[#3157f6]"
+        >
+          치료태그 매뉴얼
+        </button>
+        <button
+          type="button"
+          disabled
+          title="용어 사전은 준비 중입니다."
+          className="h-11 px-4 text-xs font-semibold text-[#a4aab7]"
+        >
+          용어 사전
+        </button>
+      </div>
+
+      <div className="grid min-h-0 flex-1 grid-cols-[360px_minmax(680px,1fr)]">
         <aside className="flex min-h-0 flex-col border-r border-[#e3e6ee] bg-white">
-          <div className="flex h-12 shrink-0 items-center justify-between border-b border-[#eceef4] px-4">
-            <span className="text-xs font-bold text-[#50586e]">폴더</span>
-            <span className="text-[10px] font-semibold text-[#a0a6b5]">
-              {folders.length}
+          <div className="flex h-12 shrink-0 items-center justify-between px-4">
+            <span className="text-xs font-bold text-[#50586e]">
+              폴더 · 치료태그
             </span>
+            <span className="text-[10px] font-semibold text-[#a0a6b5]">
+              {folders.length + documents.length}
+            </span>
+          </div>
+          <div className="shrink-0 border-b border-[#eceef4] px-3 pb-3">
+            <label className="flex h-9 items-center gap-2 rounded-xl border border-[#e0e4ed] bg-[#fafbfc] px-3 text-[#9ba1b1] focus-within:border-[#7187f6] focus-within:bg-white">
+              <Search className="size-3.5" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="폴더명 또는 치료태그 검색"
+                className="min-w-0 flex-1 bg-transparent text-[11px] text-[#363c50] outline-none"
+              />
+            </label>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto py-2">
             {orderedFolders.map(({ folder, depth }) => {
               const selected = folder.id === selectedFolderId;
               const count = documentCountByFolder.get(folder.id) ?? 0;
+              const folderDocuments = (
+                documentsByFolder.get(folder.id) ?? []
+              ).filter(
+                (document) =>
+                  !normalizedQuery ||
+                  [
+                    document.title,
+                    document.contentMarkdown,
+                    ...document.tags.map((tag) => tag.name),
+                  ]
+                    .join(" ")
+                    .toLowerCase()
+                    .includes(normalizedQuery),
+              );
+              const matchesFolder = folder.name
+                .toLowerCase()
+                .includes(normalizedQuery);
+              if (
+                normalizedQuery &&
+                !matchesFolder &&
+                folderDocuments.length === 0
+              ) {
+                return null;
+              }
+
+              const siblings = folders
+                .filter((item) => item.parentId === folder.parentId)
+                .sort(
+                  (left, right) =>
+                    left.sortOrder - right.sortOrder ||
+                    left.name.localeCompare(right.name, "ko"),
+                );
+              const folderIndex = siblings.findIndex(
+                (item) => item.id === folder.id,
+              );
 
               return (
-                <button
-                  type="button"
-                  key={folder.id}
-                  onClick={() => selectFolder(folder.id)}
-                  className={`group flex w-full items-center gap-2 py-2.5 pr-3 text-left text-xs ${
-                    selected
-                      ? "bg-[#eef2ff] font-bold text-[#3157f6]"
-                      : "text-[#60687d] hover:bg-[#f8f9fc]"
-                  }`}
-                  style={{ paddingLeft: 14 + depth * 16 }}
-                >
-                  {depth > 0 ? (
-                    <ChevronRight className="size-3 text-[#b1b6c3]" />
-                  ) : null}
-                  <Folder
-                    className={`size-4 shrink-0 ${
-                      selected ? "fill-[#dfe6ff]" : "text-[#9ba2b4]"
-                    }`}
-                  />
-                  <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-                  <span className="text-[9px] font-semibold text-[#a7adba]">
-                    {count}
-                  </span>
-                </button>
+                <Fragment key={folder.id}>
+                  <div
+                    className={`group flex h-10 items-center pr-2 text-xs ${
+                      selected
+                        ? "bg-[#eef2ff] font-bold text-[#3157f6]"
+                        : "text-[#60687d] hover:bg-[#f8f9fc]"
+                    } ${folder.isActive ? "" : "opacity-50"}`}
+                    style={{ paddingLeft: 10 + depth * 16 }}
+                  >
+                    <div className="flex shrink-0 items-center">
+                      <button
+                        type="button"
+                        onClick={() => void moveFolder(folder, -1)}
+                        disabled={
+                          isWorking ||
+                          Boolean(normalizedQuery) ||
+                          folderIndex <= 0
+                        }
+                        aria-label={`${folder.name} 폴더 위로 이동`}
+                        className="flex size-5 items-center justify-center rounded text-[#a2a8b6] hover:bg-white disabled:opacity-20"
+                      >
+                        <ArrowUp className="size-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void moveFolder(folder, 1)}
+                        disabled={
+                          isWorking ||
+                          Boolean(normalizedQuery) ||
+                          folderIndex >= siblings.length - 1
+                        }
+                        aria-label={`${folder.name} 폴더 아래로 이동`}
+                        className="flex size-5 items-center justify-center rounded text-[#a2a8b6] hover:bg-white disabled:opacity-20"
+                      >
+                        <ArrowDown className="size-3" />
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => selectFolder(folder.id)}
+                      className="flex min-w-0 flex-1 items-center gap-1.5 px-1.5 text-left"
+                    >
+                      {depth > 0 ? (
+                        <ChevronRight className="size-3 text-[#b1b6c3]" />
+                      ) : null}
+                      <Folder
+                        className={`size-4 shrink-0 ${
+                          selected ? "fill-[#dfe6ff]" : "text-[#9ba2b4]"
+                        }`}
+                      />
+                      <span className="min-w-0 flex-1 truncate">
+                        {folder.name}
+                      </span>
+                      <span className="text-[9px] font-semibold text-[#a7adba]">
+                        {count}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={folder.isActive}
+                      onClick={() => void toggleFolderActive(folder)}
+                      disabled={isWorking}
+                      aria-label={`${folder.name} 폴더 ${folder.isActive ? "비활성화" : "활성화"}`}
+                      className={`relative ml-1 h-5 w-9 shrink-0 rounded-full transition-colors ${
+                        folder.isActive ? "bg-[#3157f6]" : "bg-[#cfd4de]"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${
+                          folder.isActive ? "left-[18px]" : "left-0.5"
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {(normalizedQuery
+                    ? folderDocuments
+                    : (documentsByFolder.get(folder.id) ?? [])
+                  ).map((document, documentIndex, siblingDocuments) => {
+                    const documentSelected = document.id === selectedDocumentId;
+
+                    return (
+                      <div
+                        key={document.id}
+                        className={`flex min-h-10 items-center pr-2 text-[11px] ${
+                          documentSelected
+                            ? "bg-[#f3f6ff] font-bold text-[#3157f6]"
+                            : "text-[#687084] hover:bg-[#fafbfc]"
+                        } ${document.isActive ? "" : "opacity-50"}`}
+                        style={{ paddingLeft: 36 + depth * 16 }}
+                      >
+                        <div className="flex shrink-0 items-center">
+                          <button
+                            type="button"
+                            onClick={() => void moveDocument(document, -1)}
+                            disabled={
+                              isWorking ||
+                              Boolean(normalizedQuery) ||
+                              documentIndex <= 0
+                            }
+                            aria-label={`${document.title} 위로 이동`}
+                            className="flex size-5 items-center justify-center rounded text-[#a2a8b6] hover:bg-white disabled:opacity-20"
+                          >
+                            <ArrowUp className="size-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void moveDocument(document, 1)}
+                            disabled={
+                              isWorking ||
+                              Boolean(normalizedQuery) ||
+                              documentIndex >= siblingDocuments.length - 1
+                            }
+                            aria-label={`${document.title} 아래로 이동`}
+                            className="flex size-5 items-center justify-center rounded text-[#a2a8b6] hover:bg-white disabled:opacity-20"
+                          >
+                            <ArrowDown className="size-3" />
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => selectDocument(document)}
+                          className="flex min-w-0 flex-1 items-center gap-2 px-1.5 py-2 text-left"
+                        >
+                          <Tags className="size-3.5 shrink-0 text-[#ed5b6c]" />
+                          <span className="truncate">{document.title}</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={document.isActive}
+                          onClick={() => void toggleDocumentActive(document)}
+                          disabled={isWorking}
+                          aria-label={`${document.title} ${document.isActive ? "비활성화" : "활성화"}`}
+                          className={`relative ml-1 h-5 w-9 shrink-0 rounded-full transition-colors ${
+                            document.isActive ? "bg-[#3157f6]" : "bg-[#cfd4de]"
+                          }`}
+                        >
+                          <span
+                            className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-all ${
+                              document.isActive ? "left-[18px]" : "left-0.5"
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </Fragment>
               );
             })}
 
@@ -616,7 +1136,7 @@ export function ManualsClient({
               <div className="px-5 py-10 text-center text-[11px] leading-5 text-[#9aa1b1]">
                 폴더를 추가한 뒤
                 <br />
-                매뉴얼 문서를 작성해 주세요.
+                치료태그 매뉴얼을 작성해 주세요.
               </div>
             ) : null}
           </div>
@@ -647,80 +1167,6 @@ export function ManualsClient({
           ) : null}
         </aside>
 
-        <section className="flex min-h-0 flex-col border-r border-[#e3e6ee] bg-[#fbfbfd]">
-          <div className="shrink-0 border-b border-[#e7eaf1] p-3">
-            <label className="flex h-9 items-center gap-2 rounded-xl border border-[#e0e4ed] bg-white px-3 text-[#9ba1b1] focus-within:border-[#7187f6]">
-              <Search className="size-3.5" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="제목, 내용, 태그 검색"
-                className="min-w-0 flex-1 bg-transparent text-[11px] text-[#363c50] outline-none"
-              />
-            </label>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-2">
-            {visibleDocuments.map((document) => {
-              const selected = document.id === selectedDocumentId;
-
-              return (
-                <button
-                  type="button"
-                  key={document.id}
-                  onClick={() => selectDocument(document)}
-                  className={`mb-1 w-full rounded-xl border p-3 text-left transition-colors ${
-                    selected
-                      ? "border-[#cbd6ff] bg-white shadow-[0_4px_14px_rgba(49,87,246,0.08)]"
-                      : "border-transparent hover:border-[#e5e8ef] hover:bg-white"
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    <FileText
-                      className={`mt-0.5 size-4 shrink-0 ${
-                        selected ? "text-[#3157f6]" : "text-[#a0a6b4]"
-                      }`}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-bold text-[#42495d]">
-                        {document.title}
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-[#969cab]">
-                        {document.contentMarkdown.replace(/[#*_>`-]/g, " ")}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-2 flex items-center justify-between pl-6">
-                    <div className="flex min-w-0 gap-1 overflow-hidden">
-                      {document.tags.slice(0, 2).map((tag) => (
-                        <span
-                          key={tag.id}
-                          className="shrink-0 rounded-md bg-[#f0edff] px-1.5 py-0.5 text-[8px] font-bold text-[#6657e9]"
-                        >
-                          {tag.name}
-                        </span>
-                      ))}
-                    </div>
-                    <span className="shrink-0 text-[8px] text-[#afb4c0]">
-                      {formatUpdatedAt(document.updatedAt)}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-
-            {visibleDocuments.length === 0 ? (
-              <div className="flex h-48 flex-col items-center justify-center text-[#a1a7b6]">
-                <FileText className="mb-2 size-6" />
-                <p className="text-xs">
-                  {normalizedQuery
-                    ? "검색 결과가 없습니다."
-                    : "이 폴더에 문서가 없습니다."}
-                </p>
-              </div>
-            ) : null}
-          </div>
-        </section>
-
         <main className="relative flex min-h-0 flex-col bg-white">
           {selectedDocument ? (
             <>
@@ -734,7 +1180,7 @@ export function ManualsClient({
                         title: event.target.value,
                       }))
                     }
-                    aria-label="문서 제목"
+                    aria-label="치료태그 이름"
                     className="w-full truncate bg-transparent text-base font-bold tracking-[-0.02em] text-[#2f3549] outline-none"
                   />
                   <p className="mt-1 text-[9px] text-[#a0a6b4]">
@@ -745,9 +1191,34 @@ export function ManualsClient({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
+                    role="switch"
+                    aria-checked={draft.isActive}
+                    onClick={() =>
+                      setDraft((current) => ({
+                        ...current,
+                        isActive: !current.isActive,
+                      }))
+                    }
+                    className="flex h-9 items-center gap-2 rounded-lg border border-[#dfe3ec] px-3 text-[10px] font-bold text-[#697084]"
+                  >
+                    사용 여부
+                    <span
+                      className={`relative h-5 w-9 rounded-full transition-colors ${
+                        draft.isActive ? "bg-[#3157f6]" : "bg-[#cfd4de]"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-all ${
+                          draft.isActive ? "left-[18px]" : "left-0.5"
+                        }`}
+                      />
+                    </span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => void deleteDocument()}
                     disabled={isWorking}
-                    aria-label="문서 삭제"
+                    aria-label="치료태그 매뉴얼 삭제"
                     className="flex size-9 items-center justify-center rounded-lg border border-[#eddde1] text-[#d34e63] hover:bg-[#fff5f6]"
                   >
                     <Trash2 className="size-4" />
@@ -781,7 +1252,7 @@ export function ManualsClient({
                         folderId: event.target.value,
                       }))
                     }
-                    aria-label="문서 폴더"
+                    aria-label="치료태그 폴더"
                     className="h-8 min-w-0 flex-1 rounded-lg border border-[#e0e4ec] bg-white px-2.5 text-[10px] font-semibold text-[#626a7d] outline-none"
                   >
                     {orderedFolders.map(({ folder, depth }) => (
@@ -802,38 +1273,277 @@ export function ManualsClient({
                         tags: event.target.value,
                       }))
                     }
-                    placeholder="태그를 쉼표로 구분"
-                    aria-label="문서 태그"
+                    placeholder="AI 검색 키워드를 쉼표로 구분"
+                    aria-label="AI 검색 키워드"
                     className="h-8 min-w-0 flex-1 rounded-lg border border-[#e0e4ec] bg-white px-2.5 text-[10px] text-[#626a7d] outline-none"
                   />
                 </label>
               </div>
 
               <SectionTabs
-                ariaLabel="문서 편집 보기"
+                ariaLabel="치료태그 매뉴얼 편집 보기"
                 options={editorTabs}
                 value={editorView}
                 onValueChange={setEditorView}
               />
 
-              <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="min-h-0 flex-1 overflow-y-auto bg-[#f7f8fb]">
                 {editorView === "EDIT" ? (
-                  <textarea
-                    value={draft.contentMarkdown}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        contentMarkdown: event.target.value,
-                      }))
-                    }
-                    aria-label="매뉴얼 내용"
-                    spellCheck={false}
-                    className="h-full min-h-[560px] w-full resize-none bg-white px-7 py-6 font-mono text-[12px] leading-7 text-[#454c60] outline-none"
-                  />
+                  <div className="mx-auto max-w-[980px] space-y-5 px-7 py-6">
+                    <section className="rounded-2xl border border-[#e1e5ed] bg-white p-5">
+                      <div className="mb-3 flex items-center justify-between">
+                        <div>
+                          <h2 className="text-sm font-bold text-[#3d4458]">
+                            마크다운 내용
+                          </h2>
+                          <p className="mt-1 text-[10px] text-[#969dad]">
+                            제목, 목록, 표, 링크 등 마크다운 문법을 사용할 수
+                            있습니다.
+                          </p>
+                        </div>
+                        <span className="rounded-md bg-[#f1f3f8] px-2 py-1 font-mono text-[9px] text-[#82899b]">
+                          {draft.contentMarkdown.length.toLocaleString("ko-KR")}{" "}
+                          / 100,000
+                        </span>
+                      </div>
+                      <textarea
+                        value={draft.contentMarkdown}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            contentMarkdown: event.target.value,
+                          }))
+                        }
+                        aria-label="매뉴얼 마크다운 내용"
+                        spellCheck={false}
+                        maxLength={100_000}
+                        className="min-h-[380px] w-full resize-y rounded-xl border border-[#e2e5ed] bg-[#fcfcfd] px-4 py-3 font-mono text-[12px] leading-7 text-[#454c60] outline-none focus:border-[#7187f6]"
+                      />
+                    </section>
+
+                    <section className="rounded-2xl border border-[#e1e5ed] bg-white p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <h2 className="text-sm font-bold text-[#3d4458]">
+                            이미지
+                          </h2>
+                          <p className="mt-1 text-[10px] leading-4 text-[#969dad]">
+                            S3에 직접 업로드하고 CloudFront 주소로 제공합니다.
+                            최대 10개, 파일당 10MB입니다.
+                          </p>
+                        </div>
+                        <label className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg bg-[#eef2ff] px-3 text-xs font-bold text-[#3157f6] hover:bg-[#e4eaff]">
+                          {isUploadingImages ? (
+                            <LoaderCircle className="size-3.5 animate-spin" />
+                          ) : (
+                            <ImagePlus className="size-3.5" />
+                          )}
+                          이미지 추가
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+                            multiple
+                            disabled={
+                              isUploadingImages || draft.images.length >= 10
+                            }
+                            onChange={(event) => void uploadImages(event)}
+                            className="sr-only"
+                          />
+                        </label>
+                      </div>
+
+                      {draft.images.length > 0 ? (
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                          {draft.images.map((image, index) => (
+                            <div
+                              key={image.objectKey}
+                              className="overflow-hidden rounded-xl border border-[#e1e5ed] bg-[#fafbfc]"
+                            >
+                              <div className="relative aspect-[4/3] bg-[#eef0f5]">
+                                <Image
+                                  src={image.publicUrl}
+                                  alt={image.altText || image.originalName}
+                                  fill
+                                  sizes="(max-width: 1200px) 40vw, 280px"
+                                  className="object-cover"
+                                />
+                              </div>
+                              <div className="space-y-2 p-3">
+                                <p className="truncate text-[10px] font-semibold text-[#656d80]">
+                                  {image.originalName}
+                                </p>
+                                <input
+                                  value={image.altText}
+                                  onChange={(event) =>
+                                    setDraft((current) => ({
+                                      ...current,
+                                      images: current.images.map((item) =>
+                                        item.objectKey === image.objectKey
+                                          ? {
+                                              ...item,
+                                              altText: event.target.value,
+                                            }
+                                          : item,
+                                      ),
+                                    }))
+                                  }
+                                  maxLength={200}
+                                  placeholder="이미지 설명"
+                                  aria-label={`${image.originalName} 이미지 설명`}
+                                  className="h-8 w-full rounded-lg border border-[#dfe3ec] bg-white px-2.5 text-[10px] outline-none focus:border-[#7187f6]"
+                                />
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => moveDraftImage(index, -1)}
+                                    disabled={index === 0}
+                                    aria-label={`${image.originalName} 앞으로 이동`}
+                                    className="flex size-7 items-center justify-center rounded-md border border-[#e0e4ec] text-[#7e8598] disabled:opacity-30"
+                                  >
+                                    <ArrowUp className="size-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => moveDraftImage(index, 1)}
+                                    disabled={index === draft.images.length - 1}
+                                    aria-label={`${image.originalName} 뒤로 이동`}
+                                    className="flex size-7 items-center justify-center rounded-md border border-[#e0e4ec] text-[#7e8598] disabled:opacity-30"
+                                  >
+                                    <ArrowDown className="size-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setDraft((current) => ({
+                                        ...current,
+                                        images: current.images
+                                          .filter(
+                                            (item) =>
+                                              item.objectKey !==
+                                              image.objectKey,
+                                          )
+                                          .map((item, sortOrder) => ({
+                                            ...item,
+                                            sortOrder,
+                                          })),
+                                      }))
+                                    }
+                                    aria-label={`${image.originalName} 이미지 제거`}
+                                    className="flex size-7 items-center justify-center rounded-md border border-[#f0dbe0] text-[#d34e63]"
+                                  >
+                                    <Trash2 className="size-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-4 flex min-h-32 flex-col items-center justify-center rounded-xl border border-dashed border-[#d9dde6] bg-[#fafbfc] text-[#a0a6b4]">
+                          <ImagePlus className="size-6" />
+                          <p className="mt-2 text-[10px]">
+                            등록된 이미지가 없습니다.
+                          </p>
+                        </div>
+                      )}
+                    </section>
+
+                    <section className="rounded-2xl border border-[#e1e5ed] bg-white p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-2.5">
+                          <span className="mt-0.5 flex size-8 items-center justify-center rounded-lg bg-[#fff4df] text-[#d58b21]">
+                            <AlertTriangle className="size-4" />
+                          </span>
+                          <div>
+                            <h2 className="text-sm font-bold text-[#3d4458]">
+                              주의사항 메시지
+                            </h2>
+                            <p className="mt-1 text-[10px] leading-4 text-[#969dad]">
+                              활성화하면 상담 시 전달할 주의사항으로 사용됩니다.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={draft.cautionEnabled}
+                          onClick={() =>
+                            setDraft((current) => ({
+                              ...current,
+                              cautionEnabled: !current.cautionEnabled,
+                            }))
+                          }
+                          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                            draft.cautionEnabled
+                              ? "bg-[#3157f6]"
+                              : "bg-[#cfd4de]"
+                          }`}
+                        >
+                          <span
+                            className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${
+                              draft.cautionEnabled ? "left-5" : "left-0.5"
+                            }`}
+                          />
+                        </button>
+                      </div>
+                      <textarea
+                        value={draft.cautionMarkdown}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            cautionMarkdown: event.target.value,
+                          }))
+                        }
+                        aria-label="주의사항 메시지"
+                        maxLength={20_000}
+                        placeholder="시술 후 주의사항과 고객에게 전달할 메시지를 마크다운으로 입력해 주세요."
+                        className={`mt-4 min-h-40 w-full resize-y rounded-xl border border-[#e2e5ed] px-4 py-3 font-mono text-[12px] leading-6 text-[#454c60] outline-none focus:border-[#7187f6] ${
+                          draft.cautionEnabled ? "bg-white" : "bg-[#f5f6f8]"
+                        }`}
+                      />
+                    </section>
+                  </div>
                 ) : (
-                  <article className="mx-auto max-w-[820px] px-8 py-7 text-[12px] leading-7 text-[#4e5568] [&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-[#8066ec] [&_blockquote]:bg-[#f7f5ff] [&_blockquote]:px-4 [&_blockquote]:py-2 [&_h1]:mb-5 [&_h1]:text-xl [&_h1]:font-bold [&_h1]:text-[#292f43] [&_h2]:mb-3 [&_h2]:mt-7 [&_h2]:text-base [&_h2]:font-bold [&_h2]:text-[#31384d] [&_h3]:mb-2 [&_h3]:mt-5 [&_h3]:text-sm [&_h3]:font-bold [&_li]:ml-5 [&_li]:list-disc [&_p]:mb-3 [&_strong]:font-bold [&_strong]:text-[#31384d]">
-                    <ReactMarkdown>{draft.contentMarkdown}</ReactMarkdown>
-                  </article>
+                  <div className="mx-auto max-w-[900px] space-y-6 px-8 py-7">
+                    <article className="rounded-2xl border border-[#e1e5ed] bg-white px-7 py-6 text-[12px] leading-7 text-[#4e5568] [&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-[#8066ec] [&_blockquote]:bg-[#f7f5ff] [&_blockquote]:px-4 [&_blockquote]:py-2 [&_h1]:mb-5 [&_h1]:text-xl [&_h1]:font-bold [&_h1]:text-[#292f43] [&_h2]:mb-3 [&_h2]:mt-7 [&_h2]:text-base [&_h2]:font-bold [&_h2]:text-[#31384d] [&_h3]:mb-2 [&_h3]:mt-5 [&_h3]:text-sm [&_h3]:font-bold [&_li]:ml-5 [&_li]:list-disc [&_p]:mb-3 [&_strong]:font-bold [&_strong]:text-[#31384d]">
+                      <ReactMarkdown>{draft.contentMarkdown}</ReactMarkdown>
+                    </article>
+                    {draft.images.length > 0 ? (
+                      <section className="grid gap-4 sm:grid-cols-2">
+                        {draft.images.map((image) => (
+                          <figure
+                            key={image.objectKey}
+                            className="overflow-hidden rounded-2xl border border-[#e1e5ed] bg-white"
+                          >
+                            <div className="relative aspect-[4/3]">
+                              <Image
+                                src={image.publicUrl}
+                                alt={image.altText || image.originalName}
+                                fill
+                                sizes="(max-width: 1200px) 45vw, 400px"
+                                className="object-cover"
+                              />
+                            </div>
+                            {image.altText ? (
+                              <figcaption className="px-4 py-3 text-[10px] text-[#737b8f]">
+                                {image.altText}
+                              </figcaption>
+                            ) : null}
+                          </figure>
+                        ))}
+                      </section>
+                    ) : null}
+                    {draft.cautionEnabled && draft.cautionMarkdown ? (
+                      <section className="rounded-2xl border border-[#f1d6a7] bg-[#fff9ee] p-5">
+                        <h2 className="flex items-center gap-2 text-sm font-bold text-[#9a681d]">
+                          <AlertTriangle className="size-4" /> 주의사항
+                        </h2>
+                        <article className="mt-3 text-[12px] leading-7 text-[#6f5b3e] [&_li]:ml-5 [&_li]:list-disc [&_p]:mb-2">
+                          <ReactMarkdown>{draft.cautionMarkdown}</ReactMarkdown>
+                        </article>
+                      </section>
+                    ) : null}
+                  </div>
                 )}
               </div>
 
@@ -846,7 +1556,11 @@ export function ManualsClient({
                       : "bg-[#edf8f2] text-[#168657]"
                   }`}
                 >
-                  {error ? <X className="size-3.5" /> : <Check className="size-3.5" />}
+                  {error ? (
+                    <X className="size-3.5" />
+                  ) : (
+                    <Check className="size-3.5" />
+                  )}
                   {error || notice}
                 </div>
               ) : null}

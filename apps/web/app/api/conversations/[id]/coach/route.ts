@@ -83,11 +83,17 @@ export async function POST(_request: Request, { params }: RouteContext) {
       },
     }),
     database.manualDocument.findMany({
-      where: { hospitalId: user.hospitalId },
+      where: {
+        hospitalId: user.hospitalId,
+        isActive: true,
+        folder: { isActive: true },
+      },
       select: {
         id: true,
         title: true,
         contentMarkdown: true,
+        cautionMarkdown: true,
+        cautionEnabled: true,
         tags: {
           select: { tag: { select: { name: true } } },
         },
@@ -150,7 +156,13 @@ export async function POST(_request: Request, { params }: RouteContext) {
   const customerMessage =
     lastCustomerMessage.translatedContent || lastCustomerMessage.content;
   const retrievedDocuments = retrieveKnowledgeDocuments(
-    allDocuments,
+    allDocuments.map((document) => ({
+      ...document,
+      contentMarkdown:
+        document.cautionEnabled && document.cautionMarkdown
+          ? `${document.contentMarkdown}\n\n## 주의사항\n${document.cautionMarkdown}`
+          : document.contentMarkdown,
+    })),
     treatmentTags,
     customerMessage,
   );

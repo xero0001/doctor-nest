@@ -98,10 +98,14 @@ export default async function ChattingPage() {
       orderBy: { lastMessageAt: "desc" },
     }),
     getDatabase().manualFolder.findMany({
-      where: { hospitalId: user.hospitalId },
+      where: { hospitalId: user.hospitalId, isActive: true },
       include: {
         documents: {
+          where: { isActive: true },
           include: {
+            images: {
+              orderBy: { sortOrder: "asc" },
+            },
             tags: {
               include: { tag: true },
             },
@@ -192,6 +196,14 @@ export default async function ChattingPage() {
             title: document.title,
             slug: document.slug,
             contentMarkdown: document.contentMarkdown,
+            cautionMarkdown: document.cautionMarkdown,
+            cautionEnabled: document.cautionEnabled,
+            images: document.images.map((image) => ({
+              id: image.id,
+              publicUrl: image.publicUrl,
+              altText: image.altText,
+              originalName: image.originalName,
+            })),
             tags: document.tags.map(({ tag }) => ({
               id: tag.id,
               name: tag.name,

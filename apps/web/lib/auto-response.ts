@@ -300,11 +300,17 @@ async function processConversation(
       take: contextMessageCount,
     }),
     database.manualDocument.findMany({
-      where: { hospitalId: conversation.hospitalId },
+      where: {
+        hospitalId: conversation.hospitalId,
+        isActive: true,
+        folder: { isActive: true },
+      },
       select: {
         id: true,
         title: true,
         contentMarkdown: true,
+        cautionMarkdown: true,
+        cautionEnabled: true,
         tags: {
           select: { tag: { select: { name: true } } },
         },
@@ -330,7 +336,13 @@ async function processConversation(
     ({ tag }) => tag.name,
   );
   const retrievedDocuments = retrieveKnowledgeDocuments(
-    allDocuments,
+    allDocuments.map((document) => ({
+      ...document,
+      contentMarkdown:
+        document.cautionEnabled && document.cautionMarkdown
+          ? `${document.contentMarkdown}\n\n## 주의사항\n${document.cautionMarkdown}`
+          : document.contentMarkdown,
+    })),
     treatmentTags,
     customerMessage,
   );

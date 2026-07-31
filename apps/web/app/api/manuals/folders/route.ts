@@ -65,6 +65,7 @@ export async function POST(request: Request) {
         parentId: true,
         name: true,
         sortOrder: true,
+        isActive: true,
       },
     });
 

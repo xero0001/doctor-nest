@@ -432,6 +432,7 @@ model ManualFolder {
   parentId   String?
   name       String
   sortOrder  Int              @default(0)
+  isActive   Boolean          @default(true)
   hospital   Hospital         @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   parent     ManualFolder?    @relation("ManualFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
   children   ManualFolder[]   @relation("ManualFolderTree")
@@ -444,21 +445,43 @@ model ManualFolder {
 }
 
 model ManualDocument {
-  id              String              @id @default(cuid())
+  id              String                @id @default(cuid())
   hospitalId      String
   folderId        String
   title           String
   slug            String
   contentMarkdown String
-  sortOrder       Int                 @default(0)
-  hospital        Hospital            @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  folder          ManualFolder        @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  cautionMarkdown String                @default("")
+  cautionEnabled  Boolean               @default(false)
+  isActive        Boolean               @default(true)
+  sortOrder       Int                   @default(0)
+  hospital        Hospital              @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  folder          ManualFolder          @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  images          ManualDocumentImage[]
   tags            ManualDocumentTag[]
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
 
   @@unique([hospitalId, slug])
   @@index([folderId, sortOrder])
+}
+
+model ManualDocumentImage {
+  id           String         @id @default(cuid())
+  documentId   String
+  objectKey    String
+  publicUrl    String
+  originalName String
+  contentType  String
+  sizeBytes    Int
+  altText      String         @default("")
+  sortOrder    Int            @default(0)
+  document     ManualDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([documentId, objectKey])
+  @@index([documentId, sortOrder])
 }
 
 model ManualTag {

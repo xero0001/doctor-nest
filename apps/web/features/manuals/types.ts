@@ -3,6 +3,7 @@ export type ManualFolderRecord = {
   parentId: string | null;
   name: string;
   sortOrder: number;
+  isActive: boolean;
 };
 
 export type ManualTagRecord = {
@@ -17,7 +18,22 @@ export type ManualDocumentRecord = {
   title: string;
   slug: string;
   contentMarkdown: string;
+  cautionMarkdown: string;
+  cautionEnabled: boolean;
+  isActive: boolean;
   sortOrder: number;
   updatedAt: string;
   tags: ManualTagRecord[];
+  images: ManualDocumentImageRecord[];
+};
+
+export type ManualDocumentImageRecord = {
+  id: string;
+  objectKey: string;
+  publicUrl: string;
+  originalName: string;
+  contentType: string;
+  sizeBytes: number;
+  altText: string;
+  sortOrder: number;
 };

@@ -23,13 +23,30 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
   const { id } = await params;
   const body = (await request.json().catch(() => null)) as {
-    name?: string;
+    name?: unknown;
+    isActive?: unknown;
   } | null;
-  const name = body?.name?.trim() ?? "";
+  const hasName = Boolean(body && Object.hasOwn(body, "name"));
+  const hasIsActive = Boolean(body && Object.hasOwn(body, "isActive"));
+  const name = typeof body?.name === "string" ? body.name.trim() : "";
 
-  if (!name || name.length > 50) {
+  if (hasName && (!name || name.length > 50)) {
     return Response.json(
       { error: "폴더 이름을 1~50자로 입력해 주세요." },
+      { status: 400 },
+    );
+  }
+
+  if (hasIsActive && typeof body?.isActive !== "boolean") {
+    return Response.json(
+      { error: "폴더 사용 여부 값이 올바르지 않습니다." },
+      { status: 400 },
+    );
+  }
+
+  if (!hasName && !hasIsActive) {
+    return Response.json(
+      { error: "변경할 폴더 정보를 입력해 주세요." },
       { status: 400 },
     );
   }
@@ -48,18 +65,55 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 
   try {
+    let affectedFolderIds = [existingFolder.id];
+
+    if (typeof body?.isActive === "boolean") {
+      const hospitalFolders = await database.manualFolder.findMany({
+        where: { hospitalId: user.hospitalId },
+        select: { id: true, parentId: true },
+      });
+      const affectedIds = new Set([existingFolder.id]);
+      let changed = true;
+
+      while (changed) {
+        changed = false;
+        for (const folder of hospitalFolders) {
+          if (
+            folder.parentId &&
+            affectedIds.has(folder.parentId) &&
+            !affectedIds.has(folder.id)
+          ) {
+            affectedIds.add(folder.id);
+            changed = true;
+          }
+        }
+      }
+
+      affectedFolderIds = Array.from(affectedIds);
+      await database.manualFolder.updateMany({
+        where: { id: { in: affectedFolderIds } },
+        data: { isActive: body.isActive },
+      });
+    }
+
     const folder = await database.manualFolder.update({
       where: { id: existingFolder.id },
-      data: { name },
+      data: {
+        ...(hasName ? { name } : {}),
+        ...(typeof body?.isActive === "boolean"
+          ? { isActive: body.isActive }
+          : {}),
+      },
       select: {
         id: true,
         parentId: true,
         name: true,
         sortOrder: true,
+        isActive: true,
       },
     });
 
-    return Response.json({ folder });
+    return Response.json({ folder, affectedFolderIds });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       return Response.json(
@@ -102,8 +156,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
   }
 
   const force = new URL(request.url).searchParams.get("force") === "true";
-  const hasContents =
-    folder._count.children > 0 || folder._count.documents > 0;
+  const hasContents = folder._count.children > 0 || folder._count.documents > 0;
 
   if (hasContents && !force) {
     return Response.json(

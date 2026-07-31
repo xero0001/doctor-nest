@@ -47,6 +47,14 @@ export type ManualFolderItem = {
     title: string;
     slug: string;
     contentMarkdown: string;
+    cautionMarkdown: string;
+    cautionEnabled: boolean;
+    images: Array<{
+      id: string;
+      publicUrl: string;
+      altText: string;
+      originalName: string;
+    }>;
     tags: Array<{
       id: string;
       name: string;

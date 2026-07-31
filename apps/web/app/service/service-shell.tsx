@@ -9,6 +9,7 @@ import {
   LogOut,
   Megaphone,
   MessageCircleMore,
+  NotebookTabs,
   Settings,
   UsersRound,
   Workflow,
@@ -49,6 +50,12 @@ const navigation = [
     icon: BookOpenText,
     href: "/service/chatting#contents",
     available: false,
+  },
+  {
+    label: "원내매뉴얼",
+    icon: NotebookTabs,
+    href: "/service/manuals",
+    available: true,
   },
   {
     label: "예약관리",

@@ -47,6 +47,12 @@ import { NaverTalkChannelIcon } from "@/features/channels/components/naver-talk-
 import { WeChatChannelIcon } from "@/features/channels/components/wechat-channel-icon";
 import { WhatsAppChannelIcon } from "@/features/channels/components/whatsapp-channel-icon";
 import { SectionTabs } from "@/components/section-tabs";
+import {
+  inferConversationTargetLanguage,
+  translationLanguageOptions,
+  type TranslationTargetLanguage,
+} from "@/lib/conversation-language";
+import { formatPhoneWithCountryCode } from "@/lib/phone-country";
 
 import type {
   ChatCoachSuggestion,
@@ -150,13 +156,6 @@ const channelMeta: Record<
   },
 };
 
-const languageLabels: Record<string, string> = {
-  ko: "한국어",
-  en: "English",
-  ja: "日本語",
-  zh: "中文",
-};
-
 function getConversationDisplayName(conversation: ConversationItem) {
   return (
     conversation.customer?.name ??
@@ -168,40 +167,6 @@ function getConversationDisplayName(conversation: ConversationItem) {
 function getConversationPhone(conversation: ConversationItem) {
   return conversation.customer?.phone ?? conversation.chatAccount.phone;
 }
-
-const nationalityDialCodes: Record<string, string> = {
-  대한민국: "+82",
-  한국: "+82",
-  korea: "+82",
-  southkorea: "+82",
-  kr: "+82",
-  미국: "+1",
-  usa: "+1",
-  unitedstates: "+1",
-  us: "+1",
-  중국: "+86",
-  china: "+86",
-  cn: "+86",
-  일본: "+81",
-  japan: "+81",
-  jp: "+81",
-};
-
-const knownDialCodes = [
-  "+886",
-  "+852",
-  "+853",
-  "+971",
-  "+86",
-  "+84",
-  "+82",
-  "+81",
-  "+66",
-  "+65",
-  "+61",
-  "+44",
-  "+1",
-];
 
 function getGenderLabel(gender: string | null) {
   const normalized = gender?.trim().toUpperCase();
@@ -224,35 +189,6 @@ function formatHeaderBirthDate(value: string | null) {
   const part = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((item) => item.type === type)?.value ?? "";
   return `${part("year")}-${part("month")}-${part("day")}`;
-}
-
-function formatPhoneWithCountry(
-  phone: string | null,
-  nationality: string | null,
-) {
-  if (!phone) return "연락처 미등록";
-
-  const trimmedPhone = phone.trim();
-  const explicitDialCode = knownDialCodes.find((dialCode) =>
-    trimmedPhone.startsWith(dialCode),
-  );
-  const normalizedNationality = nationality
-    ?.replace(/[\s_-]/g, "")
-    .toLowerCase();
-  const inferredDialCode = normalizedNationality
-    ? nationalityDialCodes[normalizedNationality]
-    : undefined;
-  const dialCode =
-    explicitDialCode ??
-    inferredDialCode ??
-    (trimmedPhone.startsWith("0") ? "+82" : null);
-
-  if (!dialCode) return trimmedPhone;
-
-  const localPhone = explicitDialCode
-    ? trimmedPhone.slice(explicitDialCode.length).trim()
-    : trimmedPhone;
-  return `(${dialCode}) ${localPhone}`;
 }
 
 function formatListTime(value: string) {
@@ -1013,7 +949,7 @@ function CustomerLinkModal({
                       <span className="shrink-0 font-mono text-[10px] text-[#8b92a5]">
                         {current
                           ? "현재 연결"
-                          : patient.chartNumber ?? "차트번호 미등록"}
+                          : (patient.chartNumber ?? "차트번호 미등록")}
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-[#858c9e]">
@@ -1129,9 +1065,7 @@ function CustomerLinkModal({
           </button>
           <button
             type="button"
-            onClick={() =>
-              void updatePatientLink(selectedPatient?.id ?? null)
-            }
+            onClick={() => void updatePatientLink(selectedPatient?.id ?? null)}
             disabled={!selectedPatient || isLinking}
             className="flex h-10 items-center gap-2 rounded-xl bg-[#3157f6] px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-[#d9dde6]"
           >
@@ -1282,7 +1216,9 @@ export function ChattingClient({
           const phoneValues = [
             conversation.customer?.phone,
             conversation.chatAccount.phone,
-            ...(conversation.customer?.channels.map((channel) => channel.phone) ?? []),
+            ...(conversation.customer?.channels.map(
+              (channel) => channel.phone,
+            ) ?? []),
           ];
           matchesQuery = phoneValues.some((phone) => {
             if (!phone) return false;
@@ -1349,6 +1285,13 @@ export function ChattingClient({
     [],
   );
   const autoTranslate = currentRoom?.autoTranslateEnabled ?? true;
+  const translationTargetLanguage = currentRoom
+    ? (currentRoom.translationTargetLanguage ??
+      inferConversationTargetLanguage(
+        currentRoom.messages,
+        currentRoom.customer?.language,
+      ))
+    : "ko";
   const bookmarkedMessages = useMemo(
     () =>
       (currentRoom?.messages ?? [])
@@ -2036,6 +1979,56 @@ export function ChattingClient({
     }
   }
 
+  async function updateTranslationTargetLanguage(
+    language: TranslationTargetLanguage,
+  ) {
+    if (!currentRoom) return;
+
+    const conversationId = currentRoom.id;
+    const previousLanguage = currentRoom.translationTargetLanguage;
+    setDetailError("");
+    setRooms((current) =>
+      current.map((room) =>
+        room.id === conversationId
+          ? { ...room, translationTargetLanguage: language }
+          : room,
+      ),
+    );
+
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ translationTargetLanguage: language }),
+      });
+      const result = (await response.json()) as {
+        conversation?: ConversationItem;
+        error?: string;
+      };
+      if (!response.ok || !result.conversation) {
+        throw new Error(result.error ?? "번역 언어를 저장하지 못했습니다.");
+      }
+      setRooms((current) =>
+        current.map((room) =>
+          room.id === conversationId ? result.conversation! : room,
+        ),
+      );
+    } catch (error) {
+      setRooms((current) =>
+        current.map((room) =>
+          room.id === conversationId
+            ? { ...room, translationTargetLanguage: previousLanguage }
+            : room,
+        ),
+      );
+      setDetailError(
+        error instanceof Error
+          ? error.message
+          : "번역 언어를 저장하지 못했습니다.",
+      );
+    }
+  }
+
   async function toggleMessageBookmark(messageId: string) {
     if (!currentRoom) return;
 
@@ -2169,7 +2162,11 @@ export function ChattingClient({
       const response = await fetch(`/api/conversations/${currentRoom.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: message, autoTranslate }),
+        body: JSON.stringify({
+          content: message,
+          autoTranslate,
+          targetLanguage: translationTargetLanguage,
+        }),
       });
       const result = (await response.json()) as {
         message?: ConversationItem["messages"][number];
@@ -2553,9 +2550,9 @@ export function ChattingClient({
                 : "인적정보 미연동"}
             </span>
             <span className="rounded-lg bg-[#f7f8fa] px-2.5 py-1 font-mono">
-              {formatPhoneWithCountry(
+              {formatPhoneWithCountryCode(
                 getConversationPhone(currentRoom),
-                currentRoom.customer?.nationality ?? null,
+                currentRoom.customer?.phoneCountryCode,
               )}
             </span>
             <span className="rounded-lg bg-[#f7f8fa] px-2.5 py-1">
@@ -2582,13 +2579,25 @@ export function ChattingClient({
               <span className="text-[11px] text-[#a0a6b4]">-</span>
             ) : null}
           </div>
-          <span className="flex items-center gap-1 text-xs text-[#858c9e]">
+          <label className="flex items-center gap-1 text-xs text-[#858c9e]">
             <Languages className="size-3.5" />
-            {currentRoom.customer
-              ? languageLabels[currentRoom.customer.language] ??
-                currentRoom.customer.language
-              : "고객 연동 전"}
-          </span>
+            <span className="sr-only">번역 대상 언어</span>
+            <select
+              value={translationTargetLanguage}
+              onChange={(event) =>
+                void updateTranslationTargetLanguage(
+                  event.target.value as TranslationTargetLanguage,
+                )
+              }
+              className="cursor-pointer bg-transparent font-semibold text-[#737b8e] outline-none"
+            >
+              {translationLanguageOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         {loadingRoomId === currentRoom.id ? (

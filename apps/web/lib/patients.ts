@@ -1,5 +1,10 @@
 import { getDatabase } from "@doctornest/database";
 
+import {
+  normalizePhoneCountryCode,
+  type PhoneCountryCode,
+} from "@/lib/phone-country";
+
 export const MAX_PATIENT_IMPORT_ROWS = 500;
 
 export type PatientUpsertInput = {
@@ -7,15 +12,28 @@ export type PatientUpsertInput = {
   chartNumber?: string;
   name: string;
   phone: string;
+  phoneCountryCode?: PhoneCountryCode;
   treatmentTags?: string[];
 };
 
-export function normalizePhone(phone: string) {
-  let digits = phone.replace(/\D/g, "");
+export function normalizePhone(phone: string, phoneCountryCode = "+82") {
+  const digits = phone.replace(/\D/g, "");
   if (!digits) return null;
 
-  if (digits.startsWith("82")) digits = `0${digits.slice(2)}`;
-  return digits;
+  const countryCode = normalizePhoneCountryCode(phoneCountryCode) ?? "+82";
+  const countryDigits = countryCode.slice(1);
+  const explicitlyInternational = phone.trim().startsWith("+");
+
+  if (countryCode === "+82") {
+    if (digits.startsWith("82")) return `0${digits.slice(2)}`;
+    return digits;
+  }
+
+  if (explicitlyInternational || digits.startsWith(countryDigits)) {
+    return digits;
+  }
+
+  return `${countryDigits}${digits.startsWith("0") ? digits.slice(1) : digits}`;
 }
 
 export function normalizeTreatmentTags(tags: string[]) {
@@ -32,7 +50,12 @@ export function normalizeTreatmentTags(tags: string[]) {
 export async function upsertPatients(
   hospitalId: string,
   inputRows: PatientUpsertInput[],
-  options: { createOnly?: boolean } = {},
+  options: {
+    createOnly?: boolean;
+    modifiedById?: string;
+    modifiedByName?: string;
+    historySource?: "CUSTOMER_INPUT" | "EXCEL_IMPORT";
+  } = {},
 ) {
   const rows = inputRows
     .map((row) => ({
@@ -40,6 +63,8 @@ export async function upsertPatients(
       chartNumber: row.chartNumber?.trim() || undefined,
       name: row.name.trim(),
       phone: row.phone.trim(),
+      phoneCountryCode:
+        normalizePhoneCountryCode(row.phoneCountryCode) ?? "+82",
       treatmentTags: normalizeTreatmentTags(row.treatmentTags ?? []),
     }))
     .filter((row) => row.name || row.phone);
@@ -55,7 +80,7 @@ export async function upsertPatients(
   }
 
   const invalidRowIndex = rows.findIndex(
-    (row) => !row.name || !normalizePhone(row.phone),
+    (row) => !row.name || !normalizePhone(row.phone, row.phoneCountryCode),
   );
   if (invalidRowIndex >= 0) {
     throw new Error(
@@ -70,7 +95,10 @@ export async function upsertPatients(
       const savedPatientIds: string[] = [];
 
       for (const row of rows) {
-        const phoneNormalized = normalizePhone(row.phone)!;
+        const phoneNormalized = normalizePhone(
+          row.phone,
+          row.phoneCountryCode,
+        )!;
         const existingPatient = row.id
           ? await transaction.patient.findFirst({
               where: { id: row.id, hospitalId },
@@ -104,6 +132,7 @@ export async function upsertPatients(
               data: {
                 name: row.name,
                 phone: row.phone,
+                phoneCountryCode: row.phoneCountryCode,
                 phoneNormalized,
                 ...(row.chartNumber ? { chartNumber: row.chartNumber } : {}),
               },
@@ -115,11 +144,22 @@ export async function upsertPatients(
                 chartNumber: row.chartNumber ?? null,
                 name: row.name,
                 phone: row.phone,
+                phoneCountryCode: row.phoneCountryCode,
                 phoneNormalized,
               },
               select: { id: true },
             });
 
+        const previousTreatmentTags = existingPatient
+          ? await transaction.patientTagAssignment.findMany({
+              where: {
+                patientId: patient.id,
+                tag: { category: "TREATMENT" },
+              },
+              select: { tag: { select: { name: true } } },
+              orderBy: { createdAt: "asc" },
+            })
+          : [];
         const treatmentTagIds: string[] = [];
         for (const tagName of row.treatmentTags) {
           const tag = options.createOnly
@@ -166,6 +206,27 @@ export async function upsertPatients(
               tagId,
             })),
             skipDuplicates: true,
+          });
+        }
+
+        const previousTagNames = previousTreatmentTags
+          .map(({ tag }) => tag.name)
+          .sort();
+        const nextTagNames = [...row.treatmentTags].sort();
+        const treatmentTagsChanged =
+          previousTagNames.length !== nextTagNames.length ||
+          previousTagNames.some((name, index) => name !== nextTagNames[index]);
+
+        if (treatmentTagsChanged) {
+          await transaction.patientTagHistory.create({
+            data: {
+              hospitalId,
+              patientId: patient.id,
+              tagNames: row.treatmentTags,
+              source: options.historySource ?? "CUSTOMER_INPUT",
+              modifiedById: options.modifiedById,
+              modifiedByName: options.modifiedByName ?? "시스템",
+            },
           });
         }
 

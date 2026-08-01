@@ -15,6 +15,8 @@ import {
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { phoneCountryOptions } from "@/lib/phone-country";
+
 import {
   TreatmentTagPicker,
   type TreatmentTagOption,
@@ -25,6 +27,7 @@ type PatientDetail = {
   name: string;
   chartNumber: string;
   phone: string;
+  phoneCountryCode: string;
   email: string;
   birthDate: string;
   gender: string;
@@ -34,6 +37,13 @@ type PatientDetail = {
   notes: string;
   managementNotes: string;
   treatmentTags: string[];
+  tagHistories: Array<{
+    id: string;
+    tagNames: string[];
+    source: "CUSTOMER_INPUT" | "EXCEL_IMPORT" | "CUSTOMER_DETAIL" | "MIGRATION";
+    modifiedByName: string;
+    createdAt: string;
+  }>;
   createdAt: string;
   updatedAt: string;
   channels: Array<{
@@ -125,6 +135,7 @@ export function CustomerDetailClient({
           name: draft.name,
           chartNumber: draft.chartNumber,
           phone: draft.phone,
+          phoneCountryCode: draft.phoneCountryCode,
           email: draft.email,
           birthDate: draft.birthDate,
           gender: draft.gender,
@@ -138,13 +149,21 @@ export function CustomerDetailClient({
       });
       const result = (await response.json()) as {
         patient?: { updatedAt: string };
+        tagHistory?: PatientDetail["tagHistories"][number] | null;
         error?: string;
       };
       if (!response.ok || !result.patient) {
         throw new Error(result.error ?? "고객 상세정보를 저장하지 못했습니다.");
       }
 
-      setSavedSnapshot(draft);
+      const nextDraft = result.tagHistory
+        ? {
+            ...draft,
+            tagHistories: [result.tagHistory, ...draft.tagHistories],
+          }
+        : draft;
+      setDraft(nextDraft);
+      setSavedSnapshot(nextDraft);
       setLastSavedAt(result.patient.updatedAt);
       setSaveState("saved");
     } catch (saveError) {
@@ -207,14 +226,19 @@ export function CustomerDetailClient({
       );
       const result = (await response.json()) as { error?: string };
       if (!response.ok) {
-        throw new Error(result.error ?? "채팅 계정 연동을 해제하지 못했습니다.");
+        throw new Error(
+          result.error ?? "채팅 계정 연동을 해제하지 못했습니다.",
+        );
       }
 
       const updateChannels = (patient: PatientDetail) => {
         const channels = patient.channels.filter(
           (channel) => channel.id !== channelId,
         );
-        if (channels.length > 0 && !channels.some((channel) => channel.isPrimary)) {
+        if (
+          channels.length > 0 &&
+          !channels.some((channel) => channel.isPrimary)
+        ) {
           channels[0] = { ...channels[0], isPrimary: true };
         }
         return {
@@ -267,7 +291,9 @@ export function CustomerDetailClient({
         <main className="min-w-0 flex-1 overflow-y-auto bg-[#fbfbfc] p-6">
           <section className="grid min-h-[260px] grid-cols-3 gap-5 rounded-3xl bg-[#f4f5f8] p-5">
             <div className="flex flex-col rounded-2xl bg-white p-5">
-              <h2 className="text-sm font-extrabold text-[#41485d]">상담자동화</h2>
+              <h2 className="text-sm font-extrabold text-[#41485d]">
+                상담자동화
+              </h2>
               <p className="mt-1 text-xs text-[#969daf]">
                 고객에게 적용된 상담자동화가 표시됩니다.
               </p>
@@ -280,7 +306,9 @@ export function CustomerDetailClient({
             </div>
 
             <label className="flex flex-col rounded-2xl bg-white p-5">
-              <h2 className="text-sm font-extrabold text-[#41485d]">상담메모</h2>
+              <h2 className="text-sm font-extrabold text-[#41485d]">
+                상담메모
+              </h2>
               <p className="mt-1 text-xs text-[#969daf]">
                 채팅에서도 함께 확인되는 고객 메모입니다.
               </p>
@@ -294,7 +322,9 @@ export function CustomerDetailClient({
             </label>
 
             <label className="flex flex-col rounded-2xl bg-white p-5">
-              <h2 className="text-sm font-extrabold text-[#41485d]">관리방향</h2>
+              <h2 className="text-sm font-extrabold text-[#41485d]">
+                관리방향
+              </h2>
               <p className="mt-1 text-xs text-[#969daf]">
                 원장님의 관리 지시사항을 입력할 수 있습니다.
               </p>
@@ -339,7 +369,8 @@ export function CustomerDetailClient({
                             void updatePrimaryChannel(channelAccount.id)
                           }
                           disabled={
-                            channelAccount.isPrimary || Boolean(pendingChannelId)
+                            channelAccount.isPrimary ||
+                            Boolean(pendingChannelId)
                           }
                           aria-label={`${channelAccount.displayName ?? channelAccount.channel} 대표 계정 설정`}
                           className={`mt-0.5 flex size-5 items-center justify-center rounded-full border-2 ${
@@ -379,7 +410,8 @@ export function CustomerDetailClient({
                         <div className="flex items-center gap-1">
                           {draft.conversations.find(
                             (conversation) =>
-                              conversation.patientChannelId === channelAccount.id,
+                              conversation.patientChannelId ===
+                              channelAccount.id,
                           ) ? (
                             <Link
                               href={`/service/chatting?conversation=${draft.conversations.find((conversation) => conversation.patientChannelId === channelAccount.id)!.id}`}
@@ -391,7 +423,9 @@ export function CustomerDetailClient({
                           ) : null}
                           <button
                             type="button"
-                            onClick={() => void unlinkChannel(channelAccount.id)}
+                            onClick={() =>
+                              void unlinkChannel(channelAccount.id)
+                            }
                             disabled={Boolean(pendingChannelId)}
                             aria-label="채팅 계정 연동 해제"
                             className="flex size-8 items-center justify-center rounded-lg text-[#9aa0af] hover:bg-white hover:text-[#d8465b] disabled:opacity-50"
@@ -423,20 +457,43 @@ export function CustomerDetailClient({
                 </h2>
               </div>
               <div className="mt-4 overflow-hidden rounded-xl border border-[#e3e6ed]">
-                <div className="grid grid-cols-[180px_1fr_150px] bg-[#f2f4fb] px-4 py-3 text-xs font-bold text-[#5e667a]">
-                  <span>최근 변경</span>
+                <div className="grid grid-cols-[170px_1fr_130px_120px] bg-[#f2f4fb] px-4 py-3 text-xs font-bold text-[#5e667a]">
+                  <span>변경일시</span>
                   <span>치료태그</span>
                   <span>입력 경로</span>
+                  <span>수정자</span>
                 </div>
-                <div className="grid grid-cols-[180px_1fr_150px] items-center px-4 py-4 text-xs text-[#737b8e]">
-                  <span>{formatDateTime(lastSavedAt)}</span>
-                  <span className="font-semibold text-[#3157f6]">
-                    {draft.treatmentTags.length > 0
-                      ? draft.treatmentTags.join(", ")
-                      : "입력된 치료태그 없음"}
-                  </span>
-                  <span>고객 상세정보</span>
-                </div>
+                {draft.tagHistories.length > 0 ? (
+                  draft.tagHistories.map((history) => (
+                    <div
+                      key={history.id}
+                      className="grid grid-cols-[170px_1fr_130px_120px] items-center border-t border-[#edf0f5] px-4 py-4 text-xs text-[#737b8e] first:border-t-0"
+                    >
+                      <span>{formatDateTime(history.createdAt)}</span>
+                      <span className="font-semibold text-[#3157f6]">
+                        {history.tagNames.length > 0
+                          ? history.tagNames.join(", ")
+                          : "치료태그 없음"}
+                      </span>
+                      <span>
+                        {history.source === "CUSTOMER_INPUT"
+                          ? "고객입력"
+                          : history.source === "EXCEL_IMPORT"
+                            ? "엑셀 업로드"
+                            : history.source === "CUSTOMER_DETAIL"
+                              ? "고객 상세정보"
+                              : "기존 데이터 이관"}
+                      </span>
+                      <span className="font-semibold text-[#4f576c]">
+                        {history.modifiedByName}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="px-4 py-8 text-center text-xs text-[#9ca3b3]">
+                    치료태그 변경 이력이 없습니다.
+                  </p>
+                )}
               </div>
             </div>
           </section>
@@ -480,15 +537,32 @@ export function CustomerDetailClient({
               </label>
             </div>
 
-            <label className="block">
+            <div className="block">
               <FieldLabel required>휴대폰번호</FieldLabel>
-              <input
-                value={draft.phone}
-                onChange={(event) => updateDraft("phone", event.target.value)}
-                inputMode="tel"
-                className="h-11 w-full rounded-xl border border-[#dfe3ec] bg-white px-3 text-sm outline-none focus:border-[#7187f6]"
-              />
-            </label>
+              <div className="flex gap-2">
+                <select
+                  value={draft.phoneCountryCode}
+                  onChange={(event) =>
+                    updateDraft("phoneCountryCode", event.target.value)
+                  }
+                  aria-label="휴대폰 국가번호"
+                  className="h-11 w-[145px] shrink-0 rounded-xl border border-[#dfe3ec] bg-white px-3 text-xs font-semibold outline-none focus:border-[#7187f6]"
+                >
+                  {phoneCountryOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={draft.phone}
+                  onChange={(event) => updateDraft("phone", event.target.value)}
+                  inputMode="tel"
+                  aria-label="휴대폰번호"
+                  className="h-11 min-w-0 flex-1 rounded-xl border border-[#dfe3ec] bg-white px-3 text-sm outline-none focus:border-[#7187f6]"
+                />
+              </div>
+            </div>
 
             <div className="grid grid-cols-2 gap-3">
               <label>
@@ -506,7 +580,9 @@ export function CustomerDetailClient({
                 <FieldLabel>성별</FieldLabel>
                 <select
                   value={draft.gender}
-                  onChange={(event) => updateDraft("gender", event.target.value)}
+                  onChange={(event) =>
+                    updateDraft("gender", event.target.value)
+                  }
                   className="h-11 w-full rounded-xl border border-[#dfe3ec] bg-white px-3 text-sm outline-none focus:border-[#7187f6]"
                 >
                   <option value="">선택</option>

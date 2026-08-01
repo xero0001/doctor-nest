@@ -2,6 +2,7 @@ import { getDatabase } from "@doctornest/database";
 
 import { getCurrentUser } from "@/lib/auth";
 import { normalizePhone, normalizeTreatmentTags } from "@/lib/patients";
+import { normalizePhoneCountryCode } from "@/lib/phone-country";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -21,6 +22,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     name?: unknown;
     chartNumber?: unknown;
     phone?: unknown;
+    phoneCountryCode?: unknown;
     email?: unknown;
     birthDate?: unknown;
     gender?: unknown;
@@ -45,6 +47,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     body?.birthDate === "" ||
     (typeof body?.birthDate === "string" &&
       /^\d{4}-\d{2}-\d{2}$/.test(body.birthDate));
+  const phoneCountryCode =
+    typeof body?.phoneCountryCode === "string"
+      ? normalizePhoneCountryCode(body.phoneCountryCode)
+      : null;
 
   if (
     !body ||
@@ -52,7 +58,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     !body.name.trim() ||
     typeof body.chartNumber !== "string" ||
     typeof body.phone !== "string" ||
-    !normalizePhone(body.phone) ||
+    !phoneCountryCode ||
+    !normalizePhone(body.phone, phoneCountryCode) ||
     typeof body.email !== "string" ||
     !validBirthDate ||
     !validGender ||
@@ -87,10 +94,17 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const database = getDatabase();
 
   try {
-    const savedPatient = await database.$transaction(async (transaction) => {
+    const result = await database.$transaction(async (transaction) => {
       const patient = await transaction.patient.findFirst({
         where: { id, hospitalId: user.hospitalId },
-        select: { id: true },
+        select: {
+          id: true,
+          tagAssignments: {
+            where: { tag: { category: "TREATMENT" } },
+            select: { tag: { select: { name: true } } },
+            orderBy: { createdAt: "asc" },
+          },
+        },
       });
       if (!patient) throw new Error("고객을 찾을 수 없습니다.");
 
@@ -112,11 +126,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
           name: name.trim(),
           chartNumber: chartNumber.trim() || null,
           phone: phone.trim(),
-          phoneNormalized: normalizePhone(phone),
+          phoneCountryCode,
+          phoneNormalized: normalizePhone(phone, phoneCountryCode),
           email: email.trim() || null,
-          birthDate: birthDate
-            ? new Date(`${birthDate}T00:00:00.000Z`)
-            : null,
+          birthDate: birthDate ? new Date(`${birthDate}T00:00:00.000Z`) : null,
           gender: gender || null,
           visitType: visitType || null,
           nationality: nationality.trim() || null,
@@ -136,7 +149,27 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         });
       }
 
-      return transaction.patient.findUniqueOrThrow({
+      const previousTagNames = patient.tagAssignments
+        .map(({ tag }) => tag.name)
+        .sort();
+      const nextTagNames = [...treatmentTags].sort();
+      const treatmentTagsChanged =
+        previousTagNames.length !== nextTagNames.length ||
+        previousTagNames.some((name, index) => name !== nextTagNames[index]);
+      const tagHistory = treatmentTagsChanged
+        ? await transaction.patientTagHistory.create({
+            data: {
+              hospitalId: user.hospitalId,
+              patientId: id,
+              tagNames: treatmentTags,
+              source: "CUSTOMER_DETAIL",
+              modifiedById: user.id,
+              modifiedByName: user.name,
+            },
+          })
+        : null;
+
+      const savedPatient = await transaction.patient.findUniqueOrThrow({
         where: { id },
         include: {
           tagAssignments: {
@@ -145,14 +178,27 @@ export async function PATCH(request: Request, { params }: RouteContext) {
           },
         },
       });
+
+      return { savedPatient, tagHistory };
     });
 
     return Response.json({
       patient: {
-        id: savedPatient.id,
-        updatedAt: savedPatient.updatedAt.toISOString(),
-        treatmentTags: savedPatient.tagAssignments.map(({ tag }) => tag.name),
+        id: result.savedPatient.id,
+        updatedAt: result.savedPatient.updatedAt.toISOString(),
+        treatmentTags: result.savedPatient.tagAssignments.map(
+          ({ tag }) => tag.name,
+        ),
       },
+      tagHistory: result.tagHistory
+        ? {
+            id: result.tagHistory.id,
+            tagNames: result.tagHistory.tagNames,
+            source: result.tagHistory.source,
+            modifiedByName: result.tagHistory.modifiedByName,
+            createdAt: result.tagHistory.createdAt.toISOString(),
+          }
+        : null,
     });
   } catch (error) {
     const message =
@@ -165,9 +211,6 @@ export async function PATCH(request: Request, { params }: RouteContext) {
           ? error.message
           : "고객 상세정보를 저장하지 못했습니다.";
 
-    return Response.json(
-      { error: message },
-      { status: 400 },
-    );
+    return Response.json({ error: message }, { status: 400 });
   }
 }

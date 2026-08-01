@@ -70,6 +70,7 @@ export type ConversationItem = {
   important: boolean;
   autoRespondEnabled: boolean;
   autoTranslateEnabled: boolean;
+  translationTargetLanguage: "en" | "ja" | "zh" | "ko" | null;
   unreadCount: number;
   lastMessageAt: string;
   assignees: StaffMember[];
@@ -88,6 +89,7 @@ export type ConversationItem = {
     chartNumber: string | null;
     name: string;
     phone: string | null;
+    phoneCountryCode: string;
     email: string | null;
     gender: string | null;
     birthDate: string | null;

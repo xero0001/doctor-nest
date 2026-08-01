@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { CustomerDetailClient } from "@/features/customers/components/customer-detail-client";
 import { requireUser } from "@/lib/auth";
+import { stripPhoneCountryCode } from "@/lib/phone-country";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,10 @@ export default async function CustomerDetailPage({
           include: { tag: true },
           orderBy: { createdAt: "asc" },
         },
+        tagHistories: {
+          orderBy: { createdAt: "desc" },
+          take: 50,
+        },
       },
     }),
     database.patientTag.findMany({
@@ -66,7 +71,8 @@ export default async function CustomerDetailPage({
         id: patient.id,
         name: patient.name,
         chartNumber: patient.chartNumber ?? "",
-        phone: patient.phone ?? "",
+        phone: stripPhoneCountryCode(patient.phone, patient.phoneCountryCode),
+        phoneCountryCode: patient.phoneCountryCode,
         email: patient.email ?? "",
         birthDate: toDateInputValue(patient.birthDate),
         gender:
@@ -83,6 +89,13 @@ export default async function CustomerDetailPage({
         notes: patient.notes ?? "",
         managementNotes: patient.managementNotes ?? "",
         treatmentTags: patient.tagAssignments.map(({ tag }) => tag.name),
+        tagHistories: patient.tagHistories.map((history) => ({
+          id: history.id,
+          tagNames: history.tagNames,
+          source: history.source,
+          modifiedByName: history.modifiedByName,
+          createdAt: history.createdAt.toISOString(),
+        })),
         createdAt: patient.createdAt.toISOString(),
         updatedAt: patient.updatedAt.toISOString(),
         channels: patient.channels.map((channel) => ({

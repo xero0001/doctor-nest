@@ -18,6 +18,8 @@ import {
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 
+import { phoneCountryOptions } from "@/lib/phone-country";
+
 import {
   TreatmentTagPicker,
   type TreatmentTagOption,
@@ -27,6 +29,7 @@ type PatientRow = {
   key: string;
   name: string;
   phone: string;
+  phoneCountryCode: string;
   treatmentTags: string[];
 };
 
@@ -70,6 +73,7 @@ function createEmptyRows() {
     key: `new-${index}`,
     name: "",
     phone: "",
+    phoneCountryCode: "+82",
     treatmentTags: [],
   }));
 }
@@ -150,7 +154,9 @@ export function CustomerInputClient({
     let patients = initialPatients;
 
     if (mode === "MISSING_TAG") {
-      patients = patients.filter((patient) => patient.treatmentTags.length === 0);
+      patients = patients.filter(
+        (patient) => patient.treatmentTags.length === 0,
+      );
     } else if (mode === "DAILY") {
       patients = patients.filter(
         (patient) => toKoreanDateKey(patient.createdAt) === dailyDate,
@@ -178,7 +184,7 @@ export function CustomerInputClient({
 
   function updateRow(
     key: string,
-    field: "name" | "phone" | "treatmentTags",
+    field: "name" | "phone" | "phoneCountryCode" | "treatmentTags",
     value: string | string[],
   ) {
     setRows((current) =>
@@ -208,6 +214,7 @@ export function CustomerInputClient({
           patients: populatedRows.map((row) => ({
             name: row.name,
             phone: row.phone,
+            phoneCountryCode: row.phoneCountryCode,
             treatmentTags: row.treatmentTags,
           })),
         }),
@@ -302,12 +309,14 @@ export function CustomerInputClient({
         </div>
 
         <nav className="mt-3 space-y-1" aria-label="고객입력 메뉴">
-          {([
-            ["INPUT", "고객정보 입력", UserRound],
-            ["ALL", "전체", UsersRound],
-            ["MISSING_TAG", "치료태그 미입력", Tag],
-            ["DAILY", "일자별 고객정보 입력 내역", CalendarDays],
-          ] as const).map(([value, label, Icon]) => (
+          {(
+            [
+              ["INPUT", "고객정보 입력", UserRound],
+              ["ALL", "전체", UsersRound],
+              ["MISSING_TAG", "치료태그 미입력", Tag],
+              ["DAILY", "일자별 고객정보 입력 내역", CalendarDays],
+            ] as const
+          ).map(([value, label, Icon]) => (
             <button
               key={value}
               type="button"
@@ -321,7 +330,9 @@ export function CustomerInputClient({
               <Icon className="size-4" />
               <span className="min-w-0 flex-1 truncate">{label}</span>
               {value === "ALL" ? (
-                <span className="text-xs">{totalCount.toLocaleString("ko-KR")}</span>
+                <span className="text-xs">
+                  {totalCount.toLocaleString("ko-KR")}
+                </span>
               ) : value === "MISSING_TAG" ? (
                 <span className="text-xs">
                   {missingTreatmentTagCount.toLocaleString("ko-KR")}
@@ -351,7 +362,8 @@ export function CustomerInputClient({
                   신규 고객정보 입력
                 </h2>
                 <p className="mt-1 text-xs text-[#969daf]">
-                  이 탭은 신규 고객만 등록합니다. 기존 고객은 ‘전체’에서 확인하세요.
+                  이 탭은 신규 고객만 등록합니다. 기존 고객은 ‘전체’에서
+                  확인하세요.
                 </p>
               </div>
             </header>
@@ -372,7 +384,10 @@ export function CustomerInputClient({
                 </thead>
                 <tbody>
                   {rows.map((row, index) => (
-                    <tr key={row.key} className="h-[47px] border-b border-[#e1e5ed]">
+                    <tr
+                      key={row.key}
+                      className="h-[47px] border-b border-[#e1e5ed]"
+                    >
                       <td className="border-r border-[#e1e5ed] px-3 text-xs text-[#6f778b]">
                         {index + 1}
                       </td>
@@ -388,16 +403,37 @@ export function CustomerInputClient({
                         />
                       </td>
                       <td className="border-r border-[#e1e5ed] p-0">
-                        <input
-                          value={row.phone}
-                          onChange={(event) =>
-                            updateRow(row.key, "phone", event.target.value)
-                          }
-                          placeholder="예) 01012345678"
-                          inputMode="tel"
-                          disabled={isSaving || isUploading}
-                          className="h-[46px] w-full bg-transparent px-3 outline-none placeholder:text-[#c5cad4] focus:bg-[#f7f9ff] focus:ring-2 focus:ring-inset focus:ring-[#7187f6]"
-                        />
+                        <div className="flex h-[46px] focus-within:bg-[#f7f9ff] focus-within:ring-2 focus-within:ring-inset focus-within:ring-[#7187f6]">
+                          <select
+                            value={row.phoneCountryCode}
+                            onChange={(event) =>
+                              updateRow(
+                                row.key,
+                                "phoneCountryCode",
+                                event.target.value,
+                              )
+                            }
+                            aria-label={`${index + 1}번 고객 국가번호`}
+                            disabled={isSaving || isUploading}
+                            className="w-[86px] shrink-0 border-r border-[#e1e5ed] bg-transparent px-2 text-xs font-semibold text-[#657087] outline-none"
+                          >
+                            {phoneCountryOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.value}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            value={row.phone}
+                            onChange={(event) =>
+                              updateRow(row.key, "phone", event.target.value)
+                            }
+                            placeholder="예) 01012345678"
+                            inputMode="tel"
+                            disabled={isSaving || isUploading}
+                            className="h-full min-w-0 flex-1 bg-transparent px-3 outline-none placeholder:text-[#c5cad4]"
+                          />
+                        </div>
                       </td>
                       <td className="relative p-0">
                         <TreatmentTagPicker
@@ -456,7 +492,9 @@ export function CustomerInputClient({
                         : "text-[#d8465b]"
                     }`}
                   >
-                    {feedback.tone === "success" ? <Check className="size-4" /> : null}
+                    {feedback.tone === "success" ? (
+                      <Check className="size-4" />
+                    ) : null}
                     {feedback.message}
                   </span>
                 ) : null}
@@ -466,7 +504,9 @@ export function CustomerInputClient({
                   disabled={dirtyRowKeys.size === 0 || isSaving || isUploading}
                   className="flex h-10 min-w-20 items-center justify-center gap-2 rounded-xl bg-[#3157f6] px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-[#d8dce6]"
                 >
-                  {isSaving ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                  {isSaving ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : null}
                   {isSaving ? "저장 중" : "저장"}
                 </button>
               </div>
@@ -503,7 +543,9 @@ export function CustomerInputClient({
               ) : null}
               <div className="flex h-[78px] items-center gap-8 px-6">
                 <div className="flex shrink-0 items-baseline gap-4">
-                  <h2 className="text-lg font-extrabold text-[#30364b]">{modeTitle}</h2>
+                  <h2 className="text-lg font-extrabold text-[#30364b]">
+                    {modeTitle}
+                  </h2>
                   <span className="text-sm font-bold text-[#3157f6]">
                     {directoryPatients.length.toLocaleString("ko-KR")}
                   </span>
@@ -560,16 +602,30 @@ export function CustomerInputClient({
                 </thead>
                 <tbody>
                   {directoryPatients.map((patient) => (
-                    <tr key={patient.id} className="h-12 border-b border-[#e4e7ee] hover:bg-[#fafbff]">
+                    <tr
+                      key={patient.id}
+                      className="h-12 border-b border-[#e4e7ee] hover:bg-[#fafbff]"
+                    >
                       <td className="px-4 font-bold text-[#41485d]">
-                        <Link href={`/service/customers/${patient.id}`} className="hover:text-[#3157f6]">
+                        <Link
+                          href={`/service/customers/${patient.id}`}
+                          className="hover:text-[#3157f6]"
+                        >
                           {patient.name}
                         </Link>
                       </td>
-                      <td className="px-3 font-mono text-xs text-[#737b8e]">{patient.chartNumber || "-"}</td>
-                      <td className="px-3 text-[#5f677b]">{patient.phone || "-"}</td>
-                      <td className="px-3 text-[#737b8e]">{formatDate(patient.birthDate)}</td>
-                      <td className="px-3 text-[#737b8e]">{genderLabel(patient.gender)}</td>
+                      <td className="px-3 font-mono text-xs text-[#737b8e]">
+                        {patient.chartNumber || "-"}
+                      </td>
+                      <td className="px-3 text-[#5f677b]">
+                        {patient.phone || "-"}
+                      </td>
+                      <td className="px-3 text-[#737b8e]">
+                        {formatDate(patient.birthDate)}
+                      </td>
+                      <td className="px-3 text-[#737b8e]">
+                        {genderLabel(patient.gender)}
+                      </td>
                       <td className="px-3 text-xs text-[#3157f6]">
                         {patient.treatmentTags.length > 0
                           ? patient.treatmentTags.join(", ")
@@ -590,7 +646,9 @@ export function CustomerInputClient({
               {directoryPatients.length === 0 ? (
                 <div className="flex h-64 flex-col items-center justify-center text-[#9da4b4]">
                   <UsersRound className="size-8" />
-                  <p className="mt-3 text-sm font-semibold">표시할 고객이 없습니다.</p>
+                  <p className="mt-3 text-sm font-semibold">
+                    표시할 고객이 없습니다.
+                  </p>
                 </div>
               ) : null}
             </div>

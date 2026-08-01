@@ -14,6 +14,10 @@ import {
 import { sendInstagramTextMessage } from "@/lib/instagram-api";
 import { sendNaverTalkTextMessage } from "@/lib/naver-talk-api";
 import { getTranslationContext } from "@/lib/translation-context";
+import {
+  inferConversationTargetLanguage,
+  normalizeTranslationTargetLanguage,
+} from "@/lib/conversation-language";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -33,6 +37,7 @@ function serializeConversation(
     important: conversation.important,
     autoRespondEnabled: conversation.autoRespondEnabled,
     autoTranslateEnabled: conversation.autoTranslateEnabled,
+    translationTargetLanguage: conversation.translationTargetLanguage,
     unreadCount: conversation.unreadCount,
     lastMessageAt: conversation.lastMessageAt.toISOString(),
     assignees: conversation.assignees.map(({ user: assignedUser }) => ({
@@ -56,6 +61,7 @@ function serializeConversation(
           chartNumber: conversation.patient.chartNumber,
           name: conversation.patient.name,
           phone: conversation.patient.phone,
+          phoneCountryCode: conversation.patient.phoneCountryCode,
           email: conversation.patient.email,
           gender: conversation.patient.gender,
           birthDate: conversation.patient.birthDate?.toISOString() ?? null,
@@ -75,13 +81,15 @@ function serializeConversation(
             displayName: patientChannel.displayName,
             phone: patientChannel.phone,
           })),
-          appointments: conversation.patient.appointments.map((appointment) => ({
-            id: appointment.id,
-            scheduledAt: appointment.scheduledAt.toISOString(),
-            doctorName: appointment.doctorName,
-            treatment: appointment.treatment,
-            status: appointment.status,
-          })),
+          appointments: conversation.patient.appointments.map(
+            (appointment) => ({
+              id: appointment.id,
+              scheduledAt: appointment.scheduledAt.toISOString(),
+              doctorName: appointment.doctorName,
+              treatment: appointment.treatment,
+              status: appointment.status,
+            }),
+          ),
         }
       : null,
     messages: conversation.messages.map((message) => ({
@@ -184,6 +192,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     important?: unknown;
     autoRespondEnabled?: unknown;
     autoTranslateEnabled?: unknown;
+    translationTargetLanguage?: unknown;
     status?: unknown;
     notes?: unknown;
     patientId?: unknown;
@@ -199,6 +208,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     (body &&
       Object.hasOwn(body, "autoTranslateEnabled") &&
       typeof body.autoTranslateEnabled !== "boolean") ||
+    (body &&
+      Object.hasOwn(body, "translationTargetLanguage") &&
+      normalizeTranslationTargetLanguage(body.translationTargetLanguage) ===
+        null) ||
     (body &&
       Object.hasOwn(body, "status") &&
       body.status !== "OPEN" &&
@@ -245,6 +258,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     typeof body?.important === "boolean" ||
     typeof body?.autoRespondEnabled === "boolean" ||
     typeof body?.autoTranslateEnabled === "boolean" ||
+    normalizeTranslationTargetLanguage(body?.translationTargetLanguage) !==
+      null ||
     body?.status === "OPEN" ||
     body?.status === "CLOSED";
   const hasPatientNotes = typeof body?.notes === "string";
@@ -342,6 +357,16 @@ export async function PATCH(request: Request, { params }: RouteContext) {
                   ...(typeof body?.autoTranslateEnabled === "boolean"
                     ? { autoTranslateEnabled: body.autoTranslateEnabled }
                     : {}),
+                  ...(normalizeTranslationTargetLanguage(
+                    body?.translationTargetLanguage,
+                  )
+                    ? {
+                        translationTargetLanguage:
+                          normalizeTranslationTargetLanguage(
+                            body?.translationTargetLanguage,
+                          ),
+                      }
+                    : {}),
                   ...(body?.status === "OPEN" || body?.status === "CLOSED"
                     ? { status: body.status }
                     : {}),
@@ -385,9 +410,24 @@ export async function POST(request: Request, { params }: RouteContext) {
   const body = (await request.json().catch(() => null)) as {
     content?: string;
     autoTranslate?: boolean;
+    targetLanguage?: unknown;
   } | null;
   const content = body?.content?.trim();
   const autoTranslate = body?.autoTranslate !== false;
+  const requestedTargetLanguage = normalizeTranslationTargetLanguage(
+    body?.targetLanguage,
+  );
+
+  if (
+    body &&
+    Object.hasOwn(body, "targetLanguage") &&
+    !requestedTargetLanguage
+  ) {
+    return Response.json(
+      { error: "번역 대상 언어가 올바르지 않습니다." },
+      { status: 400 },
+    );
+  }
 
   if (!content) {
     return Response.json({ error: "메시지를 입력해 주세요." }, { status: 400 });
@@ -409,6 +449,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     select: {
       id: true,
       channel: true,
+      translationTargetLanguage: true,
       patient: {
         select: {
           language: true,
@@ -439,13 +480,34 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   if (autoTranslate) {
     try {
+      const inboundMessages =
+        requestedTargetLanguage || conversation.translationTargetLanguage
+          ? []
+          : await database.message.findMany({
+              where: {
+                conversationId: conversation.id,
+                direction: "INBOUND",
+                sender: "CUSTOMER",
+              },
+              select: { content: true, sourceLanguage: true },
+              orderBy: [{ sentAt: "asc" }, { id: "asc" }],
+            });
+      const targetLanguage =
+        requestedTargetLanguage ??
+        normalizeTranslationTargetLanguage(
+          conversation.translationTargetLanguage,
+        ) ??
+        inferConversationTargetLanguage(
+          inboundMessages,
+          conversation.patient?.language,
+        );
       const context = await getTranslationContext({
         hospitalId: user.hospitalId,
         conversationId: conversation.id,
       });
       translation = await translateStaffReply(
         content,
-        conversation.patient?.language ?? "ko",
+        targetLanguage,
         user.hospitalId,
         context,
       );

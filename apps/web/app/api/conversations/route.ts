@@ -54,6 +54,7 @@ export async function GET() {
         important: conversation.important,
         autoRespondEnabled: conversation.autoRespondEnabled,
         autoTranslateEnabled: conversation.autoTranslateEnabled,
+        translationTargetLanguage: conversation.translationTargetLanguage,
         unreadCount: conversation.unreadCount,
         lastMessageAt: conversation.lastMessageAt.toISOString(),
         assignees: conversation.assignees.map(({ user: assignedUser }) => ({
@@ -78,6 +79,7 @@ export async function GET() {
               chartNumber: conversation.patient.chartNumber,
               name: conversation.patient.name,
               phone: conversation.patient.phone,
+              phoneCountryCode: conversation.patient.phoneCountryCode,
               email: conversation.patient.email,
               gender: conversation.patient.gender,
               birthDate: conversation.patient.birthDate?.toISOString() ?? null,

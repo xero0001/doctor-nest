@@ -113,6 +113,8 @@ export async function POST(request: Request) {
         typeof (patient as PatientUpsertInput).id === "string") &&
       (!Object.hasOwn(patient, "chartNumber") ||
         typeof (patient as PatientUpsertInput).chartNumber === "string") &&
+      (!Object.hasOwn(patient, "phoneCountryCode") ||
+        typeof (patient as PatientUpsertInput).phoneCountryCode === "string") &&
       (!Object.hasOwn(patient, "treatmentTags") ||
         (Array.isArray((patient as PatientUpsertInput).treatmentTags) &&
           (patient as PatientUpsertInput).treatmentTags!.every(
@@ -130,6 +132,9 @@ export async function POST(request: Request) {
   try {
     const savedPatients = await upsertPatients(user.hospitalId, patients, {
       createOnly: true,
+      modifiedById: user.id,
+      modifiedByName: user.name,
+      historySource: "CUSTOMER_INPUT",
     });
 
     return Response.json({

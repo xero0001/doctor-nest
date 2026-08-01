@@ -131,6 +131,8 @@ export default async function ChattingPage() {
       important: conversation.important,
       autoRespondEnabled: conversation.autoRespondEnabled,
       autoTranslateEnabled: conversation.autoTranslateEnabled,
+      translationTargetLanguage:
+        conversation.translationTargetLanguage as ConversationItem["translationTargetLanguage"],
       unreadCount: conversation.unreadCount,
       lastMessageAt: conversation.lastMessageAt.toISOString(),
       assignees: conversation.assignees.map(({ user: assignedUser }) => ({
@@ -154,6 +156,7 @@ export default async function ChattingPage() {
             chartNumber: conversation.patient.chartNumber,
             name: conversation.patient.name,
             phone: conversation.patient.phone,
+            phoneCountryCode: conversation.patient.phoneCountryCode,
             email: conversation.patient.email,
             gender: conversation.patient.gender,
             birthDate: conversation.patient.birthDate?.toISOString() ?? null,
@@ -173,13 +176,15 @@ export default async function ChattingPage() {
               displayName: patientChannel.displayName,
               phone: patientChannel.phone,
             })),
-            appointments: conversation.patient.appointments.map((appointment) => ({
-              id: appointment.id,
-              scheduledAt: appointment.scheduledAt.toISOString(),
-              doctorName: appointment.doctorName,
-              treatment: appointment.treatment,
-              status: appointment.status,
-            })),
+            appointments: conversation.patient.appointments.map(
+              (appointment) => ({
+                id: appointment.id,
+                scheduledAt: appointment.scheduledAt.toISOString(),
+                doctorName: appointment.doctorName,
+                treatment: appointment.treatment,
+                status: appointment.status,
+              }),
+            ),
           }
         : null,
       messages: conversation.messages.map((message) => ({

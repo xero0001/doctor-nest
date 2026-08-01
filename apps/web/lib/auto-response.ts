@@ -11,6 +11,10 @@ import {
 } from "@/lib/chat-knowledge";
 import { sendChannelTextMessage } from "@/lib/send-channel-message";
 import { getTranslationContext } from "@/lib/translation-context";
+import {
+  inferConversationTargetLanguage,
+  normalizeTranslationTargetLanguage,
+} from "@/lib/conversation-language";
 
 const MAX_AUTO_RESPONSES_PER_RUN = 10;
 const CANDIDATE_SCAN_LIMIT = 100;
@@ -220,6 +224,7 @@ async function processConversation(
       status: true,
       autoRespondEnabled: true,
       autoTranslateEnabled: true,
+      translationTargetLanguage: true,
       hospital: {
         select: {
           autoResponseContextEnabled: true,
@@ -455,13 +460,33 @@ async function processConversation(
       translatedLanguageName: "한국어",
     };
     if (conversation.autoTranslateEnabled) {
+      const explicitTargetLanguage = normalizeTranslationTargetLanguage(
+        conversation.translationTargetLanguage,
+      );
+      const inboundMessages = explicitTargetLanguage
+        ? []
+        : await database.message.findMany({
+            where: {
+              conversationId: conversation.id,
+              direction: "INBOUND",
+              sender: "CUSTOMER",
+            },
+            select: { content: true, sourceLanguage: true },
+            orderBy: [{ sentAt: "asc" }, { id: "asc" }],
+          });
+      const targetLanguage =
+        explicitTargetLanguage ??
+        inferConversationTargetLanguage(
+          inboundMessages,
+          conversation.patient?.language,
+        );
       const translationContext = await getTranslationContext({
         hospitalId: conversation.hospitalId,
         conversationId: conversation.id,
       });
       translation = await translateStaffReply(
         generatedContent,
-        conversation.patient?.language ?? "ko",
+        targetLanguage,
         conversation.hospitalId,
         translationContext,
       );

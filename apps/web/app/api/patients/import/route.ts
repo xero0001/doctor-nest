@@ -71,9 +71,7 @@ export async function POST(request: Request) {
     const chartNumberColumn = headers.get("차트번호(선택)");
 
     if (!nameColumn || !phoneColumn) {
-      throw new Error(
-        "엑셀 첫 행에 ‘고객명*’, ‘휴대폰번호*’ 열이 필요합니다.",
-      );
+      throw new Error("엑셀 첫 행에 ‘고객명*’, ‘휴대폰번호*’ 열이 필요합니다.");
     }
 
     const patients: PatientUpsertInput[] = [];
@@ -98,7 +96,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const savedPatients = await upsertPatients(user.hospitalId, patients);
+    const savedPatients = await upsertPatients(user.hospitalId, patients, {
+      modifiedById: user.id,
+      modifiedByName: user.name,
+      historySource: "EXCEL_IMPORT",
+    });
 
     return Response.json({ savedCount: savedPatients.length });
   } catch (error) {

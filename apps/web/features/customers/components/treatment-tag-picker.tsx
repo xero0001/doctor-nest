@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, X } from "lucide-react";
+import { Check, ChevronDown, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 export type TreatmentTagOption = {
@@ -29,17 +29,26 @@ export function TreatmentTagPicker({
   placement?: "top" | "bottom";
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  function setPickerOpen(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (!nextOpen) setQuery("");
+  }
 
   useEffect(() => {
     if (!open) return;
 
     function closePicker(event: MouseEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setPickerOpen(false);
+      }
     }
 
     function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") setPickerOpen(false);
     }
 
     document.addEventListener("mousedown", closePicker);
@@ -49,6 +58,19 @@ export function TreatmentTagPicker({
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    window.requestAnimationFrame(() => searchInputRef.current?.focus());
+  }, [open]);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredOptions = normalizedQuery
+    ? options.filter((option) =>
+        option.name.toLowerCase().includes(normalizedQuery),
+      )
+    : options;
 
   function toggleTag(name: string) {
     onChange(
@@ -64,12 +86,12 @@ export function TreatmentTagPicker({
         role="combobox"
         tabIndex={disabled ? -1 : 0}
         onClick={() => {
-          if (!disabled) setOpen((current) => !current);
+          if (!disabled) setPickerOpen(!open);
         }}
         onKeyDown={(event) => {
           if (!disabled && (event.key === "Enter" || event.key === " ")) {
             event.preventDefault();
-            setOpen((current) => !current);
+            setPickerOpen(!open);
           }
         }}
         aria-disabled={disabled}
@@ -130,12 +152,20 @@ export function TreatmentTagPicker({
               : "top-[calc(100%+6px)]"
           }`}
         >
-          <p className="border-b border-[#edf0f5] px-3 py-2.5 text-[10px] leading-4 text-[#8b92a5]">
-            미리 등록된 치료태그 중 선택해 주세요.
-          </p>
+          <label className="flex items-center gap-2 border-b border-[#edf0f5] px-3 py-2.5 text-[#8b92a5] focus-within:text-[#3157f6]">
+            <Search className="size-3.5 shrink-0" />
+            <input
+              ref={searchInputRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="치료태그 검색"
+              aria-label="치료태그 검색"
+              className="min-w-0 flex-1 bg-transparent text-xs text-[#4f576c] outline-none placeholder:text-[#a8aebc]"
+            />
+          </label>
           <div className="max-h-52 overflow-y-auto p-1.5">
-            {options.length > 0 ? (
-              options.map((option) => {
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((option) => {
                 const selected = selectedNames.includes(option.name);
                 return (
                   <button
@@ -160,7 +190,9 @@ export function TreatmentTagPicker({
               })
             ) : (
               <p className="px-3 py-8 text-center text-xs text-[#9ba1b1]">
-                등록된 치료태그가 없습니다.
+                {options.length > 0
+                  ? "검색 결과가 없습니다."
+                  : "등록된 치료태그가 없습니다."}
               </p>
             )}
           </div>

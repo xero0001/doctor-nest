@@ -42,8 +42,8 @@ const navigation = [
   {
     label: "자동화",
     icon: Workflow,
-    href: "/service/chatting#automation",
-    available: false,
+    href: "/service/automations",
+    available: true,
   },
   {
     label: "케어콘텐츠",
@@ -106,7 +106,7 @@ export function ServiceShell({ user, children }: ServiceShellProps) {
           aria-label="서비스 메뉴"
         >
           {navigation.map(({ label, icon: Icon, href, available }) => {
-            const active = available && pathname === href;
+            const active = available && pathname.startsWith(href);
             return (
               <Link
                 key={label}
@@ -129,10 +129,7 @@ export function ServiceShell({ user, children }: ServiceShellProps) {
             );
           })}
 
-          <div
-            className="my-2 h-px w-10 bg-[#e7eaf2]"
-            aria-hidden="true"
-          />
+          <div className="my-2 h-px w-10 bg-[#e7eaf2]" aria-hidden="true" />
 
           <Link
             href="/service/chatting#experience-group"

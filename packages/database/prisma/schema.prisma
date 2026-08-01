@@ -23,6 +23,8 @@ model Hospital {
   channelConnections              ChannelConnection[]
   patients                        Patient[]
   patientTags                     PatientTag[]
+  patientTagHistories             PatientTagHistory[]
+  careAutomations                 CareAutomation[]
   conversations                   Conversation[]
   appointments                    Appointment[]
   manualFolders                   ManualFolder[]
@@ -86,6 +88,7 @@ model AuthUser {
   authsessions            AuthSession[]
   authaccounts            AuthAccount[]
   conversationAssignments ConversationAssignee[]
+  patientTagHistories     PatientTagHistory[]
 
   @@index([hospitalId])
 }
@@ -174,6 +177,7 @@ model Patient {
   chartNumber      String?                @map("externalRef")
   name             String
   phone            String?
+  phoneCountryCode String                 @default("+82")
   phoneNormalized  String?
   email            String?
   gender           String?
@@ -189,6 +193,7 @@ model Patient {
   hospital         Hospital               @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   channels         PatientChannel[]
   tagAssignments   PatientTagAssignment[]
+  tagHistories     PatientTagHistory[]
   conversations    Conversation[]
   appointments     Appointment[]
   createdAt        DateTime               @default(now())
@@ -235,15 +240,16 @@ enum PatientTagCategory {
 }
 
 model PatientTag {
-  id          String                 @id @default(cuid())
-  hospitalId  String
-  name        String
-  color       String                 @default("#3157F6")
-  category    PatientTagCategory     @default(TREATMENT)
-  hospital    Hospital               @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  assignments PatientTagAssignment[]
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
+  id                String                 @id @default(cuid())
+  hospitalId        String
+  name              String
+  color             String                 @default("#3157F6")
+  category          PatientTagCategory     @default(TREATMENT)
+  hospital          Hospital               @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  assignments       PatientTagAssignment[]
+  automationTargets CareAutomationTag[]
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
   @@unique([hospitalId, name])
   @@index([hospitalId, category])
@@ -260,33 +266,98 @@ model PatientTagAssignment {
   @@index([tagId])
 }
 
+enum PatientTagHistorySource {
+  CUSTOMER_INPUT
+  EXCEL_IMPORT
+  CUSTOMER_DETAIL
+  MIGRATION
+}
+
+model PatientTagHistory {
+  id             String                  @id @default(cuid())
+  hospitalId     String
+  patientId      String
+  tagNames       String[]                @default([])
+  source         PatientTagHistorySource
+  modifiedById   String?
+  modifiedByName String
+  hospital       Hospital                @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patient        Patient                 @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  modifiedBy     AuthUser?               @relation(fields: [modifiedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime                @default(now())
+
+  @@index([patientId, createdAt])
+  @@index([hospitalId, createdAt])
+  @@index([modifiedById])
+}
+
+model CareAutomation {
+  id          String                  @id @default(cuid())
+  hospitalId  String
+  name        String
+  nationality String?
+  message     String                  @default("")
+  isActive    Boolean                 @default(true)
+  hospital    Hospital                @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  targetTags  CareAutomationTag[]
+  messages    CareAutomationMessage[]
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  @@index([hospitalId, isActive, updatedAt])
+}
+
+model CareAutomationMessage {
+  id           String         @id @default(cuid())
+  automationId String
+  dayOffset    Int
+  title        String
+  content      String
+  sortOrder    Int            @default(0)
+  automation   CareAutomation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([automationId, sortOrder])
+}
+
+model CareAutomationTag {
+  automationId String
+  tagId        String         @unique
+  automation   CareAutomation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  tag          PatientTag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([automationId, tagId])
+}
+
 enum ConversationStatus {
   OPEN
   CLOSED
 }
 
 model Conversation {
-  id                      String                   @id @default(cuid())
-  hospitalId              String                   @map("organizationId")
-  patientId               String?                  @map("customerId")
-  patientChannelId        String?
-  channel                 ChatChannel
-  externalThreadId        String?
-  status                  ConversationStatus       @default(OPEN)
-  important               Boolean                  @default(false)
-  autoRespondEnabled      Boolean                  @default(false)
-  autoTranslateEnabled    Boolean                  @default(true)
-  unreadCount             Int                      @default(0)
-  lastMessageAt           DateTime                 @default(now())
-  hospital                Hospital                 @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  patient                 Patient?                 @relation(fields: [patientId], references: [id], onDelete: SetNull)
-  patientChannel          PatientChannel?          @relation(fields: [patientChannelId], references: [id], onDelete: SetNull)
-  messages                Message[]
-  assignees               ConversationAssignee[]
-  chatCoachGenerations    ChatCoachGeneration[]
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
-  autoResponseGenerations AutoResponseGeneration[]
+  id                        String                   @id @default(cuid())
+  hospitalId                String                   @map("organizationId")
+  patientId                 String?                  @map("customerId")
+  patientChannelId          String?
+  channel                   ChatChannel
+  externalThreadId          String?
+  status                    ConversationStatus       @default(OPEN)
+  important                 Boolean                  @default(false)
+  autoRespondEnabled        Boolean                  @default(false)
+  autoTranslateEnabled      Boolean                  @default(true)
+  translationTargetLanguage String?
+  unreadCount               Int                      @default(0)
+  lastMessageAt             DateTime                 @default(now())
+  hospital                  Hospital                 @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patient                   Patient?                 @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  patientChannel            PatientChannel?          @relation(fields: [patientChannelId], references: [id], onDelete: SetNull)
+  messages                  Message[]
+  assignees                 ConversationAssignee[]
+  chatCoachGenerations      ChatCoachGeneration[]
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
+  autoResponseGenerations   AutoResponseGeneration[]
 
   @@unique([hospitalId, channel, externalThreadId])
   @@index([hospitalId, status, lastMessageAt])

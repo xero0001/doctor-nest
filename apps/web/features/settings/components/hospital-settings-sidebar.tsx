@@ -54,7 +54,16 @@ export function HospitalSettingsSidebar() {
         >
           채널연동
         </Link>
-        <span className="block px-8 py-2.5 text-[#a0a6b4]">고객태그</span>
+        <Link
+          href="/service/settings/customer-tags"
+          className={`block rounded-lg px-8 py-2.5 font-bold ${
+            pathname === "/service/settings/customer-tags"
+              ? "bg-[#f2f5ff] text-[#3157f6]"
+              : "text-[#6f7789] hover:bg-[#f6f7fa]"
+          }`}
+        >
+          고객태그
+        </Link>
 
         <div className="mt-4 flex items-center justify-between px-4 py-3 font-extrabold text-[#4d5569]">
           계정관리

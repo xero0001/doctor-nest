@@ -1304,6 +1304,18 @@ export function ChattingClient({
         ),
     [currentRoom],
   );
+  const rightPanelTabs = useMemo(
+    () =>
+      [
+        { value: "AUTOMATION", label: "자동화 내역" },
+        {
+          value: "BOOKMARKS",
+          label: "채팅북마크",
+          count: bookmarkedMessages.length,
+        },
+      ] as const,
+    [bookmarkedMessages.length],
+  );
   const normalizedManualQuery = manualQuery.trim().toLowerCase();
   const filteredManualFolders = useMemo(
     () => filterManualFolderTree(manualFolders, normalizedManualQuery),
@@ -2910,39 +2922,12 @@ export function ChattingClient({
           </section>
 
           <section className="border-b border-[#e5e8ef] bg-white">
-            <div
-              role="tablist"
-              aria-label="상담 기록 구분"
-              className="grid grid-cols-2 border-b border-[#e5e8ef]"
-            >
-              {(
-                [
-                  ["AUTOMATION", "자동화 내역"],
-                  [
-                    "BOOKMARKS",
-                    `채팅북마크 ${bookmarkedMessages.length || ""}`,
-                  ],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="tab"
-                  aria-selected={rightPanelTab === value}
-                  onClick={() => setRightPanelTab(value)}
-                  className={`relative h-12 text-xs font-bold transition ${
-                    rightPanelTab === value
-                      ? "text-[#33394d]"
-                      : "text-[#9298aa] hover:text-[#646b7f]"
-                  }`}
-                >
-                  {label}
-                  {rightPanelTab === value ? (
-                    <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[#6657e9]" />
-                  ) : null}
-                </button>
-              ))}
-            </div>
+            <SectionTabs
+              ariaLabel="상담 기록 구분"
+              options={rightPanelTabs}
+              value={rightPanelTab}
+              onValueChange={setRightPanelTab}
+            />
 
             <div className="min-h-52 p-4">
               {rightPanelTab === "AUTOMATION" ? (

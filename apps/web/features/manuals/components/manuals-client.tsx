@@ -23,7 +23,6 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import type { ChangeEvent, FormEvent } from "react";
 import { Fragment, useMemo, useState } from "react";
-import ReactMarkdown from "react-markdown";
 
 import { SectionTabs } from "@/components/section-tabs";
 import type {
@@ -56,9 +55,14 @@ type FolderDialog =
       parentId: string;
     };
 
-const editorTabs = [
-  { value: "EDIT", label: "편집" },
-  { value: "PREVIEW", label: "미리보기" },
+const manualAreaTabs = [
+  { value: "MANUAL", label: "치료태그 매뉴얼" },
+  {
+    value: "GLOSSARY",
+    label: "용어 사전",
+    disabled: true,
+    title: "용어 사전은 준비 중입니다.",
+  },
 ] as const;
 
 const manualImageAccept =
@@ -173,7 +177,7 @@ export function ManualsClient({
     createDraft(initialDocument),
   );
   const [query, setQuery] = useState("");
-  const [editorView, setEditorView] = useState<"EDIT" | "PREVIEW">("EDIT");
+  const [manualArea, setManualArea] = useState<"MANUAL" | "GLOSSARY">("MANUAL");
   const [folderDialog, setFolderDialog] = useState<FolderDialog | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
@@ -248,7 +252,6 @@ export function ManualsClient({
     setSelectedDocumentId(document.id);
     setSelectedFolderId(document.folderId);
     setDraft(createDraft(document));
-    setEditorView("EDIT");
     resetMessages();
   }
 
@@ -300,7 +303,6 @@ export function ManualsClient({
       setSelectedDocumentId(result.document.id);
       setSelectedFolderId(result.document.folderId);
       setDraft(createDraft(result.document));
-      setEditorView("EDIT");
       setNotice("새 문서를 만들었습니다.");
     } catch (caughtError) {
       setError(
@@ -884,76 +886,48 @@ export function ManualsClient({
   }
 
   return (
-    <div className="flex h-full min-h-0 min-w-[1120px] flex-col bg-[#f6f7fb]">
-      <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-[#e2e6ef] bg-white px-6">
-        <div className="flex items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-[#eef2ff] text-[#3157f6]">
-            <BookOpenText className="size-5" />
-          </span>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold tracking-[-0.03em]">
-                원내매뉴얼
-              </h1>
-              <span className="rounded-full bg-[#f0edff] px-2 py-1 text-xs font-bold text-[#6657e9]">
-                병원 전용
-              </span>
-            </div>
-            <p className="mt-0.5 text-xs text-[#8c93a5]">
+    <div className="relative h-full min-h-0 min-w-[1120px]">
+      <div className="grid h-full min-h-0 grid-cols-[360px_minmax(760px,1fr)] bg-[#f6f7fb]">
+        <aside className="flex min-h-0 flex-col border-r border-[#e3e6ee] bg-white">
+          <SectionTabs
+            ariaLabel="원내매뉴얼 구분"
+            options={manualAreaTabs}
+            value={manualArea}
+            onValueChange={setManualArea}
+          />
+          <div className="shrink-0 border-b border-[#eceef4] px-4 py-4">
+            <p className="text-xs leading-5 text-[#8c93a5]">
               {organizationName}의 상담 기준과 시술 정보를 관리합니다.
             </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setFolderDialog({
+                    mode: "create",
+                    name: "",
+                    parentId: selectedFolderId,
+                  })
+                }
+                className="flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#dfe3ec] bg-white px-3 text-xs font-bold text-[#626a80] hover:bg-[#f8f9fc]"
+              >
+                <FolderPlus className="size-3.5" /> 폴더 추가
+              </button>
+              <button
+                type="button"
+                onClick={() => void createDocument()}
+                disabled={isWorking}
+                className="flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#3157f6] px-3 text-xs font-bold text-white disabled:opacity-50"
+              >
+                {isWorking ? (
+                  <LoaderCircle className="size-3.5 animate-spin" />
+                ) : (
+                  <FilePlus2 className="size-3.5" />
+                )}
+                치료태그 추가
+              </button>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() =>
-              setFolderDialog({
-                mode: "create",
-                name: "",
-                parentId: selectedFolderId,
-              })
-            }
-            className="flex h-9 items-center gap-1.5 rounded-lg border border-[#dfe3ec] bg-white px-3 text-xs font-bold text-[#626a80] hover:bg-[#f8f9fc]"
-          >
-            <FolderPlus className="size-3.5" /> 폴더 추가
-          </button>
-          <button
-            type="button"
-            onClick={() => void createDocument()}
-            disabled={isWorking}
-            className="flex h-9 items-center gap-1.5 rounded-lg bg-[#3157f6] px-3.5 text-xs font-bold text-white shadow-[0_6px_18px_rgba(49,87,246,0.2)] disabled:opacity-50"
-          >
-            {isWorking ? (
-              <LoaderCircle className="size-3.5 animate-spin" />
-            ) : (
-              <FilePlus2 className="size-3.5" />
-            )}
-            치료태그 추가
-          </button>
-        </div>
-      </header>
-
-      <div className="flex h-11 shrink-0 items-end border-b border-[#e2e6ef] bg-white px-5">
-        <button
-          type="button"
-          aria-current="page"
-          className="h-11 border-b-2 border-[#3157f6] px-4 text-xs font-bold text-[#3157f6]"
-        >
-          치료태그 매뉴얼
-        </button>
-        <button
-          type="button"
-          disabled
-          title="용어 사전은 준비 중입니다."
-          className="h-11 px-4 text-xs font-semibold text-[#a4aab7]"
-        >
-          용어 사전
-        </button>
-      </div>
-
-      <div className="grid min-h-0 flex-1 grid-cols-[360px_minmax(680px,1fr)]">
-        <aside className="flex min-h-0 flex-col border-r border-[#e3e6ee] bg-white">
           <div className="flex h-12 shrink-0 items-center justify-between px-4">
             <span className="text-xs font-bold text-[#50586e]">
               폴더 · 치료태그
@@ -1204,8 +1178,9 @@ export function ManualsClient({
         <main className="relative flex min-h-0 flex-col bg-white">
           {selectedDocument ? (
             <>
-              <div className="flex h-[72px] shrink-0 items-center justify-between border-b border-[#e5e8ef] px-5">
-                <div className="min-w-0 flex-1 pr-5">
+              <div className="flex h-16 shrink-0 items-center justify-between border-b border-[#e5e8ef] px-6">
+                <div className="flex min-w-0 flex-1 items-center gap-2.5 pr-5">
+                  <Tags className="size-5 shrink-0 text-[#eb3e52]" />
                   <input
                     value={draft.title}
                     onChange={(event) =>
@@ -1215,12 +1190,8 @@ export function ManualsClient({
                       }))
                     }
                     aria-label="치료태그 이름"
-                    className="w-full truncate bg-transparent text-base font-bold tracking-[-0.02em] text-[#2f3549] outline-none"
+                    className="min-w-0 flex-1 truncate bg-transparent text-base font-extrabold tracking-[-0.02em] text-[#2f3549] outline-none"
                   />
-                  <p className="mt-1 text-xs text-[#a0a6b4]">
-                    /{selectedDocument.slug}
-                    {isDirty ? " · 저장되지 않은 변경사항" : " · 저장됨"}
-                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1235,7 +1206,7 @@ export function ManualsClient({
                     }
                     className="flex h-9 items-center gap-2 rounded-lg border border-[#dfe3ec] px-3 text-xs font-bold text-[#697084]"
                   >
-                    사용 여부
+                    AI 필수 참조
                     <span
                       className={`relative h-5 w-9 rounded-full transition-colors ${
                         draft.isActive ? "bg-[#3157f6]" : "bg-[#cfd4de]"
@@ -1275,368 +1246,313 @@ export function ManualsClient({
                 </div>
               </div>
 
-              <div className="grid shrink-0 grid-cols-2 gap-3 border-b border-[#e8eaf1] bg-[#fafbfe] px-5 py-3">
-                <label className="flex items-center gap-2">
-                  <Folder className="size-3.5 shrink-0 text-[#8e95a7]" />
-                  <select
-                    value={draft.folderId}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        folderId: event.target.value,
-                      }))
-                    }
-                    aria-label="치료태그 폴더"
-                    className="h-8 min-w-0 flex-1 rounded-lg border border-[#e0e4ec] bg-white px-2.5 text-xs font-semibold text-[#626a7d] outline-none"
-                  >
-                    {orderedFolders.map(({ folder, depth }) => (
-                      <option key={folder.id} value={folder.id}>
-                        {"　".repeat(depth)}
-                        {folder.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex items-center gap-2">
-                  <Tags className="size-3.5 shrink-0 text-[#8e95a7]" />
-                  <input
-                    value={draft.tags}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        tags: event.target.value,
-                      }))
-                    }
-                    placeholder="AI 검색 키워드를 쉼표로 구분"
-                    aria-label="AI 검색 키워드"
-                    className="h-8 min-w-0 flex-1 rounded-lg border border-[#e0e4ec] bg-white px-2.5 text-xs text-[#626a7d] outline-none"
-                  />
-                </label>
-              </div>
-
-              <SectionTabs
-                ariaLabel="치료태그 매뉴얼 편집 보기"
-                options={editorTabs}
-                value={editorView}
-                onValueChange={setEditorView}
-              />
-
               <div className="min-h-0 flex-1 overflow-y-auto bg-[#f7f8fb]">
-                {editorView === "EDIT" ? (
-                  <div className="mx-auto max-w-[980px] space-y-5 px-7 py-6">
-                    <section className="rounded-2xl border border-[#e1e5ed] bg-white p-6">
-                      <div className="mb-3 flex items-center justify-between">
-                        <div>
-                          <h2 className="text-base font-extrabold text-[#3d4458]">
-                            내용
-                          </h2>
-                          <p className="mt-1 text-xs text-[#969dad]">
-                            서식 도구를 사용해 고객에게 보여줄 내용을 편집할 수
-                            있습니다.
-                          </p>
-                        </div>
-                        <span className="rounded-md bg-[#f1f3f8] px-2.5 py-1.5 font-mono text-xs text-[#82899b]">
-                          {draft.contentMarkdown.length.toLocaleString("ko-KR")}{" "}
-                          / 100,000
-                        </span>
+                <div className="mx-auto max-w-[980px] space-y-5 px-7 py-6">
+                  <section className="rounded-2xl border border-[#e1e5ed] bg-white p-6">
+                    <div className="mb-3 flex items-center justify-between">
+                      <div>
+                        <h2 className="text-base font-extrabold text-[#3d4458]">
+                          내용
+                        </h2>
+                        <p className="mt-1 text-xs text-[#969dad]">
+                          서식 도구를 사용해 고객에게 보여줄 내용을 편집할 수
+                          있습니다.
+                        </p>
                       </div>
-                      <ManualContentEditor
-                        value={draft.contentMarkdown}
-                        onChange={(contentMarkdown) =>
-                          setDraft((current) => ({
-                            ...current,
-                            contentMarkdown,
-                          }))
-                        }
-                      />
-                    </section>
+                      <span className="rounded-md bg-[#f1f3f8] px-2.5 py-1.5 font-mono text-xs text-[#82899b]">
+                        {draft.contentMarkdown.length.toLocaleString("ko-KR")} /
+                        100,000
+                      </span>
+                    </div>
+                    <ManualContentEditor
+                      value={draft.contentMarkdown}
+                      onChange={(contentMarkdown) =>
+                        setDraft((current) => ({
+                          ...current,
+                          contentMarkdown,
+                        }))
+                      }
+                    />
+                  </section>
 
-                    <section className="rounded-2xl border border-[#e1e5ed] bg-white p-6">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <h2 className="text-base font-extrabold text-[#3d4458]">
-                            이미지
-                          </h2>
-                          <p className="mt-1 text-xs leading-4 text-[#969dad]">
-                            S3에 직접 업로드하고 CloudFront 주소로 제공합니다.
-                            최대 10개, 파일당 10MB입니다.
-                          </p>
-                        </div>
-                        <label className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg bg-[#eef2ff] px-3 text-xs font-bold text-[#3157f6] hover:bg-[#e4eaff]">
-                          {isUploadingImages ? (
-                            <LoaderCircle className="size-3.5 animate-spin" />
-                          ) : (
-                            <ImagePlus className="size-3.5" />
-                          )}
-                          이미지 추가
-                          <input
-                            type="file"
-                            accept={manualImageAccept}
-                            multiple
-                            disabled={
-                              isUploadingImages || draft.images.length >= 10
-                            }
-                            onChange={uploadImages}
-                            className="sr-only"
-                          />
-                        </label>
-                      </div>
-
-                      {draft.images.length > 0 ? (
-                        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                          {draft.images.map((image, index) => (
-                            <div
-                              key={image.objectKey}
-                              className="overflow-hidden rounded-xl border border-[#e1e5ed] bg-[#fafbfc]"
-                            >
-                              <div className="relative aspect-[4/3] bg-[#eef0f5]">
-                                <Image
-                                  src={image.publicUrl}
-                                  alt={image.altText || image.originalName}
-                                  fill
-                                  sizes="(max-width: 1200px) 40vw, 280px"
-                                  className="object-cover"
-                                />
-                              </div>
-                              <div className="space-y-2 p-3">
-                                <p className="truncate text-xs font-semibold text-[#656d80]">
-                                  {image.originalName}
-                                </p>
-                                <input
-                                  value={image.altText}
-                                  onChange={(event) =>
-                                    setDraft((current) => ({
-                                      ...current,
-                                      images: current.images.map((item) =>
-                                        item.objectKey === image.objectKey
-                                          ? {
-                                              ...item,
-                                              altText: event.target.value,
-                                            }
-                                          : item,
-                                      ),
-                                    }))
-                                  }
-                                  maxLength={200}
-                                  placeholder="이미지 설명"
-                                  aria-label={`${image.originalName} 이미지 설명`}
-                                  className="h-8 w-full rounded-lg border border-[#dfe3ec] bg-white px-2.5 text-xs outline-none focus:border-[#7187f6]"
-                                />
-                                <div className="flex items-center justify-end gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => moveDraftImage(index, -1)}
-                                    disabled={index === 0}
-                                    aria-label={`${image.originalName} 앞으로 이동`}
-                                    className="flex size-7 items-center justify-center rounded-md border border-[#e0e4ec] text-[#7e8598] disabled:opacity-30"
-                                  >
-                                    <ArrowUp className="size-3" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => moveDraftImage(index, 1)}
-                                    disabled={index === draft.images.length - 1}
-                                    aria-label={`${image.originalName} 뒤로 이동`}
-                                    className="flex size-7 items-center justify-center rounded-md border border-[#e0e4ec] text-[#7e8598] disabled:opacity-30"
-                                  >
-                                    <ArrowDown className="size-3" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setDraft((current) => ({
-                                        ...current,
-                                        images: current.images
-                                          .filter(
-                                            (item) =>
-                                              item.objectKey !==
-                                              image.objectKey,
-                                          )
-                                          .map((item, sortOrder) => ({
-                                            ...item,
-                                            sortOrder,
-                                          })),
-                                      }))
-                                    }
-                                    aria-label={`${image.originalName} 이미지 제거`}
-                                    className="flex size-7 items-center justify-center rounded-md border border-[#f0dbe0] text-[#d34e63]"
-                                  >
-                                    <Trash2 className="size-3" />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <label
-                          aria-label="이미지 파일 선택 또는 드래그해서 업로드"
-                          onDragEnter={(event) => {
-                            event.preventDefault();
-                            if (
-                              !isUploadingImages &&
-                              draft.images.length < 10
-                            ) {
-                              setIsDraggingImages(true);
-                            }
-                          }}
-                          onDragOver={(event) => {
-                            event.preventDefault();
-                            event.dataTransfer.dropEffect = "copy";
-                          }}
-                          onDragLeave={(event) => {
-                            event.preventDefault();
-                            setIsDraggingImages(false);
-                          }}
-                          onDrop={(event) => {
-                            event.preventDefault();
-                            setIsDraggingImages(false);
-                            if (
-                              isUploadingImages ||
-                              draft.images.length >= 10
-                            ) {
-                              return;
-                            }
-                            void uploadImageFiles(
-                              Array.from(event.dataTransfer.files),
-                            );
-                          }}
-                          className={`mt-4 flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed px-6 text-center transition ${
-                            isUploadingImages || draft.images.length >= 10
-                              ? "cursor-not-allowed border-[#d9dde6] bg-[#f6f7f9] text-[#a0a6b4] opacity-70"
-                              : isDraggingImages
-                                ? "cursor-copy border-[#3157f6] bg-[#eef2ff] text-[#3157f6] ring-4 ring-[#3157f6]/10"
-                                : "cursor-pointer border-[#ccd3df] bg-[#fafbfc] text-[#8d95a7] hover:border-[#7187f6] hover:bg-[#f5f7ff] hover:text-[#3157f6]"
-                          }`}
-                        >
-                          <span className="flex size-12 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#3157f6]">
-                            {isUploadingImages ? (
-                              <LoaderCircle className="size-6 animate-spin" />
-                            ) : (
-                              <ImagePlus className="size-6" />
-                            )}
-                          </span>
-                          <p className="mt-4 text-sm font-bold">
-                            {isUploadingImages
-                              ? "이미지를 업로드하고 있습니다."
-                              : isDraggingImages
-                                ? "여기에 놓아 업로드"
-                                : "클릭하거나 이미지를 드래그해 업로드"}
-                          </p>
-                          <p className="mt-1 text-xs text-[#969dad]">
-                            JPG, PNG, WebP, GIF, AVIF · 파일당 최대 10MB
-                          </p>
-                          <input
-                            type="file"
-                            accept={manualImageAccept}
-                            multiple
-                            disabled={
-                              isUploadingImages || draft.images.length >= 10
-                            }
-                            onChange={uploadImages}
-                            className="sr-only"
-                          />
-                        </label>
-                      )}
-                    </section>
-
-                    <section className="rounded-2xl border border-[#e1e5ed] bg-white p-6">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-2.5">
-                          <span className="mt-0.5 flex size-8 items-center justify-center rounded-lg bg-[#fff4df] text-[#d58b21]">
-                            <AlertTriangle className="size-4" />
-                          </span>
-                          <div>
-                            <h2 className="text-base font-extrabold text-[#3d4458]">
-                              주의사항 메시지
-                            </h2>
-                            <p className="mt-1 text-xs leading-4 text-[#969dad]">
-                              활성화하면 상담 시 전달할 주의사항으로 사용됩니다.
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={draft.cautionEnabled}
-                          onClick={() =>
-                            setDraft((current) => ({
-                              ...current,
-                              cautionEnabled: !current.cautionEnabled,
-                            }))
-                          }
-                          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                            draft.cautionEnabled
-                              ? "bg-[#3157f6]"
-                              : "bg-[#cfd4de]"
-                          }`}
-                        >
-                          <span
-                            className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${
-                              draft.cautionEnabled ? "left-5" : "left-0.5"
-                            }`}
-                          />
-                        </button>
-                      </div>
-                      <textarea
-                        value={draft.cautionMarkdown}
+                  <section className="grid grid-cols-2 gap-4 rounded-2xl border border-[#e1e5ed] bg-white p-6">
+                    <label className="block">
+                      <span className="mb-2 block text-xs font-bold text-[#596175]">
+                        폴더
+                      </span>
+                      <select
+                        value={draft.folderId}
                         onChange={(event) =>
                           setDraft((current) => ({
                             ...current,
-                            cautionMarkdown: event.target.value,
+                            folderId: event.target.value,
                           }))
                         }
-                        aria-label="주의사항 메시지"
-                        maxLength={20_000}
-                        placeholder="시술 후 주의사항과 고객에게 전달할 메시지를 마크다운으로 입력해 주세요."
-                        className={`mt-4 min-h-40 w-full resize-y rounded-xl border border-[#e2e5ed] px-4 py-3 font-mono text-xs leading-6 text-[#454c60] outline-none focus:border-[#7187f6] ${
-                          draft.cautionEnabled ? "bg-white" : "bg-[#f5f6f8]"
-                        }`}
+                        aria-label="치료태그 폴더"
+                        className="h-11 w-full rounded-xl border border-[#dfe3ea] bg-white px-4 text-sm font-semibold text-[#626a7d] outline-none focus:border-[#7187f6]"
+                      >
+                        {orderedFolders.map(({ folder, depth }) => (
+                          <option key={folder.id} value={folder.id}>
+                            {"　".repeat(depth)}
+                            {folder.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="mb-2 block text-xs font-bold text-[#596175]">
+                        AI 검색 키워드
+                      </span>
+                      <input
+                        value={draft.tags}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            tags: event.target.value,
+                          }))
+                        }
+                        placeholder="키워드를 쉼표로 구분해 주세요."
+                        aria-label="AI 검색 키워드"
+                        className="h-11 w-full rounded-xl border border-[#dfe3ea] px-4 text-sm text-[#626a7d] outline-none focus:border-[#7187f6]"
                       />
-                    </section>
-                  </div>
-                ) : (
-                  <div className="mx-auto max-w-[900px] space-y-6 px-8 py-7">
-                    <article className="rounded-2xl border border-[#e1e5ed] bg-white px-7 py-6 text-xs leading-7 text-[#4e5568] [&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-[#8066ec] [&_blockquote]:bg-[#f7f5ff] [&_blockquote]:px-4 [&_blockquote]:py-2 [&_h1]:mb-5 [&_h1]:text-xl [&_h1]:font-bold [&_h1]:text-[#292f43] [&_h2]:mb-3 [&_h2]:mt-7 [&_h2]:text-base [&_h2]:font-bold [&_h2]:text-[#31384d] [&_h3]:mb-2 [&_h3]:mt-5 [&_h3]:text-sm [&_h3]:font-bold [&_li]:ml-5 [&_li]:list-disc [&_p]:mb-3 [&_strong]:font-bold [&_strong]:text-[#31384d]">
-                      <ReactMarkdown>{draft.contentMarkdown}</ReactMarkdown>
-                    </article>
+                    </label>
+                  </section>
+
+                  <section className="rounded-2xl border border-[#e1e5ed] bg-white p-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h2 className="text-base font-extrabold text-[#3d4458]">
+                          이미지
+                        </h2>
+                        <p className="mt-1 text-xs leading-4 text-[#969dad]">
+                          S3에 직접 업로드하고 CloudFront 주소로 제공합니다.
+                          최대 10개, 파일당 10MB입니다.
+                        </p>
+                      </div>
+                      <label className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg bg-[#eef2ff] px-3 text-xs font-bold text-[#3157f6] hover:bg-[#e4eaff]">
+                        {isUploadingImages ? (
+                          <LoaderCircle className="size-3.5 animate-spin" />
+                        ) : (
+                          <ImagePlus className="size-3.5" />
+                        )}
+                        이미지 추가
+                        <input
+                          type="file"
+                          accept={manualImageAccept}
+                          multiple
+                          disabled={
+                            isUploadingImages || draft.images.length >= 10
+                          }
+                          onChange={uploadImages}
+                          className="sr-only"
+                        />
+                      </label>
+                    </div>
+
                     {draft.images.length > 0 ? (
-                      <section className="grid gap-4 sm:grid-cols-2">
-                        {draft.images.map((image) => (
-                          <figure
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {draft.images.map((image, index) => (
+                          <div
                             key={image.objectKey}
-                            className="overflow-hidden rounded-2xl border border-[#e1e5ed] bg-white"
+                            className="overflow-hidden rounded-xl border border-[#e1e5ed] bg-[#fafbfc]"
                           >
-                            <div className="relative aspect-[4/3]">
+                            <div className="relative aspect-[4/3] bg-[#eef0f5]">
                               <Image
                                 src={image.publicUrl}
                                 alt={image.altText || image.originalName}
                                 fill
-                                sizes="(max-width: 1200px) 45vw, 400px"
+                                sizes="(max-width: 1200px) 40vw, 280px"
                                 className="object-cover"
                               />
                             </div>
-                            {image.altText ? (
-                              <figcaption className="px-4 py-3 text-xs text-[#737b8f]">
-                                {image.altText}
-                              </figcaption>
-                            ) : null}
-                          </figure>
+                            <div className="space-y-2 p-3">
+                              <p className="truncate text-xs font-semibold text-[#656d80]">
+                                {image.originalName}
+                              </p>
+                              <input
+                                value={image.altText}
+                                onChange={(event) =>
+                                  setDraft((current) => ({
+                                    ...current,
+                                    images: current.images.map((item) =>
+                                      item.objectKey === image.objectKey
+                                        ? {
+                                            ...item,
+                                            altText: event.target.value,
+                                          }
+                                        : item,
+                                    ),
+                                  }))
+                                }
+                                maxLength={200}
+                                placeholder="이미지 설명"
+                                aria-label={`${image.originalName} 이미지 설명`}
+                                className="h-8 w-full rounded-lg border border-[#dfe3ec] bg-white px-2.5 text-xs outline-none focus:border-[#7187f6]"
+                              />
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => moveDraftImage(index, -1)}
+                                  disabled={index === 0}
+                                  aria-label={`${image.originalName} 앞으로 이동`}
+                                  className="flex size-7 items-center justify-center rounded-md border border-[#e0e4ec] text-[#7e8598] disabled:opacity-30"
+                                >
+                                  <ArrowUp className="size-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => moveDraftImage(index, 1)}
+                                  disabled={index === draft.images.length - 1}
+                                  aria-label={`${image.originalName} 뒤로 이동`}
+                                  className="flex size-7 items-center justify-center rounded-md border border-[#e0e4ec] text-[#7e8598] disabled:opacity-30"
+                                >
+                                  <ArrowDown className="size-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setDraft((current) => ({
+                                      ...current,
+                                      images: current.images
+                                        .filter(
+                                          (item) =>
+                                            item.objectKey !== image.objectKey,
+                                        )
+                                        .map((item, sortOrder) => ({
+                                          ...item,
+                                          sortOrder,
+                                        })),
+                                    }))
+                                  }
+                                  aria-label={`${image.originalName} 이미지 제거`}
+                                  className="flex size-7 items-center justify-center rounded-md border border-[#f0dbe0] text-[#d34e63]"
+                                >
+                                  <Trash2 className="size-3" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
                         ))}
-                      </section>
-                    ) : null}
-                    {draft.cautionEnabled && draft.cautionMarkdown ? (
-                      <section className="rounded-2xl border border-[#f1d6a7] bg-[#fff9ee] p-5">
-                        <h2 className="flex items-center gap-2 text-sm font-bold text-[#9a681d]">
-                          <AlertTriangle className="size-4" /> 주의사항
-                        </h2>
-                        <article className="mt-3 text-xs leading-7 text-[#6f5b3e] [&_li]:ml-5 [&_li]:list-disc [&_p]:mb-2">
-                          <ReactMarkdown>{draft.cautionMarkdown}</ReactMarkdown>
-                        </article>
-                      </section>
-                    ) : null}
-                  </div>
-                )}
+                      </div>
+                    ) : (
+                      <label
+                        aria-label="이미지 파일 선택 또는 드래그해서 업로드"
+                        onDragEnter={(event) => {
+                          event.preventDefault();
+                          if (!isUploadingImages && draft.images.length < 10) {
+                            setIsDraggingImages(true);
+                          }
+                        }}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect = "copy";
+                        }}
+                        onDragLeave={(event) => {
+                          event.preventDefault();
+                          setIsDraggingImages(false);
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          setIsDraggingImages(false);
+                          if (isUploadingImages || draft.images.length >= 10) {
+                            return;
+                          }
+                          void uploadImageFiles(
+                            Array.from(event.dataTransfer.files),
+                          );
+                        }}
+                        className={`mt-4 flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed px-6 text-center transition ${
+                          isUploadingImages || draft.images.length >= 10
+                            ? "cursor-not-allowed border-[#d9dde6] bg-[#f6f7f9] text-[#a0a6b4] opacity-70"
+                            : isDraggingImages
+                              ? "cursor-copy border-[#3157f6] bg-[#eef2ff] text-[#3157f6] ring-4 ring-[#3157f6]/10"
+                              : "cursor-pointer border-[#ccd3df] bg-[#fafbfc] text-[#8d95a7] hover:border-[#7187f6] hover:bg-[#f5f7ff] hover:text-[#3157f6]"
+                        }`}
+                      >
+                        <span className="flex size-12 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#3157f6]">
+                          {isUploadingImages ? (
+                            <LoaderCircle className="size-6 animate-spin" />
+                          ) : (
+                            <ImagePlus className="size-6" />
+                          )}
+                        </span>
+                        <p className="mt-4 text-sm font-bold">
+                          {isUploadingImages
+                            ? "이미지를 업로드하고 있습니다."
+                            : isDraggingImages
+                              ? "여기에 놓아 업로드"
+                              : "클릭하거나 이미지를 드래그해 업로드"}
+                        </p>
+                        <p className="mt-1 text-xs text-[#969dad]">
+                          JPG, PNG, WebP, GIF, AVIF · 파일당 최대 10MB
+                        </p>
+                        <input
+                          type="file"
+                          accept={manualImageAccept}
+                          multiple
+                          disabled={
+                            isUploadingImages || draft.images.length >= 10
+                          }
+                          onChange={uploadImages}
+                          className="sr-only"
+                        />
+                      </label>
+                    )}
+                  </section>
+
+                  <section className="rounded-2xl border border-[#e1e5ed] bg-white p-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-2.5">
+                        <span className="mt-0.5 flex size-8 items-center justify-center rounded-lg bg-[#fff4df] text-[#d58b21]">
+                          <AlertTriangle className="size-4" />
+                        </span>
+                        <div>
+                          <h2 className="text-base font-extrabold text-[#3d4458]">
+                            주의사항 메시지
+                          </h2>
+                          <p className="mt-1 text-xs leading-4 text-[#969dad]">
+                            활성화하면 상담 시 전달할 주의사항으로 사용됩니다.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={draft.cautionEnabled}
+                        onClick={() =>
+                          setDraft((current) => ({
+                            ...current,
+                            cautionEnabled: !current.cautionEnabled,
+                          }))
+                        }
+                        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                          draft.cautionEnabled ? "bg-[#3157f6]" : "bg-[#cfd4de]"
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${
+                            draft.cautionEnabled ? "left-5" : "left-0.5"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    <textarea
+                      value={draft.cautionMarkdown}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          cautionMarkdown: event.target.value,
+                        }))
+                      }
+                      aria-label="주의사항 메시지"
+                      maxLength={20_000}
+                      placeholder="시술 후 주의사항과 고객에게 전달할 메시지를 마크다운으로 입력해 주세요."
+                      className={`mt-4 min-h-40 w-full resize-y rounded-xl border border-[#e2e5ed] px-4 py-3 font-mono text-xs leading-6 text-[#454c60] outline-none focus:border-[#7187f6] ${
+                        draft.cautionEnabled ? "bg-white" : "bg-[#f5f6f8]"
+                      }`}
+                    />
+                  </section>
+                </div>
               </div>
 
               {error || notice ? (

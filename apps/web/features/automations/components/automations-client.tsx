@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { SectionTabs } from "@/components/section-tabs";
 import {
   TreatmentTagPicker,
   type TreatmentTagOption,
@@ -88,6 +89,7 @@ export function AutomationsClient({
 }) {
   const [automations, setAutomations] = useState(initialAutomations);
   const [query, setQuery] = useState("");
+  const [statusTab, setStatusTab] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
   const [viewer, setViewer] = useState<AutomationItem | null>(null);
   const [editor, setEditor] = useState<EditorDraft | null>(null);
   const [editorSnapshot, setEditorSnapshot] = useState("");
@@ -112,13 +114,26 @@ export function AutomationsClient({
 
   const filteredAutomations = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return automations;
-    return automations.filter((automation) =>
-      `${automation.name} ${automation.tags.map((tag) => tag.name).join(" ")}`
+    return automations.filter((automation) => {
+      if (automation.isActive !== (statusTab === "ACTIVE")) return false;
+      if (!normalizedQuery) return true;
+      return `${automation.name} ${automation.tags.map((tag) => tag.name).join(" ")}`
         .toLowerCase()
-        .includes(normalizedQuery),
-    );
-  }, [automations, query]);
+        .includes(normalizedQuery);
+    });
+  }, [automations, query, statusTab]);
+  const statusTabs = useMemo(() => {
+    let activeCount = 0;
+    let inactiveCount = 0;
+    for (const automation of automations) {
+      if (automation.isActive) activeCount += 1;
+      else inactiveCount += 1;
+    }
+    return [
+      { value: "ACTIVE", label: "진행 중", count: activeCount },
+      { value: "INACTIVE", label: "사용 안 함", count: inactiveCount },
+    ] as const;
+  }, [automations]);
 
   useEffect(() => {
     isDirtyRef.current = isDirty;
@@ -737,6 +752,13 @@ export function AutomationsClient({
               <Plus className="size-4" /> 등록
             </button>
           </header>
+          <SectionTabs
+            ariaLabel="자동화 상태"
+            options={statusTabs}
+            value={statusTab}
+            onValueChange={setStatusTab}
+            layout="fit"
+          />
           <div className="flex shrink-0 items-center border-b border-[#e5e9f1] bg-white px-7 py-4">
             <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-[#dfe3ec] px-4 focus-within:border-[#7187f6]">
               <Search className="size-4 text-[#9ba2b1]" />

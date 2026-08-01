@@ -2,6 +2,8 @@ type SectionTabOption<T extends string> = {
   value: T;
   label: string;
   count?: number;
+  disabled?: boolean;
+  title?: string;
 };
 
 export function SectionTabs<T extends string>({
@@ -9,18 +11,28 @@ export function SectionTabs<T extends string>({
   options,
   value,
   onValueChange,
+  layout = "equal",
 }: {
   ariaLabel: string;
   options: readonly SectionTabOption<T>[];
   value: T;
   onValueChange: (value: T) => void;
+  layout?: "equal" | "fit";
 }) {
   return (
     <div
       role="tablist"
       aria-label={ariaLabel}
-      className="grid shrink-0 border-b border-[#e8eaf1] px-3"
-      style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
+      className={`${
+        layout === "equal" ? "grid px-3" : "flex px-6"
+      } shrink-0 border-b border-[#e8eaf1]`}
+      style={
+        layout === "equal"
+          ? {
+              gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))`,
+            }
+          : undefined
+      }
     >
       {options.map((option) => {
         const selected = value === option.value;
@@ -30,10 +42,19 @@ export function SectionTabs<T extends string>({
             type="button"
             role="tab"
             aria-selected={selected}
+            aria-disabled={option.disabled || undefined}
+            disabled={option.disabled}
+            title={option.title}
             key={option.value}
             onClick={() => onValueChange(option.value)}
-            className={`relative flex h-11 items-center justify-center gap-1.5 text-xs font-semibold ${
-              selected ? "text-[#252a3e]" : "text-[#9ca1b1]"
+            className={`relative flex h-11 items-center justify-center gap-1.5 text-xs font-semibold disabled:cursor-not-allowed ${
+              layout === "fit" ? "min-w-44 px-6" : ""
+            } ${
+              selected
+                ? "text-[#252a3e]"
+                : option.disabled
+                  ? "text-[#c2c6d0]"
+                  : "text-[#9ca1b1] hover:text-[#646b7f]"
             }`}
           >
             {option.label}

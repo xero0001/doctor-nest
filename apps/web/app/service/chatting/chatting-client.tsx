@@ -53,6 +53,7 @@ import {
   type TranslationTargetLanguage,
 } from "@/lib/conversation-language";
 import { formatPhoneWithCountryCode } from "@/lib/phone-country";
+import type { ContentEventRecord } from "@/features/events/types";
 
 import type {
   ChatCoachSuggestion,
@@ -81,7 +82,7 @@ const MAX_PATIENT_NOTES_LENGTH = 5_000;
 type CustomerNotesSaveStatus = "idle" | "saving" | "saved" | "error";
 
 const knowledgeTabs = [
-  { value: "원내매뉴얼", label: "원내매뉴얼" },
+  { value: "원내매뉴얼", label: "치료태그 매뉴얼" },
   { value: "콘텐츠", label: "콘텐츠" },
 ] as const;
 
@@ -530,6 +531,110 @@ function ManualFolderBranch({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function ContentEventCard({
+  event,
+  selected,
+  onToggle,
+}: {
+  event: ContentEventRecord;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  const finalPrice = Math.max(0, event.originalPrice - event.discountAmount);
+
+  return (
+    <article className="border-b border-[#edf0f5] bg-white">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={selected}
+        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+          selected ? "bg-[#f0ebff]" : "hover:bg-[#f8f9fc]"
+        }`}
+      >
+        <div className="relative aspect-[4/3] w-20 shrink-0 overflow-hidden rounded-lg bg-[#f2f3f6]">
+          {event.thumbnail ? (
+            <Image
+              src={event.thumbnail.publicUrl}
+              alt={event.thumbnail.altText || event.title}
+              fill
+              sizes="80px"
+              className="object-cover"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-[#a6acba]">
+              <BookOpenText className="size-5" />
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            {event.isPinned ? (
+              <Star className="size-3 shrink-0 fill-[#ffcf34] text-[#ffbe19]" />
+            ) : null}
+            <h3 className="truncate text-sm font-bold text-[#3f475a]">
+              {event.title}
+            </h3>
+          </div>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#8b92a3]">
+            {event.summary || "등록된 소개글이 없습니다."}
+          </p>
+          <p className="mt-1 text-xs font-extrabold text-[#3157f6]">
+            {finalPrice.toLocaleString("ko-KR")}원
+          </p>
+        </div>
+        <ChevronRight
+          className={`size-4 shrink-0 text-[#9ca2b1] transition-transform ${
+            selected ? "rotate-90" : ""
+          }`}
+        />
+      </button>
+
+      {selected ? (
+        <div className="border-t border-[#e7e3f7] bg-[#faf9ff] px-4 py-4">
+          {event.exposureEndAt ? (
+            <p className="mb-3 text-xs font-medium text-[#858c9d]">
+              노출 종료 {event.exposureEndAt.slice(0, 10)}
+            </p>
+          ) : null}
+          {event.detailType === "IMAGE" ? (
+            event.detailImages.length > 0 ? (
+              <div className="space-y-2">
+                {event.detailImages.map((image) => (
+                  <div
+                    key={image.id}
+                    className="relative aspect-[4/5] overflow-hidden rounded-lg bg-white"
+                  >
+                    <Image
+                      src={image.publicUrl}
+                      alt={image.altText || event.title}
+                      fill
+                      sizes="320px"
+                      className="object-contain"
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="py-5 text-center text-xs text-[#989eae]">
+                등록된 상세 이미지가 없습니다.
+              </p>
+            )
+          ) : event.detailText ? (
+            <div className="whitespace-pre-wrap rounded-lg bg-white px-3 py-3 text-xs leading-6 text-[#596176]">
+              {event.detailText}
+            </div>
+          ) : (
+            <p className="py-5 text-center text-xs text-[#989eae]">
+              등록된 상세 내용이 없습니다.
+            </p>
+          )}
+        </div>
+      ) : null}
+    </article>
   );
 }
 
@@ -1086,10 +1191,12 @@ export function ChattingClient({
   conversations,
   manualFolders,
   staffMembers,
+  contentEvents,
 }: {
   conversations: ConversationItem[];
   manualFolders: ManualFolderItem[];
   staffMembers: StaffMember[];
+  contentEvents: ContentEventRecord[];
 }) {
   const [chatTab, setChatTab] = useState<ChatTab>("OPEN");
   const [selectedRoomId, setSelectedRoomId] = useState(
@@ -1116,6 +1223,9 @@ export function ChattingClient({
   );
   const [selectedManualId, setSelectedManualId] = useState(
     () => flattenManualDocuments(manualFolders)[0]?.id ?? "",
+  );
+  const [selectedContentId, setSelectedContentId] = useState(
+    contentEvents[0]?.id ?? "",
   );
   const [rooms, setRooms] = useState(conversations);
   const [loadingRoomId, setLoadingRoomId] = useState<string | null>(null);
@@ -1295,7 +1405,10 @@ export function ChattingClient({
   const bookmarkedMessages = useMemo(
     () =>
       (currentRoom?.messages ?? [])
-        .filter((message) => Boolean(message.bookmarkedAt))
+        .filter(
+          (message) =>
+            message.direction === "INBOUND" && Boolean(message.bookmarkedAt),
+        )
         .slice()
         .sort(
           (left, right) =>
@@ -1321,6 +1434,14 @@ export function ChattingClient({
     () => filterManualFolderTree(manualFolders, normalizedManualQuery),
     [manualFolders, normalizedManualQuery],
   );
+  const filteredContentEvents = useMemo(() => {
+    if (!normalizedManualQuery) return contentEvents;
+    return contentEvents.filter((event) =>
+      `${event.title} ${event.summary} ${event.detailText}`
+        .toLowerCase()
+        .includes(normalizedManualQuery),
+    );
+  }, [contentEvents, normalizedManualQuery]);
   const manualDocuments = useMemo(
     () => flattenManualDocuments(manualFolders),
     [manualFolders],
@@ -2046,7 +2167,7 @@ export function ChattingClient({
 
     const conversationId = currentRoom.id;
     const message = currentRoom.messages.find((item) => item.id === messageId);
-    if (!message) return;
+    if (!message || message.direction !== "INBOUND") return;
 
     const wasBookmarked = Boolean(message.bookmarkedAt);
     const nextBookmarked = !wasBookmarked;
@@ -2443,7 +2564,11 @@ export function ChattingClient({
             <input
               value={manualQuery}
               onChange={(event) => setManualQuery(event.target.value)}
-              placeholder="폴더, 문서, 태그 검색"
+              placeholder={
+                knowledgeTab === "원내매뉴얼"
+                  ? "폴더, 문서, 태그 검색"
+                  : "콘텐츠 제목, 소개 검색"
+              }
               className="min-w-0 flex-1 bg-transparent text-[11px] outline-none placeholder:text-[#aeb3c0]"
             />
           </label>
@@ -2473,15 +2598,32 @@ export function ChattingClient({
                 ))}
                 {filteredManualFolders.length === 0 ? (
                   <div className="px-4 py-8 text-center text-[10px] text-[#989eae]">
-                    검색 조건에 맞는 원내매뉴얼이 없습니다.
+                    검색 조건에 맞는 치료태그 매뉴얼이 없습니다.
                   </div>
                 ) : null}
               </div>
             </>
+          ) : filteredContentEvents.length > 0 ? (
+            filteredContentEvents.map((event) => (
+              <ContentEventCard
+                key={event.id}
+                event={event}
+                selected={selectedContentId === event.id}
+                onToggle={() =>
+                  setSelectedContentId((current) =>
+                    current === event.id ? "" : event.id,
+                  )
+                }
+              />
+            ))
           ) : (
-            <div className="flex h-48 flex-col items-center justify-center text-[#9aa0b0]">
+            <div className="flex h-48 flex-col items-center justify-center px-6 text-center text-[#9aa0b0]">
               <BookOpenText className="mb-2 size-6" />
-              <p className="text-[10px]">병원 콘텐츠를 준비하고 있습니다.</p>
+              <p className="text-xs font-bold">
+                {normalizedManualQuery
+                  ? "검색 조건에 맞는 콘텐츠가 없습니다."
+                  : "등록된 활성 콘텐츠가 없습니다."}
+              </p>
             </div>
           )}
         </div>
@@ -2718,21 +2860,23 @@ export function ChattingClient({
                           <Check className="ml-1 inline size-2.5 text-[#3157f6]" />
                         ) : null}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => void toggleMessageBookmark(message.id)}
-                        aria-pressed={Boolean(message.bookmarkedAt)}
-                        aria-label={`메시지 북마크 ${message.bookmarkedAt ? "해제" : "추가"}`}
-                        className={`rounded p-0.5 transition hover:bg-white/80 ${
-                          message.bookmarkedAt
-                            ? "text-[#6657e9]"
-                            : "text-[#a0a6b4] hover:text-[#6657e9]"
-                        }`}
-                      >
-                        <Bookmark
-                          className={`size-3 ${message.bookmarkedAt ? "fill-current" : ""}`}
-                        />
-                      </button>
+                      {inbound ? (
+                        <button
+                          type="button"
+                          onClick={() => void toggleMessageBookmark(message.id)}
+                          aria-pressed={Boolean(message.bookmarkedAt)}
+                          aria-label={`메시지 북마크 ${message.bookmarkedAt ? "해제" : "추가"}`}
+                          className={`rounded p-0.5 transition hover:bg-white/80 ${
+                            message.bookmarkedAt
+                              ? "text-[#6657e9]"
+                              : "text-[#a0a6b4] hover:text-[#6657e9]"
+                          }`}
+                        >
+                          <Bookmark
+                            className={`size-3 ${message.bookmarkedAt ? "fill-current" : ""}`}
+                          />
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -3129,17 +3273,30 @@ export function ChattingClient({
                 type="button"
                 role="menuitem"
                 aria-haspopup="menu"
-                aria-expanded={isAssigneeMenuOpen}
-                onClick={() => setIsAssigneeMenuOpen((current) => !current)}
-                onMouseEnter={() => setIsAssigneeMenuOpen(true)}
-                className="flex h-10 w-full items-center gap-2.5 rounded-lg px-3 text-left text-sm font-semibold text-[#555d72] hover:bg-[#f5f7fb]"
+                aria-expanded={staffMembers.length > 0 && isAssigneeMenuOpen}
+                aria-disabled={staffMembers.length === 0}
+                disabled={staffMembers.length === 0}
+                title={
+                  staffMembers.length === 0
+                    ? "추가할 수 있는 다른 계정이 없습니다."
+                    : undefined
+                }
+                onClick={() =>
+                  setIsAssigneeMenuOpen((current) =>
+                    staffMembers.length > 0 ? !current : false,
+                  )
+                }
+                onMouseEnter={() =>
+                  setIsAssigneeMenuOpen(staffMembers.length > 0)
+                }
+                className="flex h-10 w-full items-center gap-2.5 rounded-lg px-3 text-left text-sm font-semibold text-[#555d72] hover:bg-[#f5f7fb] disabled:cursor-not-allowed disabled:text-[#b8bdc8] disabled:hover:bg-transparent"
               >
-                <UserPlus className="size-4 text-[#7d8598]" />
+                <UserPlus className="size-4 text-current" />
                 <span className="flex-1">담당자 추가</span>
-                <ChevronRight className="size-3.5 text-[#a0a6b4]" />
+                <ChevronRight className="size-3.5 text-current opacity-70" />
               </button>
 
-              {isAssigneeMenuOpen ? (
+              {staffMembers.length > 0 && isAssigneeMenuOpen ? (
                 <div
                   role="menu"
                   aria-label="담당자 선택"
@@ -3149,51 +3306,45 @@ export function ChattingClient({
                       : "left-full ml-2"
                   }`}
                 >
-                  {staffMembers.length > 0 ? (
-                    staffMembers.map((staffMember) => {
-                      const isAssigned = contextRoom.assignees.some(
-                        (assignee) => assignee.id === staffMember.id,
-                      );
-                      const requestKey = `${contextRoom.id}:${staffMember.id}`;
-                      const isPending = pendingAssigneeKey === requestKey;
+                  {staffMembers.map((staffMember) => {
+                    const isAssigned = contextRoom.assignees.some(
+                      (assignee) => assignee.id === staffMember.id,
+                    );
+                    const requestKey = `${contextRoom.id}:${staffMember.id}`;
+                    const isPending = pendingAssigneeKey === requestKey;
 
-                      return (
-                        <button
-                          key={staffMember.id}
-                          type="button"
-                          role="menuitemcheckbox"
-                          aria-checked={isAssigned}
-                          disabled={isPending}
-                          onClick={() =>
-                            void toggleConversationAssignee(
-                              contextRoom.id,
-                              staffMember,
-                            )
-                          }
-                          className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs font-semibold text-[#555d72] hover:bg-[#f5f7fb] disabled:opacity-60"
+                    return (
+                      <button
+                        key={staffMember.id}
+                        type="button"
+                        role="menuitemcheckbox"
+                        aria-checked={isAssigned}
+                        disabled={isPending}
+                        onClick={() =>
+                          void toggleConversationAssignee(
+                            contextRoom.id,
+                            staffMember,
+                          )
+                        }
+                        className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs font-semibold text-[#555d72] hover:bg-[#f5f7fb] disabled:opacity-60"
+                      >
+                        <span
+                          className={`flex size-4 shrink-0 items-center justify-center rounded border ${
+                            isAssigned
+                              ? "border-[#3157f6] bg-[#3157f6] text-white"
+                              : "border-[#cfd4df] bg-white text-transparent"
+                          }`}
                         >
-                          <span
-                            className={`flex size-4 shrink-0 items-center justify-center rounded border ${
-                              isAssigned
-                                ? "border-[#3157f6] bg-[#3157f6] text-white"
-                                : "border-[#cfd4df] bg-white text-transparent"
-                            }`}
-                          >
-                            {isPending ? (
-                              <LoaderCircle className="size-3 animate-spin text-[#3157f6]" />
-                            ) : (
-                              <Check className="size-3" />
-                            )}
-                          </span>
-                          <span className="truncate">{staffMember.name}</span>
-                        </button>
-                      );
-                    })
-                  ) : (
-                    <p className="px-3 py-4 text-center text-xs text-[#9aa0af]">
-                      등록된 담당자가 없습니다.
-                    </p>
-                  )}
+                          {isPending ? (
+                            <LoaderCircle className="size-3 animate-spin text-[#3157f6]" />
+                          ) : (
+                            <Check className="size-3" />
+                          )}
+                        </span>
+                        <span className="truncate">{staffMember.name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               ) : null}
             </div>

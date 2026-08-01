@@ -2,6 +2,7 @@ import { getDatabase } from "@doctornest/database";
 
 import { requireUser } from "@/lib/auth";
 import { serializeChatCoachGeneration } from "@/lib/chat-coach-generation";
+import { serializeContentEvent } from "@/lib/content-events";
 
 import { ChattingClient } from "./chatting-client";
 import type {
@@ -58,70 +59,94 @@ function buildManualFolderTree(folders: ManualFolderRecord[]) {
 
 export default async function ChattingPage() {
   const user = await requireUser();
-  const [conversations, manualFolders, staffMembers] = await Promise.all([
-    getDatabase().conversation.findMany({
-      where: {
-        hospitalId: user.hospitalId,
-      },
-      include: {
-        patient: {
-          include: {
-            channels: {
-              orderBy: { createdAt: "asc" },
-            },
-            tagAssignments: {
-              include: { tag: true },
-              orderBy: { createdAt: "asc" },
-            },
-            appointments: {
-              orderBy: { scheduledAt: "desc" },
+  const now = new Date();
+  const [conversations, manualFolders, staffMembers, contentEvents] =
+    await Promise.all([
+      getDatabase().conversation.findMany({
+        where: {
+          hospitalId: user.hospitalId,
+        },
+        include: {
+          patient: {
+            include: {
+              channels: {
+                orderBy: { createdAt: "asc" },
+              },
+              tagAssignments: {
+                include: { tag: true },
+                orderBy: { createdAt: "asc" },
+              },
+              appointments: {
+                orderBy: { scheduledAt: "desc" },
+              },
             },
           },
-        },
-        patientChannel: true,
-        messages: {
-          orderBy: { sentAt: "asc" },
-        },
-        assignees: {
-          include: {
-            user: {
-              select: { id: true, name: true },
-            },
+          patientChannel: true,
+          messages: {
+            orderBy: { sentAt: "asc" },
           },
-          orderBy: { assignedAt: "asc" },
-        },
-        chatCoachGenerations: {
-          where: { status: "COMPLETED" },
-          orderBy: { createdAt: "desc" },
-          take: 50,
-        },
-      },
-      orderBy: { lastMessageAt: "desc" },
-    }),
-    getDatabase().manualFolder.findMany({
-      where: { hospitalId: user.hospitalId, isActive: true },
-      include: {
-        documents: {
-          where: { isActive: true },
-          include: {
-            images: {
-              orderBy: { sortOrder: "asc" },
+          assignees: {
+            include: {
+              user: {
+                select: { id: true, name: true },
+              },
             },
-            tags: {
-              include: { tag: true },
-            },
+            orderBy: { assignedAt: "asc" },
           },
-          orderBy: { sortOrder: "asc" },
+          chatCoachGenerations: {
+            where: { status: "COMPLETED" },
+            orderBy: { createdAt: "desc" },
+            take: 50,
+          },
         },
-      },
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    }),
-    getDatabase().authUser.findMany({
-      where: { hospitalId: user.hospitalId },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+        orderBy: { lastMessageAt: "desc" },
+      }),
+      getDatabase().manualFolder.findMany({
+        where: { hospitalId: user.hospitalId, isActive: true },
+        include: {
+          documents: {
+            where: { isActive: true },
+            include: {
+              images: {
+                orderBy: { sortOrder: "asc" },
+              },
+              tags: {
+                include: { tag: true },
+              },
+            },
+            orderBy: { sortOrder: "asc" },
+          },
+        },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      }),
+      getDatabase().authUser.findMany({
+        where: {
+          hospitalId: user.hospitalId,
+          id: { not: user.id },
+        },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+      getDatabase().contentEvent.findMany({
+        where: {
+          hospitalId: user.hospitalId,
+          isActive: true,
+          AND: [
+            {
+              OR: [
+                { exposureStartAt: null },
+                { exposureStartAt: { lte: now } },
+              ],
+            },
+            { OR: [{ exposureEndAt: null }, { exposureEndAt: { gte: now } }] },
+          ],
+        },
+        include: {
+          images: { orderBy: [{ role: "asc" }, { sortOrder: "asc" }] },
+        },
+        orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
+      }),
+    ]);
 
   const serializedConversations: ConversationItem[] = conversations.map(
     (conversation) => ({
@@ -210,6 +235,7 @@ export default async function ChattingPage() {
     <ChattingClient
       conversations={serializedConversations}
       staffMembers={staffMembers satisfies StaffMember[]}
+      contentEvents={contentEvents.map(serializeContentEvent)}
       manualFolders={buildManualFolderTree(
         manualFolders.map((folder) => ({
           id: folder.id,

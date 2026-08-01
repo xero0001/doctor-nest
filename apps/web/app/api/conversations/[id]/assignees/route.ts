@@ -25,6 +25,13 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     );
   }
 
+  if (body.userId === currentUser.id) {
+    return Response.json(
+      { error: "현재 로그인한 계정은 담당자로 추가할 수 없습니다." },
+      { status: 409 },
+    );
+  }
+
   const { id } = await params;
   const database = getDatabase();
   const [conversation, staffMember] = await Promise.all([

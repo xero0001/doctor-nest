@@ -227,45 +227,64 @@ function MobilePreview({ draft }: { draft: EventDraft }) {
             ) : null}
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto bg-[#f4f4f5] py-2">
-          {draft.detailType === "IMAGE" ? (
-            draft.detailImages.length > 0 ? (
-              <div className="space-y-2">
-                {draft.detailImages.map((image) => (
-                  <div
-                    key={image.objectKey}
-                    className="relative aspect-[4/5] bg-white"
-                  >
-                    <Image
-                      src={image.publicUrl}
-                      alt={image.altText || image.originalName}
-                      fill
-                      sizes="350px"
-                      className="object-contain"
-                    />
-                  </div>
-                ))}
+        <div className="min-h-0 flex-1 overflow-y-auto bg-[#f4f4f5]">
+          {draft.thumbnail ? (
+            <div className="relative aspect-[4/3] border-b-8 border-[#f4f4f5] bg-white">
+              <Image
+                src={draft.thumbnail.publicUrl}
+                alt={
+                  draft.thumbnail.altText ||
+                  draft.title ||
+                  draft.thumbnail.originalName
+                }
+                fill
+                sizes="350px"
+                className="object-cover"
+              />
+            </div>
+          ) : null}
+          <div
+            className={draft.thumbnail ? "min-h-[360px] py-2" : "h-full py-2"}
+          >
+            {draft.detailType === "IMAGE" ? (
+              draft.detailImages.length > 0 ? (
+                <div className="space-y-2">
+                  {draft.detailImages.map((image) => (
+                    <div
+                      key={image.objectKey}
+                      className="relative aspect-[4/5] bg-white"
+                    >
+                      <Image
+                        src={image.publicUrl}
+                        alt={image.altText || image.originalName}
+                        fill
+                        sizes="350px"
+                        className="object-contain"
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex h-full min-h-[340px] flex-col items-center justify-center text-[#b0b5bf]">
+                  <ImagePlus className="size-10" />
+                  <p className="mt-3 text-xs font-bold">
+                    상세 이미지를 등록해 주세요.
+                  </p>
+                </div>
+              )
+            ) : draft.detailText ? (
+              <div className="min-h-full whitespace-pre-wrap bg-white px-5 py-6 text-sm leading-7 text-[#3b4252]">
+                {draft.detailText}
               </div>
             ) : (
-              <div className="flex h-full flex-col items-center justify-center text-[#b0b5bf]">
-                <ImagePlus className="size-10" />
+              <div className="flex h-full min-h-[340px] flex-col items-center justify-center text-[#b0b5bf]">
+                <FileText className="size-10" />
                 <p className="mt-3 text-xs font-bold">
-                  상세 이미지를 등록해 주세요.
+                  상세 텍스트를 입력해 주세요.
                 </p>
               </div>
-            )
-          ) : draft.detailText ? (
-            <div className="min-h-full whitespace-pre-wrap bg-white px-5 py-6 text-sm leading-7 text-[#3b4252]">
-              {draft.detailText}
-            </div>
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center text-[#b0b5bf]">
-              <FileText className="size-10" />
-              <p className="mt-3 text-xs font-bold">
-                상세 텍스트를 입력해 주세요.
-              </p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </aside>

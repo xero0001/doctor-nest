@@ -34,13 +34,20 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         hospitalId: user.hospitalId,
       },
     },
-    select: { id: true },
+    select: { id: true, direction: true },
   });
 
   if (!message) {
     return Response.json(
       { error: "메시지를 찾을 수 없습니다." },
       { status: 404 },
+    );
+  }
+
+  if (message.direction !== "INBOUND") {
+    return Response.json(
+      { error: "내가 보낸 메시지는 북마크할 수 없습니다." },
+      { status: 409 },
     );
   }
 

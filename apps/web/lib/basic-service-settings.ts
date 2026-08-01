@@ -13,6 +13,8 @@ type HospitalServiceSettingsSource = {
   customerInputNationalityEnabled: boolean;
   customerInputMarketingEnabled: boolean;
   automationTagSelectionMode: string;
+  autoResponseContextEnabled: boolean;
+  autoResponseContextMessageCount: number;
   appointmentManagementEnabled: boolean;
 };
 
@@ -33,6 +35,8 @@ export function serializeBasicServiceSettings(
     },
     automationTagSelectionMode:
       hospital.automationTagSelectionMode === "FIRST" ? "FIRST" : "ALL",
+    autoResponseContextEnabled: hospital.autoResponseContextEnabled,
+    autoResponseContextMessageCount: hospital.autoResponseContextMessageCount,
     appointmentManagementEnabled: hospital.appointmentManagementEnabled,
     treatmentTags,
   };

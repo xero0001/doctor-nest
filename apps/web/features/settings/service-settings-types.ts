@@ -21,6 +21,8 @@ export type TreatmentTagSetting = {
 export type BasicServiceSettings = {
   inputFields: Record<CustomerInputFieldKey, boolean>;
   automationTagSelectionMode: AutomationTagSelectionMode;
+  autoResponseContextEnabled: boolean;
+  autoResponseContextMessageCount: number;
   appointmentManagementEnabled: boolean;
   treatmentTags: TreatmentTagSetting[];
 };

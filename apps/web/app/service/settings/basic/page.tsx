@@ -22,6 +22,8 @@ export default async function BasicSettingsPage() {
         customerInputNationalityEnabled: true,
         customerInputMarketingEnabled: true,
         automationTagSelectionMode: true,
+        autoResponseContextEnabled: true,
+        autoResponseContextMessageCount: true,
         appointmentManagementEnabled: true,
       },
     }),

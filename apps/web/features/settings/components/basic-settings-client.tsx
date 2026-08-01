@@ -229,6 +229,14 @@ export function BasicSettingsClient({
       setError("치료태그명을 입력해 주세요.");
       return;
     }
+    if (
+      !Number.isInteger(settings.autoResponseContextMessageCount) ||
+      settings.autoResponseContextMessageCount < 1 ||
+      settings.autoResponseContextMessageCount > 50
+    ) {
+      setError("최근 대화 윈도우는 1~50턴 사이로 입력해 주세요.");
+      return;
+    }
 
     setIsSaving(true);
     resetFeedback();
@@ -239,6 +247,9 @@ export function BasicSettingsClient({
         body: JSON.stringify({
           inputFields: settings.inputFields,
           automationTagSelectionMode: settings.automationTagSelectionMode,
+          autoResponseContextEnabled: settings.autoResponseContextEnabled,
+          autoResponseContextMessageCount:
+            settings.autoResponseContextMessageCount,
           appointmentManagementEnabled: settings.appointmentManagementEnabled,
           treatmentTags: treatmentTags.map(({ id, name, color }) => ({
             id,
@@ -407,6 +418,67 @@ export function BasicSettingsClient({
                     </span>
                   </label>
                 ))}
+              </div>
+
+              <div
+                className={`mt-5 flex items-center justify-between gap-6 rounded-xl border p-5 transition-colors ${
+                  settings.autoResponseContextEnabled
+                    ? "border-[#cfe0f6] bg-[#f6faff]"
+                    : "border-[#e4e7ed] bg-[#f8f9fb]"
+                }`}
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <h3 className="text-sm font-extrabold text-[#4d5569]">
+                        최근 대화 윈도우 사용
+                      </h3>
+                      <p className="mt-1 text-xs leading-5 text-[#9299aa]">
+                        상담자동화가 답변을 만들 때 최근 대화를 함께 참고합니다.
+                      </p>
+                    </div>
+                    <SettingsSwitch
+                      checked={settings.autoResponseContextEnabled}
+                      label="최근 대화 윈도우 사용"
+                      onChange={(checked) => {
+                        setSettings((current) => ({
+                          ...current,
+                          autoResponseContextEnabled: checked,
+                        }));
+                        resetFeedback();
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <label className="shrink-0">
+                  <span className="text-xs font-bold text-[#697084]">
+                    최근 대화 턴 수
+                  </span>
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      step={1}
+                      disabled={!settings.autoResponseContextEnabled}
+                      value={settings.autoResponseContextMessageCount}
+                      onChange={(event) => {
+                        setSettings((current) => ({
+                          ...current,
+                          autoResponseContextMessageCount: Number(
+                            event.target.value,
+                          ),
+                        }));
+                        resetFeedback();
+                      }}
+                      className="h-10 w-24 rounded-xl border border-[#d9deea] bg-white px-3 text-sm font-semibold outline-none focus:border-[#7187f6] focus:ring-3 focus:ring-[#3157f6]/10 disabled:cursor-not-allowed disabled:bg-[#eef0f4] disabled:text-[#9ba1af]"
+                    />
+                    <span className="text-sm font-semibold text-[#777f93]">
+                      턴
+                    </span>
+                  </div>
+                </label>
               </div>
             </section>
 

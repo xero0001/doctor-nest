@@ -24,6 +24,8 @@ const colorPattern = /^#[0-9A-F]{6}$/i;
 type SettingsRequestBody = {
   inputFields?: unknown;
   automationTagSelectionMode?: unknown;
+  autoResponseContextEnabled?: unknown;
+  autoResponseContextMessageCount?: unknown;
   appointmentManagementEnabled?: unknown;
   treatmentTags?: unknown;
 };
@@ -48,6 +50,16 @@ function parseRequest(body: SettingsRequestBody | null) {
     automationTagSelectionMode !== "ALL"
   ) {
     throw new Error("상담자동화 적용 방식을 선택해 주세요.");
+  }
+
+  if (
+    typeof body.autoResponseContextEnabled !== "boolean" ||
+    typeof body.autoResponseContextMessageCount !== "number" ||
+    !Number.isInteger(body.autoResponseContextMessageCount) ||
+    body.autoResponseContextMessageCount < 1 ||
+    body.autoResponseContextMessageCount > 50
+  ) {
+    throw new Error("최근 대화 윈도우는 1~50턴 사이로 입력해 주세요.");
   }
 
   if (typeof body.appointmentManagementEnabled !== "boolean") {
@@ -88,6 +100,8 @@ function parseRequest(body: SettingsRequestBody | null) {
     ) as Record<CustomerInputFieldKey, boolean>,
     automationTagSelectionMode:
       automationTagSelectionMode as AutomationTagSelectionMode,
+    autoResponseContextEnabled: body.autoResponseContextEnabled,
+    autoResponseContextMessageCount: body.autoResponseContextMessageCount,
     appointmentManagementEnabled: body.appointmentManagementEnabled,
     treatmentTags,
   };
@@ -108,6 +122,8 @@ async function readSettings(hospitalId: string) {
         customerInputNationalityEnabled: true,
         customerInputMarketingEnabled: true,
         automationTagSelectionMode: true,
+        autoResponseContextEnabled: true,
+        autoResponseContextMessageCount: true,
         appointmentManagementEnabled: true,
       },
     }),
@@ -153,7 +169,9 @@ export async function PATCH(request: Request) {
     );
   } catch (error) {
     return Response.json(
-      { error: error instanceof Error ? error.message : "설정을 확인해 주세요." },
+      {
+        error: error instanceof Error ? error.message : "설정을 확인해 주세요.",
+      },
       { status: 400 },
     );
   }
@@ -173,7 +191,8 @@ export async function PATCH(request: Request) {
         .filter((id) => existingById.has(id));
 
       const unknownPersistedId = input.treatmentTags.find(
-        (tag) => tag.id && !tag.id.startsWith("new-") && !existingById.has(tag.id),
+        (tag) =>
+          tag.id && !tag.id.startsWith("new-") && !existingById.has(tag.id),
       );
       if (unknownPersistedId) {
         throw new Error("수정할 치료태그를 찾을 수 없습니다.");
@@ -240,9 +259,11 @@ export async function PATCH(request: Request) {
           customerInputGenderEnabled: input.inputFields.gender,
           customerInputTreatmentTagEnabled: input.inputFields.treatmentTag,
           customerInputNationalityEnabled: input.inputFields.nationality,
-          customerInputMarketingEnabled:
-            input.inputFields.marketingConsent,
+          customerInputMarketingEnabled: input.inputFields.marketingConsent,
           automationTagSelectionMode: input.automationTagSelectionMode,
+          autoResponseContextEnabled: input.autoResponseContextEnabled,
+          autoResponseContextMessageCount:
+            input.autoResponseContextMessageCount,
           appointmentManagementEnabled: input.appointmentManagementEnabled,
         },
       });

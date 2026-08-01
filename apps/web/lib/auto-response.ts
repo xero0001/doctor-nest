@@ -20,6 +20,23 @@ const MAX_AUTO_RESPONSES_PER_RUN = 10;
 const CANDIDATE_SCAN_LIMIT = 100;
 const AUTO_RESPONSE_CONCURRENCY = 5;
 const STALE_PENDING_TIMEOUT_MS = 5 * 60 * 1_000;
+const CHANNEL_AUTO_REPLY_MODEL = "channel-auto-reply";
+const CHANNEL_AUTO_REPLY_SCAN_LIMIT = 100;
+const MAX_CHANNEL_AUTO_REPLIES_PER_RUN = 20;
+const CHANNEL_AUTO_REPLY_CONCURRENCY = 5;
+const SENDABLE_AUTO_REPLY_CHANNELS = [
+  "LINE",
+  "NAVER_TALK",
+  "INSTAGRAM",
+] as const;
+
+type SendableAutoReplyChannel = (typeof SENDABLE_AUTO_REPLY_CHANNELS)[number];
+type OperatingHour = {
+  weekday: string;
+  isOpen: boolean;
+  openMinutes: number;
+  closeMinutes: number;
+};
 
 type AutoResponseRunResult = {
   conversationId: string;
@@ -29,6 +46,65 @@ type AutoResponseRunResult = {
 
 function isCustomerMessage(message: { sender: string; direction: string }) {
   return message.sender === "CUSTOMER" && message.direction === "INBOUND";
+}
+
+function isSendableAutoReplyChannel(
+  channel: string,
+): channel is SendableAutoReplyChannel {
+  return SENDABLE_AUTO_REPLY_CHANNELS.some(
+    (sendableChannel) => sendableChannel === channel,
+  );
+}
+
+function getSeoulWeekdayAndMinutes(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
+  const weekdays: Record<string, string> = {
+    Monday: "MONDAY",
+    Tuesday: "TUESDAY",
+    Wednesday: "WEDNESDAY",
+    Thursday: "THURSDAY",
+    Friday: "FRIDAY",
+    Saturday: "SATURDAY",
+    Sunday: "SUNDAY",
+  };
+  const weekday = weekdays[values.weekday ?? ""];
+  const hour = Number(values.hour);
+  const minute = Number(values.minute);
+
+  if (!weekday || !Number.isInteger(hour) || !Number.isInteger(minute)) {
+    return null;
+  }
+
+  return { weekday, minutes: hour * 60 + minute };
+}
+
+function isWithinBusinessHours(date: Date, operatingHours: OperatingHour[]) {
+  const current = getSeoulWeekdayAndMinutes(date);
+  if (!current) return false;
+  const configured = operatingHours.find(
+    (operatingHour) => operatingHour.weekday === current.weekday,
+  );
+  const fallback = {
+    isOpen: current.weekday !== "SUNDAY",
+    openMinutes: 600,
+    closeMinutes: current.weekday === "SATURDAY" ? 840 : 1140,
+  };
+  const operatingHour = configured ?? fallback;
+
+  return (
+    operatingHour.isOpen &&
+    current.minutes >= operatingHour.openMinutes &&
+    current.minutes < operatingHour.closeMinutes
+  );
 }
 
 async function cancelGeneration(id: string, detail: string) {
@@ -63,6 +139,7 @@ async function failGeneration(id: string, error: unknown) {
 
 async function finalizeDeliveredResponse(generation: {
   id: string;
+  model: string;
   conversationId: string;
   generatedContent: string | null;
   deliveredContent: string | null;
@@ -96,7 +173,7 @@ async function finalizeDeliveredResponse(generation: {
         conversationId: generation.conversationId,
         externalMessageId: storedExternalMessageId,
         direction: "OUTBOUND",
-        sender: "AI",
+        sender: generation.model === CHANNEL_AUTO_REPLY_MODEL ? "SYSTEM" : "AI",
         content: generation.generatedContent!,
         sourceLanguage: "ko",
         sourceLanguageName: "한국어",
@@ -528,6 +605,396 @@ async function processConversation(
     console.error(`자동 응대 처리 실패: ${conversationId}`, error);
     return { conversationId, status: "failed", detail };
   }
+}
+
+async function claimChannelAutoReply({
+  hospitalId,
+  conversationId,
+  sourceMessageId,
+  sourceSnapshot,
+  content,
+}: {
+  hospitalId: string;
+  conversationId: string;
+  sourceMessageId: string;
+  sourceSnapshot: string;
+  content: string;
+}) {
+  const database = getDatabase();
+  const generationKey = {
+    conversationId_sourceMessageId: {
+      conversationId,
+      sourceMessageId,
+    },
+  };
+  const existing = await database.autoResponseGeneration.findUnique({
+    where: generationKey,
+  });
+
+  if (existing) {
+    if (existing.model !== CHANNEL_AUTO_REPLY_MODEL || existing.sentAt) {
+      return null;
+    }
+    const pendingIsFresh =
+      existing.status === "PENDING" &&
+      Date.now() - existing.updatedAt.getTime() < STALE_PENDING_TIMEOUT_MS;
+    if (
+      pendingIsFresh ||
+      existing.status === "COMPLETED" ||
+      existing.status === "CANCELLED"
+    ) {
+      return null;
+    }
+
+    const claimed = await database.autoResponseGeneration.updateMany({
+      where: {
+        id: existing.id,
+        status: existing.status,
+        updatedAt: existing.updatedAt,
+      },
+      data: {
+        status: "PENDING",
+        sourceSnapshot,
+        generatedContent: content,
+        deliveredContent: content,
+        translatedLanguage: "ko",
+        translatedLanguageName: "한국어",
+        externalMessageId: null,
+        errorMessage: null,
+        sentAt: null,
+        attemptCount: { increment: 1 },
+      },
+    });
+    if (claimed.count === 0) return null;
+
+    return database.autoResponseGeneration.findUniqueOrThrow({
+      where: { id: existing.id },
+    });
+  }
+
+  try {
+    return await database.autoResponseGeneration.create({
+      data: {
+        hospitalId,
+        conversationId,
+        sourceMessageId,
+        model: CHANNEL_AUTO_REPLY_MODEL,
+        sourceSnapshot,
+        generatedContent: content,
+        deliveredContent: content,
+      },
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function processChannelAutoReply(
+  conversationId: string,
+): Promise<AutoResponseRunResult> {
+  const database = getDatabase();
+  const conversation = await database.conversation.findUnique({
+    where: { id: conversationId },
+    select: {
+      id: true,
+      hospitalId: true,
+      channel: true,
+      status: true,
+      patientChannel: {
+        select: { externalCustomerId: true },
+      },
+      hospital: {
+        select: {
+          operatingHours: {
+            select: {
+              weekday: true,
+              isOpen: true,
+              openMinutes: true,
+              closeMinutes: true,
+            },
+          },
+        },
+      },
+      messages: {
+        select: {
+          id: true,
+          sender: true,
+          direction: true,
+          content: true,
+          sentAt: true,
+        },
+        orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+        take: 1,
+      },
+    },
+  });
+  const latestMessage = conversation?.messages[0];
+
+  if (
+    !conversation ||
+    conversation.status !== "OPEN" ||
+    !latestMessage ||
+    !isCustomerMessage(latestMessage) ||
+    !isSendableAutoReplyChannel(conversation.channel)
+  ) {
+    return {
+      conversationId,
+      status: "skipped",
+      detail: "채널 자동응대 대상 상태가 아닙니다.",
+    };
+  }
+
+  const [setting, connection] = await Promise.all([
+    database.channelAutoReplySetting.findUnique({
+      where: {
+        hospitalId_channel: {
+          hospitalId: conversation.hospitalId,
+          channel: conversation.channel,
+        },
+      },
+    }),
+    database.channelConnection.findUnique({
+      where: {
+        hospitalId_channel: {
+          hospitalId: conversation.hospitalId,
+          channel: conversation.channel,
+        },
+      },
+      select: { status: true },
+    }),
+  ]);
+
+  if (!setting || connection?.status !== "CONNECTED") {
+    return {
+      conversationId,
+      status: "skipped",
+      detail: "연결된 채널의 자동응대 설정을 찾지 못했습니다.",
+    };
+  }
+
+  const dueAt =
+    latestMessage.sentAt.getTime() + setting.delayMinutes * 60 * 1_000;
+  if (Date.now() < dueAt) {
+    return {
+      conversationId,
+      status: "skipped",
+      detail: "채널 자동응대 대기시간이 지나지 않았습니다.",
+    };
+  }
+
+  const inBusinessHours = isWithinBusinessHours(
+    new Date(),
+    conversation.hospital.operatingHours,
+  );
+  const enabled = inBusinessHours
+    ? setting.businessHoursEnabled
+    : setting.outsideBusinessHoursEnabled;
+  const content = (
+    inBusinessHours
+      ? setting.businessHoursMessage
+      : setting.outsideBusinessHoursMessage
+  ).trim();
+  if (!enabled || !content) {
+    return {
+      conversationId,
+      status: "skipped",
+      detail: inBusinessHours
+        ? "운영시간 내 자동응대가 비활성화되어 있습니다."
+        : "운영시간 외 자동응대가 비활성화되어 있습니다.",
+    };
+  }
+
+  const generation = await claimChannelAutoReply({
+    hospitalId: conversation.hospitalId,
+    conversationId: conversation.id,
+    sourceMessageId: latestMessage.id,
+    sourceSnapshot: latestMessage.content,
+    content,
+  });
+  if (!generation) {
+    return {
+      conversationId,
+      status: "skipped",
+      detail: "이미 처리했거나 다른 실행에서 처리 중입니다.",
+    };
+  }
+
+  try {
+    const latestState = await database.conversation.findUnique({
+      where: { id: conversation.id },
+      select: {
+        status: true,
+        messages: {
+          select: { id: true },
+          orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+          take: 1,
+        },
+      },
+    });
+    if (
+      latestState?.status !== "OPEN" ||
+      latestState.messages[0]?.id !== latestMessage.id
+    ) {
+      await cancelGeneration(
+        generation.id,
+        "발송 전 채팅 상태 또는 마지막 메시지가 변경되었습니다.",
+      );
+      return {
+        conversationId,
+        status: "skipped",
+        detail: "발송 전 채팅 상태가 변경되어 전송하지 않았습니다.",
+      };
+    }
+
+    const externalCustomerId =
+      conversation.patientChannel?.externalCustomerId.trim();
+    if (!externalCustomerId) {
+      throw new Error("고객의 외부 채널 식별자가 없습니다.");
+    }
+
+    const externalMessageId = await sendChannelTextMessage({
+      hospitalId: conversation.hospitalId,
+      channel: conversation.channel,
+      externalCustomerId,
+      text: content,
+    });
+    const sentAt = new Date();
+    const deliveredGeneration = await database.autoResponseGeneration.update({
+      where: { id: generation.id },
+      data: {
+        externalMessageId,
+        sentAt,
+      },
+    });
+    await finalizeDeliveredResponse(deliveredGeneration);
+
+    return {
+      conversationId,
+      status: "completed",
+      detail: "설정된 채널 자동응대 메시지를 발송했습니다.",
+    };
+  } catch (error) {
+    const detail = await failGeneration(generation.id, error);
+    console.error(`채널 자동응대 처리 실패: ${conversationId}`, error);
+    return { conversationId, status: "failed", detail };
+  }
+}
+
+export async function runDueChannelAutoReplies() {
+  const database = getDatabase();
+  const [settings, connections] = await Promise.all([
+    database.channelAutoReplySetting.findMany({
+      where: {
+        channel: { in: [...SENDABLE_AUTO_REPLY_CHANNELS] },
+        OR: [
+          { businessHoursEnabled: true },
+          { outsideBusinessHoursEnabled: true },
+        ],
+      },
+      select: {
+        hospitalId: true,
+        channel: true,
+        delayMinutes: true,
+      },
+    }),
+    database.channelConnection.findMany({
+      where: {
+        channel: { in: [...SENDABLE_AUTO_REPLY_CHANNELS] },
+        status: "CONNECTED",
+      },
+      select: { hospitalId: true, channel: true },
+    }),
+  ]);
+  const connectedKeys = new Set(
+    connections.map(
+      (connection) => `${connection.hospitalId}:${connection.channel}`,
+    ),
+  );
+  const activeSettings = settings.filter((setting) =>
+    connectedKeys.has(`${setting.hospitalId}:${setting.channel}`),
+  );
+  if (activeSettings.length === 0) {
+    return {
+      scanned: 0,
+      due: 0,
+      completed: 0,
+      skipped: 0,
+      failed: 0,
+      results: [] as AutoResponseRunResult[],
+    };
+  }
+
+  const settingByKey = new Map(
+    activeSettings.map((setting) => [
+      `${setting.hospitalId}:${setting.channel}`,
+      setting,
+    ]),
+  );
+  const candidates = await database.conversation.findMany({
+    where: {
+      hospitalId: {
+        in: [...new Set(activeSettings.map((item) => item.hospitalId))],
+      },
+      channel: { in: [...SENDABLE_AUTO_REPLY_CHANNELS] },
+      status: "OPEN",
+      patientChannelId: { not: null },
+    },
+    select: {
+      id: true,
+      hospitalId: true,
+      channel: true,
+      messages: {
+        select: {
+          sender: true,
+          direction: true,
+          sentAt: true,
+        },
+        orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+        take: 1,
+      },
+    },
+    orderBy: { lastMessageAt: "asc" },
+    take: CHANNEL_AUTO_REPLY_SCAN_LIMIT,
+  });
+  const now = Date.now();
+  const dueConversationIds = candidates
+    .filter((candidate) => {
+      const latestMessage = candidate.messages[0];
+      const setting = settingByKey.get(
+        `${candidate.hospitalId}:${candidate.channel}`,
+      );
+      return (
+        setting &&
+        latestMessage &&
+        isCustomerMessage(latestMessage) &&
+        now - latestMessage.sentAt.getTime() >=
+          setting.delayMinutes * 60 * 1_000
+      );
+    })
+    .slice(0, MAX_CHANNEL_AUTO_REPLIES_PER_RUN)
+    .map((candidate) => candidate.id);
+  const results: AutoResponseRunResult[] = [];
+
+  for (
+    let index = 0;
+    index < dueConversationIds.length;
+    index += CHANNEL_AUTO_REPLY_CONCURRENCY
+  ) {
+    const batch = dueConversationIds.slice(
+      index,
+      index + CHANNEL_AUTO_REPLY_CONCURRENCY,
+    );
+    results.push(...(await Promise.all(batch.map(processChannelAutoReply))));
+  }
+
+  return {
+    scanned: candidates.length,
+    due: dueConversationIds.length,
+    completed: results.filter((result) => result.status === "completed").length,
+    skipped: results.filter((result) => result.status === "skipped").length,
+    failed: results.filter((result) => result.status === "failed").length,
+    results,
+  };
 }
 
 export async function runDueAutoResponses() {

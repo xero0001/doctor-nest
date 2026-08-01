@@ -43,7 +43,16 @@ export function HospitalSettingsSidebar() {
           서비스설정
           <ChevronDown className="size-4 text-[#9ca2af]" />
         </div>
-        <span className="block px-8 py-2.5 text-[#a0a6b4]">기본설정</span>
+        <Link
+          href="/service/settings/basic"
+          className={`block rounded-lg px-8 py-2.5 font-bold ${
+            pathname === "/service/settings/basic"
+              ? "bg-[#f2f5ff] text-[#3157f6]"
+              : "text-[#6f7789] hover:bg-[#f6f7fa]"
+          }`}
+        >
+          기본설정
+        </Link>
         <Link
           href="/service/settings/channels"
           className={`block rounded-lg px-8 py-2.5 font-bold ${
@@ -65,11 +74,26 @@ export function HospitalSettingsSidebar() {
           고객태그
         </Link>
 
-        <div className="mt-4 flex items-center justify-between px-4 py-3 font-extrabold text-[#4d5569]">
+        <div
+          className={`mt-4 flex items-center justify-between rounded-xl px-4 py-3 font-extrabold ${
+            pathname.startsWith("/service/settings/accounts")
+              ? "bg-[#eaf3ff] text-[#4c6f9c]"
+              : "text-[#4d5569]"
+          }`}
+        >
           계정관리
           <ChevronDown className="size-4 text-[#9ca2af]" />
         </div>
-        <span className="block px-8 py-2.5 text-[#a0a6b4]">전체계정</span>
+        <Link
+          href="/service/settings/accounts"
+          className={`block rounded-lg px-8 py-2.5 font-bold ${
+            pathname === "/service/settings/accounts"
+              ? "bg-[#f2f5ff] text-[#3157f6]"
+              : "text-[#6f7789] hover:bg-[#f6f7fa]"
+          }`}
+        >
+          전체계정
+        </Link>
         <Link
           href="/service/settings/permissions"
           className={`block rounded-lg px-8 py-2.5 font-bold ${

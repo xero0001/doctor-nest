@@ -18,6 +18,7 @@ import {
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 
+import type { BasicServiceSettings } from "@/features/settings/service-settings-types";
 import { phoneCountryOptions } from "@/lib/phone-country";
 
 import {
@@ -30,6 +31,12 @@ type PatientRow = {
   name: string;
   phone: string;
   phoneCountryCode: string;
+  chartNumber: string;
+  visitType: "" | "NEW" | "RETURNING";
+  birthDate: string;
+  gender: "" | "MALE" | "FEMALE" | "OTHER";
+  nationality: string;
+  marketingConsent: boolean;
   treatmentTags: string[];
 };
 
@@ -74,6 +81,12 @@ function createEmptyRows() {
     name: "",
     phone: "",
     phoneCountryCode: "+82",
+    chartNumber: "",
+    visitType: "",
+    birthDate: "",
+    gender: "",
+    nationality: "",
+    marketingConsent: false,
     treatmentTags: [],
   }));
 }
@@ -124,12 +137,14 @@ export function CustomerInputClient({
   totalCount,
   missingTreatmentTagCount,
   availableTreatmentTags,
+  inputFields,
   initialMode = "INPUT",
 }: {
   initialPatients: InitialPatient[];
   totalCount: number;
   missingTreatmentTagCount: number;
   availableTreatmentTags: TreatmentTagOption[];
+  inputFields: BasicServiceSettings["inputFields"];
   initialMode?: CustomerViewMode;
 }) {
   const [mode, setMode] = useState<CustomerViewMode>(initialMode);
@@ -184,10 +199,10 @@ export function CustomerInputClient({
     setFeedback(null);
   }
 
-  function updateRow(
+  function updateRow<K extends keyof Omit<PatientRow, "key">>(
     key: string,
-    field: "name" | "phone" | "phoneCountryCode" | "treatmentTags",
-    value: string | string[],
+    field: K,
+    value: PatientRow[K],
   ) {
     setRows((current) =>
       current.map((row) =>
@@ -217,6 +232,12 @@ export function CustomerInputClient({
             name: row.name,
             phone: row.phone,
             phoneCountryCode: row.phoneCountryCode,
+            chartNumber: row.chartNumber,
+            visitType: row.visitType,
+            birthDate: row.birthDate,
+            gender: row.gender,
+            nationality: row.nationality,
+            marketingConsent: row.marketingConsent,
             treatmentTags: row.treatmentTags,
           })),
         }),
@@ -371,17 +392,54 @@ export function CustomerInputClient({
             </header>
 
             <div className="min-h-0 flex-1 overflow-auto bg-[#fbfbfc]">
-              <table className="w-full min-w-[800px] table-fixed border-collapse bg-white text-sm">
+              <table
+                className="w-full table-fixed border-collapse bg-white text-sm"
+                style={{
+                  minWidth: `${660 + Object.values(inputFields).filter(Boolean).length * 170}px`,
+                }}
+              >
                 <thead className="sticky top-0 z-20 bg-[#f2f4fb] text-left text-[#535b70] shadow-[0_1px_0_#dfe3ec]">
                   <tr className="h-12">
                     <th className="w-16 border-r border-[#dce1ec] px-3">No</th>
-                    <th className="w-[28%] border-r border-[#dce1ec] px-3">
+                    <th className="w-[180px] border-r border-[#dce1ec] px-3">
                       고객명<span className="text-[#e34e61]">*</span>
                     </th>
-                    <th className="w-[25%] border-r border-[#dce1ec] px-3">
+                    <th className="w-[240px] border-r border-[#dce1ec] px-3">
                       휴대폰번호<span className="text-[#e34e61]">*</span>
                     </th>
-                    <th className="px-3">치료태그</th>
+                    {inputFields.chartNumber ? (
+                      <th className="w-[160px] border-r border-[#dce1ec] px-3">
+                        차트번호
+                      </th>
+                    ) : null}
+                    {inputFields.visitType ? (
+                      <th className="w-[130px] border-r border-[#dce1ec] px-3">
+                        초진/재진
+                      </th>
+                    ) : null}
+                    {inputFields.birthDate ? (
+                      <th className="w-[170px] border-r border-[#dce1ec] px-3">
+                        생년월일
+                      </th>
+                    ) : null}
+                    {inputFields.gender ? (
+                      <th className="w-[130px] border-r border-[#dce1ec] px-3">
+                        성별
+                      </th>
+                    ) : null}
+                    {inputFields.treatmentTag ? (
+                      <th className="w-[240px] border-r border-[#dce1ec] px-3">
+                        치료태그
+                      </th>
+                    ) : null}
+                    {inputFields.nationality ? (
+                      <th className="w-[150px] border-r border-[#dce1ec] px-3">
+                        국적
+                      </th>
+                    ) : null}
+                    {inputFields.marketingConsent ? (
+                      <th className="w-[180px] px-3">광고성메시지 수신여부</th>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -406,25 +464,27 @@ export function CustomerInputClient({
                       </td>
                       <td className="border-r border-[#e1e5ed] p-0">
                         <div className="flex h-[46px] focus-within:bg-[#f7f9ff] focus-within:ring-2 focus-within:ring-inset focus-within:ring-[#7187f6]">
-                          <select
-                            value={row.phoneCountryCode}
-                            onChange={(event) =>
-                              updateRow(
-                                row.key,
-                                "phoneCountryCode",
-                                event.target.value,
-                              )
-                            }
-                            aria-label={`${index + 1}번 고객 국가번호`}
-                            disabled={isSaving || isUploading}
-                            className="w-[86px] shrink-0 border-r border-[#e1e5ed] bg-transparent px-2 text-xs font-semibold text-[#657087] outline-none"
-                          >
-                            {phoneCountryOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.value}
-                              </option>
-                            ))}
-                          </select>
+                          {inputFields.countryCode ? (
+                            <select
+                              value={row.phoneCountryCode}
+                              onChange={(event) =>
+                                updateRow(
+                                  row.key,
+                                  "phoneCountryCode",
+                                  event.target.value,
+                                )
+                              }
+                              aria-label={`${index + 1}번 고객 국가번호`}
+                              disabled={isSaving || isUploading}
+                              className="w-[86px] shrink-0 border-r border-[#e1e5ed] bg-transparent px-2 text-xs font-semibold text-[#657087] outline-none"
+                            >
+                              {phoneCountryOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.value}
+                                </option>
+                              ))}
+                            </select>
+                          ) : null}
                           <input
                             value={row.phone}
                             onChange={(event) =>
@@ -437,17 +497,134 @@ export function CustomerInputClient({
                           />
                         </div>
                       </td>
-                      <td className="relative p-0">
-                        <TreatmentTagPicker
-                          compact
-                          options={availableTreatmentTags}
-                          selectedNames={row.treatmentTags}
-                          onChange={(names) =>
-                            updateRow(row.key, "treatmentTags", names)
-                          }
-                          disabled={isSaving || isUploading}
-                        />
-                      </td>
+                      {inputFields.chartNumber ? (
+                        <td className="border-r border-[#e1e5ed] p-0">
+                          <input
+                            value={row.chartNumber}
+                            onChange={(event) =>
+                              updateRow(
+                                row.key,
+                                "chartNumber",
+                                event.target.value,
+                              )
+                            }
+                            placeholder="차트번호"
+                            disabled={isSaving || isUploading}
+                            className="h-[46px] w-full bg-transparent px-3 outline-none placeholder:text-[#c5cad4] focus:bg-[#f7f9ff] focus:ring-2 focus:ring-inset focus:ring-[#7187f6]"
+                          />
+                        </td>
+                      ) : null}
+                      {inputFields.visitType ? (
+                        <td className="border-r border-[#e1e5ed] p-0">
+                          <select
+                            value={row.visitType}
+                            onChange={(event) =>
+                              updateRow(
+                                row.key,
+                                "visitType",
+                                event.target.value as PatientRow["visitType"],
+                              )
+                            }
+                            disabled={isSaving || isUploading}
+                            aria-label={`${index + 1}번 고객 초진 재진`}
+                            className="h-[46px] w-full bg-transparent px-3 text-sm outline-none focus:bg-[#f7f9ff]"
+                          >
+                            <option value="">선택</option>
+                            <option value="NEW">초진</option>
+                            <option value="RETURNING">재진</option>
+                          </select>
+                        </td>
+                      ) : null}
+                      {inputFields.birthDate ? (
+                        <td className="border-r border-[#e1e5ed] p-0">
+                          <input
+                            type="date"
+                            value={row.birthDate}
+                            onChange={(event) =>
+                              updateRow(
+                                row.key,
+                                "birthDate",
+                                event.target.value,
+                              )
+                            }
+                            disabled={isSaving || isUploading}
+                            aria-label={`${index + 1}번 고객 생년월일`}
+                            className="h-[46px] w-full bg-transparent px-3 text-xs outline-none focus:bg-[#f7f9ff]"
+                          />
+                        </td>
+                      ) : null}
+                      {inputFields.gender ? (
+                        <td className="border-r border-[#e1e5ed] p-0">
+                          <select
+                            value={row.gender}
+                            onChange={(event) =>
+                              updateRow(
+                                row.key,
+                                "gender",
+                                event.target.value as PatientRow["gender"],
+                              )
+                            }
+                            disabled={isSaving || isUploading}
+                            aria-label={`${index + 1}번 고객 성별`}
+                            className="h-[46px] w-full bg-transparent px-3 text-sm outline-none focus:bg-[#f7f9ff]"
+                          >
+                            <option value="">선택</option>
+                            <option value="MALE">남성</option>
+                            <option value="FEMALE">여성</option>
+                            <option value="OTHER">기타</option>
+                          </select>
+                        </td>
+                      ) : null}
+                      {inputFields.treatmentTag ? (
+                        <td className="relative border-r border-[#e1e5ed] p-0">
+                          <TreatmentTagPicker
+                            compact
+                            options={availableTreatmentTags}
+                            selectedNames={row.treatmentTags}
+                            onChange={(names) =>
+                              updateRow(row.key, "treatmentTags", names)
+                            }
+                            disabled={isSaving || isUploading}
+                          />
+                        </td>
+                      ) : null}
+                      {inputFields.nationality ? (
+                        <td className="border-r border-[#e1e5ed] p-0">
+                          <input
+                            value={row.nationality}
+                            onChange={(event) =>
+                              updateRow(
+                                row.key,
+                                "nationality",
+                                event.target.value,
+                              )
+                            }
+                            placeholder="예) 대한민국"
+                            disabled={isSaving || isUploading}
+                            className="h-[46px] w-full bg-transparent px-3 outline-none placeholder:text-[#c5cad4] focus:bg-[#f7f9ff] focus:ring-2 focus:ring-inset focus:ring-[#7187f6]"
+                          />
+                        </td>
+                      ) : null}
+                      {inputFields.marketingConsent ? (
+                        <td className="p-0">
+                          <select
+                            value={row.marketingConsent ? "YES" : "NO"}
+                            onChange={(event) =>
+                              updateRow(
+                                row.key,
+                                "marketingConsent",
+                                event.target.value === "YES",
+                              )
+                            }
+                            disabled={isSaving || isUploading}
+                            aria-label={`${index + 1}번 고객 광고성메시지 수신여부`}
+                            className="h-[46px] w-full bg-transparent px-3 text-sm outline-none focus:bg-[#f7f9ff]"
+                          >
+                            <option value="NO">미수신</option>
+                            <option value="YES">수신</option>
+                          </select>
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>

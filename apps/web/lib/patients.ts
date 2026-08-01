@@ -13,6 +13,11 @@ export type PatientUpsertInput = {
   name: string;
   phone: string;
   phoneCountryCode?: PhoneCountryCode;
+  birthDate?: string;
+  gender?: "MALE" | "FEMALE" | "OTHER" | "";
+  visitType?: "NEW" | "RETURNING" | "";
+  nationality?: string;
+  marketingConsent?: boolean;
   treatmentTags?: string[];
 };
 
@@ -65,6 +70,19 @@ export async function upsertPatients(
       phone: row.phone.trim(),
       phoneCountryCode:
         normalizePhoneCountryCode(row.phoneCountryCode) ?? "+82",
+      birthDate: row.birthDate?.trim() || undefined,
+      gender:
+        row.gender === "MALE" ||
+        row.gender === "FEMALE" ||
+        row.gender === "OTHER"
+          ? row.gender
+          : undefined,
+      visitType:
+        row.visitType === "NEW" || row.visitType === "RETURNING"
+          ? row.visitType
+          : undefined,
+      nationality: row.nationality?.trim() || undefined,
+      marketingConsent: row.marketingConsent,
       treatmentTags: normalizeTreatmentTags(row.treatmentTags ?? []),
     }))
     .filter((row) => row.name || row.phone);
@@ -85,6 +103,17 @@ export async function upsertPatients(
   if (invalidRowIndex >= 0) {
     throw new Error(
       `${invalidRowIndex + 1}번째 고객의 고객명과 휴대폰번호를 확인해 주세요.`,
+    );
+  }
+
+  const invalidBirthDateIndex = rows.findIndex(
+    (row) =>
+      row.birthDate &&
+      !/^\d{4}-\d{2}-\d{2}$/.test(row.birthDate),
+  );
+  if (invalidBirthDateIndex >= 0) {
+    throw new Error(
+      `${invalidBirthDateIndex + 1}번째 고객의 생년월일을 확인해 주세요.`,
     );
   }
 
@@ -134,6 +163,17 @@ export async function upsertPatients(
                 phone: row.phone,
                 phoneCountryCode: row.phoneCountryCode,
                 phoneNormalized,
+                ...(row.birthDate
+                  ? { birthDate: new Date(`${row.birthDate}T00:00:00.000Z`) }
+                  : {}),
+                ...(row.gender ? { gender: row.gender } : {}),
+                ...(row.visitType ? { visitType: row.visitType } : {}),
+                ...(row.nationality
+                  ? { nationality: row.nationality }
+                  : {}),
+                ...(typeof row.marketingConsent === "boolean"
+                  ? { marketingConsent: row.marketingConsent }
+                  : {}),
                 ...(row.chartNumber ? { chartNumber: row.chartNumber } : {}),
               },
               select: { id: true },
@@ -146,6 +186,13 @@ export async function upsertPatients(
                 phone: row.phone,
                 phoneCountryCode: row.phoneCountryCode,
                 phoneNormalized,
+                birthDate: row.birthDate
+                  ? new Date(`${row.birthDate}T00:00:00.000Z`)
+                  : null,
+                gender: row.gender ?? null,
+                visitType: row.visitType ?? null,
+                nationality: row.nationality ?? null,
+                marketingConsent: row.marketingConsent ?? false,
               },
               select: { id: true },
             });

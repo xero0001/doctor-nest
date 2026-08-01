@@ -8,44 +8,55 @@ datasource db {
 }
 
 model Hospital {
-  id                              String                   @id @default(cuid())
-  name                            String
-  slug                            String                   @unique
-  translationContextEnabled       Boolean                  @default(true)
-  translationContextMessageCount  Int                      @default(10)
-  chatCoachContextEnabled         Boolean                  @default(true)
-  chatCoachContextMessageCount    Int                      @default(10)
-  autoResponseContextEnabled      Boolean                  @default(true)
-  autoResponseContextMessageCount Int                      @default(10)
-  autoResponseDelayMinutes        Int                      @default(5)
-  introduction                    String                   @default("")
-  operatingNotes                  String                   @default("")
-  profileImageObjectKey           String?
-  profileImageUrl                 String?
-  profileImageOriginalName        String?
-  profileImageContentType         String?
-  profileImageSizeBytes           Int?
-  users                           User[]
-  authUsers                       AuthUser[]
-  channelConnections              ChannelConnection[]
-  channelAutoReplySettings        ChannelAutoReplySetting[]
-  patients                        Patient[]
-  patientTags                     PatientTag[]
-  patientTagHistories             PatientTagHistory[]
-  careAutomations                 CareAutomation[]
-  conversations                   Conversation[]
-  appointments                    Appointment[]
-  manualFolders                   ManualFolder[]
-  manualTags                      ManualTag[]
-  manualDocuments                 ManualDocument[]
-  contentEvents                   ContentEvent[]
-  operatingHours                  HospitalOperatingHour[]
-  chatCoachGenerations            ChatCoachGeneration[]
-  autoResponseGenerations         AutoResponseGeneration[]
-  accessProfiles                  HospitalAccessProfile[]
-  createdAt                       DateTime                 @default(now())
-  updatedAt                       DateTime                 @updatedAt
-  patientChannels                 PatientChannel[]
+  id                               String                    @id @default(cuid())
+  name                             String
+  slug                             String                    @unique
+  translationContextEnabled        Boolean                   @default(true)
+  translationContextMessageCount   Int                       @default(10)
+  chatCoachContextEnabled          Boolean                   @default(true)
+  chatCoachContextMessageCount     Int                       @default(10)
+  autoResponseContextEnabled       Boolean                   @default(true)
+  autoResponseContextMessageCount  Int                       @default(10)
+  autoResponseDelayMinutes         Int                       @default(5)
+  introduction                     String                    @default("")
+  operatingNotes                   String                    @default("")
+  profileImageObjectKey            String?
+  profileImageUrl                  String?
+  profileImageOriginalName         String?
+  profileImageContentType          String?
+  profileImageSizeBytes            Int?
+  customerInputChartNumberEnabled  Boolean                   @default(false)
+  customerInputVisitTypeEnabled    Boolean                   @default(false)
+  customerInputCountryCodeEnabled  Boolean                   @default(false)
+  customerInputBirthDateEnabled    Boolean                   @default(false)
+  customerInputGenderEnabled       Boolean                   @default(false)
+  customerInputTreatmentTagEnabled Boolean                   @default(true)
+  customerInputNationalityEnabled  Boolean                   @default(false)
+  customerInputMarketingEnabled    Boolean                   @default(false)
+  automationTagSelectionMode       String                    @default("ALL")
+  appointmentManagementEnabled     Boolean                   @default(false)
+  users                            User[]
+  authUsers                        AuthUser[]
+  channelConnections               ChannelConnection[]
+  channelAssigneeSettings          ChannelAssigneeSetting[]
+  channelAutoReplySettings         ChannelAutoReplySetting[]
+  patients                         Patient[]
+  patientTags                      PatientTag[]
+  patientTagHistories              PatientTagHistory[]
+  careAutomations                  CareAutomation[]
+  conversations                    Conversation[]
+  appointments                     Appointment[]
+  manualFolders                    ManualFolder[]
+  manualTags                       ManualTag[]
+  manualDocuments                  ManualDocument[]
+  contentEvents                    ContentEvent[]
+  operatingHours                   HospitalOperatingHour[]
+  chatCoachGenerations             ChatCoachGeneration[]
+  autoResponseGenerations          AutoResponseGeneration[]
+  accessProfiles                   HospitalAccessProfile[]
+  createdAt                        DateTime                  @default(now())
+  updatedAt                        DateTime                  @updatedAt
+  patientChannels                  PatientChannel[]
 
   @@map("Organization")
 }
@@ -109,23 +120,26 @@ model Session {
 }
 
 model AuthUser {
-  id                      String                 @id
+  id                      String                   @id
   name                    String
-  email                   String                 @unique
-  emailVerified           Boolean                @default(false)
+  email                   String                   @unique
+  emailVerified           Boolean                  @default(false)
   image                   String?
-  createdAt               DateTime               @default(now())
-  updatedAt               DateTime               @updatedAt
-  username                String?                @unique
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  username                String?                  @unique
   displayUsername         String?
-  hospitalId              String?                @map("organizationId")
-  role                    String                 @default("AGENT")
+  hospitalId              String?                  @map("organizationId")
+  role                    String                   @default("AGENT")
+  jobTitle                String                   @default("직원")
+  isDefaultAssignee       Boolean                  @default(false)
   accessProfileId         String?
-  hospital                Hospital?              @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
-  accessProfile           HospitalAccessProfile? @relation(fields: [accessProfileId], references: [id], onDelete: SetNull)
+  hospital                Hospital?                @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  accessProfile           HospitalAccessProfile?   @relation(fields: [accessProfileId], references: [id], onDelete: SetNull)
   authsessions            AuthSession[]
   authaccounts            AuthAccount[]
   conversationAssignments ConversationAssignee[]
+  channelAssigneeSettings ChannelAssigneeSetting[]
   patientTagHistories     PatientTagHistory[]
 
   @@index([hospitalId])
@@ -226,6 +240,20 @@ model ChannelConnection {
 
   @@unique([hospitalId, channel])
   @@index([hospitalId, status])
+}
+
+model ChannelAssigneeSetting {
+  id         String      @id @default(cuid())
+  hospitalId String      @map("organizationId")
+  channel    ChatChannel
+  userId     String
+  hospital   Hospital    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  user       AuthUser    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@unique([hospitalId, channel])
+  @@index([userId])
 }
 
 model ChannelAutoReplySetting {

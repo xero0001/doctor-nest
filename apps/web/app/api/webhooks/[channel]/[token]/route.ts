@@ -334,6 +334,34 @@ async function persistInboundEvent(
           },
         });
 
+    if (!existingConversation) {
+      const [channelAssignee, defaultAssignee] = await Promise.all([
+        transaction.channelAssigneeSetting.findUnique({
+          where: {
+            hospitalId_channel: {
+              hospitalId: connection.hospitalId,
+              channel,
+            },
+          },
+          select: { userId: true },
+        }),
+        transaction.authUser.findFirst({
+          where: {
+            hospitalId: connection.hospitalId,
+            isDefaultAssignee: true,
+          },
+          orderBy: { createdAt: "asc" },
+          select: { id: true },
+        }),
+      ]);
+      const assigneeId = channelAssignee?.userId ?? defaultAssignee?.id;
+      if (assigneeId) {
+        await transaction.conversationAssignee.create({
+          data: { conversationId: conversation.id, userId: assigneeId },
+        });
+      }
+    }
+
     const storedMessage = await transaction.message.create({
       data: {
         conversationId: conversation.id,

@@ -14,7 +14,13 @@ export default async function CustomersPage({
   const { view } = await searchParams;
   const database = getDatabase();
 
-  const [patients, totalCount, missingTreatmentTagCount, treatmentTags] =
+  const [
+    patients,
+    totalCount,
+    missingTreatmentTagCount,
+    treatmentTags,
+    hospital,
+  ] =
     await Promise.all([
       database.patient.findMany({
         where: { hospitalId: user.hospitalId },
@@ -39,18 +45,41 @@ export default async function CustomersPage({
           },
         },
       }),
-      database.patientTag.findMany({
-        where: { hospitalId: user.hospitalId, category: "TREATMENT" },
-        select: { id: true, name: true, color: true },
-        orderBy: [{ name: "asc" }],
-      }),
-    ]);
+    database.patientTag.findMany({
+      where: { hospitalId: user.hospitalId, category: "TREATMENT" },
+      select: { id: true, name: true, color: true },
+      orderBy: [{ name: "asc" }],
+    }),
+    database.hospital.findUniqueOrThrow({
+      where: { id: user.hospitalId },
+      select: {
+        customerInputChartNumberEnabled: true,
+        customerInputVisitTypeEnabled: true,
+        customerInputCountryCodeEnabled: true,
+        customerInputBirthDateEnabled: true,
+        customerInputGenderEnabled: true,
+        customerInputTreatmentTagEnabled: true,
+        customerInputNationalityEnabled: true,
+        customerInputMarketingEnabled: true,
+      },
+    }),
+  ]);
 
   return (
     <CustomerInputClient
       totalCount={totalCount}
       missingTreatmentTagCount={missingTreatmentTagCount}
       availableTreatmentTags={treatmentTags}
+      inputFields={{
+        chartNumber: hospital.customerInputChartNumberEnabled,
+        visitType: hospital.customerInputVisitTypeEnabled,
+        countryCode: hospital.customerInputCountryCodeEnabled,
+        birthDate: hospital.customerInputBirthDateEnabled,
+        gender: hospital.customerInputGenderEnabled,
+        treatmentTag: hospital.customerInputTreatmentTagEnabled,
+        nationality: hospital.customerInputNationalityEnabled,
+        marketingConsent: hospital.customerInputMarketingEnabled,
+      }}
       initialMode={
         view === "daily"
           ? "DAILY"

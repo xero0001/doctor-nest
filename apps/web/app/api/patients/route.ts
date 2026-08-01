@@ -115,6 +115,21 @@ export async function POST(request: Request) {
         typeof (patient as PatientUpsertInput).chartNumber === "string") &&
       (!Object.hasOwn(patient, "phoneCountryCode") ||
         typeof (patient as PatientUpsertInput).phoneCountryCode === "string") &&
+      (!Object.hasOwn(patient, "birthDate") ||
+        typeof (patient as PatientUpsertInput).birthDate === "string") &&
+      (!Object.hasOwn(patient, "gender") ||
+        ["", "MALE", "FEMALE", "OTHER"].includes(
+          (patient as PatientUpsertInput).gender ?? "",
+        )) &&
+      (!Object.hasOwn(patient, "visitType") ||
+        ["", "NEW", "RETURNING"].includes(
+          (patient as PatientUpsertInput).visitType ?? "",
+        )) &&
+      (!Object.hasOwn(patient, "nationality") ||
+        typeof (patient as PatientUpsertInput).nationality === "string") &&
+      (!Object.hasOwn(patient, "marketingConsent") ||
+        typeof (patient as PatientUpsertInput).marketingConsent ===
+          "boolean") &&
       (!Object.hasOwn(patient, "treatmentTags") ||
         (Array.isArray((patient as PatientUpsertInput).treatmentTags) &&
           (patient as PatientUpsertInput).treatmentTags!.every(

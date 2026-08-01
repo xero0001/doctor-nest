@@ -46,6 +46,12 @@ const navigation = [
     available: true,
   },
   {
+    label: "마케팅",
+    icon: Megaphone,
+    href: "/service/marketing",
+    available: true,
+  },
+  {
     label: "콘텐츠",
     icon: BookOpenText,
     href: "/service/events",
@@ -61,7 +67,8 @@ const navigation = [
     label: "예약관리",
     icon: CalendarDays,
     href: "/service/chatting#appointments",
-    available: false,
+    available: true,
+    requiresAppointmentManagement: true,
   },
 ];
 
@@ -70,10 +77,15 @@ type ServiceShellProps = {
     name: string;
     organizationName: string;
   };
+  appointmentManagementEnabled: boolean;
   children: React.ReactNode;
 };
 
-export function ServiceShell({ user, children }: ServiceShellProps) {
+export function ServiceShell({
+  user,
+  appointmentManagementEnabled,
+  children,
+}: ServiceShellProps) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -105,7 +117,15 @@ export function ServiceShell({ user, children }: ServiceShellProps) {
           className="mt-5 flex flex-1 flex-col items-center gap-1 px-2"
           aria-label="서비스 메뉴"
         >
-          {navigation.map(({ label, icon: Icon, href, available }) => {
+          {navigation.map((item) => {
+            if (
+              "requiresAppointmentManagement" in item &&
+              item.requiresAppointmentManagement &&
+              !appointmentManagementEnabled
+            ) {
+              return null;
+            }
+            const { label, icon: Icon, href, available } = item;
             const active = available && pathname.startsWith(href);
             return (
               <Link
@@ -128,16 +148,6 @@ export function ServiceShell({ user, children }: ServiceShellProps) {
               </Link>
             );
           })}
-
-          <div className="my-2 h-px w-10 bg-[#e7eaf2]" aria-hidden="true" />
-
-          <Link
-            href="/service/chatting#experience-group"
-            className="group relative flex w-full flex-col items-center gap-1.5 rounded-xl py-2.5 text-[10px] font-medium text-[#969caf] transition-colors hover:bg-[#f6f7fb] hover:text-[#59617a]"
-          >
-            <Megaphone className="size-[18px]" strokeWidth={1.8} />
-            <span>체험단</span>
-          </Link>
         </nav>
 
         <div className="flex flex-col items-center gap-1 px-2 pb-4">

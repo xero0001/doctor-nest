@@ -42,6 +42,7 @@ model Hospital {
   operatingHours                  HospitalOperatingHour[]
   chatCoachGenerations            ChatCoachGeneration[]
   autoResponseGenerations         AutoResponseGeneration[]
+  accessProfiles                  HospitalAccessProfile[]
   createdAt                       DateTime                 @default(now())
   updatedAt                       DateTime                 @updatedAt
   patientChannels                 PatientChannel[]
@@ -119,13 +120,34 @@ model AuthUser {
   displayUsername         String?
   hospitalId              String?                @map("organizationId")
   role                    String                 @default("AGENT")
+  accessProfileId         String?
   hospital                Hospital?              @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  accessProfile           HospitalAccessProfile? @relation(fields: [accessProfileId], references: [id], onDelete: SetNull)
   authsessions            AuthSession[]
   authaccounts            AuthAccount[]
   conversationAssignments ConversationAssignee[]
   patientTagHistories     PatientTagHistory[]
 
   @@index([hospitalId])
+  @@index([accessProfileId])
+}
+
+model HospitalAccessProfile {
+  id          String     @id @default(cuid())
+  hospitalId  String     @map("organizationId")
+  key         String
+  name        String
+  description String     @default("")
+  permissions String[]   @default([])
+  isLocked    Boolean    @default(false)
+  sortOrder   Int        @default(0)
+  hospital    Hospital   @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  users       AuthUser[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([hospitalId, key])
+  @@index([hospitalId, sortOrder])
 }
 
 model AuthSession {

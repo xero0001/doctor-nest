@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function SettingsPage() {
-  redirect("/service/settings/channels");
+  redirect("/service/settings/profile");
 }

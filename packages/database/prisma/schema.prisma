@@ -18,6 +18,13 @@ model Hospital {
   autoResponseContextEnabled      Boolean                  @default(true)
   autoResponseContextMessageCount Int                      @default(10)
   autoResponseDelayMinutes        Int                      @default(5)
+  introduction                    String                   @default("")
+  operatingNotes                  String                   @default("")
+  profileImageObjectKey           String?
+  profileImageUrl                 String?
+  profileImageOriginalName        String?
+  profileImageContentType         String?
+  profileImageSizeBytes           Int?
   users                           User[]
   authUsers                       AuthUser[]
   channelConnections              ChannelConnection[]
@@ -30,6 +37,8 @@ model Hospital {
   manualFolders                   ManualFolder[]
   manualTags                      ManualTag[]
   manualDocuments                 ManualDocument[]
+  contentEvents                   ContentEvent[]
+  operatingHours                  HospitalOperatingHour[]
   chatCoachGenerations            ChatCoachGeneration[]
   autoResponseGenerations         AutoResponseGeneration[]
   createdAt                       DateTime                 @default(now())
@@ -37,6 +46,31 @@ model Hospital {
   patientChannels                 PatientChannel[]
 
   @@map("Organization")
+}
+
+enum HospitalWeekday {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+model HospitalOperatingHour {
+  id           String          @id @default(cuid())
+  hospitalId   String
+  weekday      HospitalWeekday
+  isOpen       Boolean         @default(true)
+  openMinutes  Int             @default(600)
+  closeMinutes Int             @default(1140)
+  hospital     Hospital        @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@unique([hospitalId, weekday])
+  @@index([hospitalId, weekday])
 }
 
 enum UserRole {
@@ -590,4 +624,58 @@ model ManualDocumentTag {
 
   @@id([documentId, tagId])
   @@index([tagId])
+}
+
+enum ContentEventDetailType {
+  IMAGE
+  TEXT
+}
+
+enum ContentEventImageRole {
+  THUMBNAIL
+  DETAIL
+}
+
+model ContentEvent {
+  id                String                 @id @default(cuid())
+  hospitalId        String
+  title             String
+  summary           String                 @default("")
+  originalPrice     Int                    @default(0)
+  discountAmount    Int                    @default(0)
+  currency          String                 @default("KRW")
+  isActive          Boolean                @default(true)
+  isPinned          Boolean                @default(false)
+  exposureStartAt   DateTime?
+  exposureEndAt     DateTime?
+  detailType        ContentEventDetailType @default(IMAGE)
+  detailText        String                 @default("")
+  viewCount         Int                    @default(0)
+  consultationCount Int                    @default(0)
+  hospital          Hospital               @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  images            ContentEventImage[]
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  @@index([hospitalId, isPinned, createdAt])
+  @@index([hospitalId, isActive, exposureStartAt, exposureEndAt])
+}
+
+model ContentEventImage {
+  id           String                @id @default(cuid())
+  eventId      String
+  role         ContentEventImageRole
+  objectKey    String
+  publicUrl    String
+  originalName String
+  contentType  String
+  sizeBytes    Int
+  altText      String                @default("")
+  sortOrder    Int                   @default(0)
+  event        ContentEvent          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@unique([eventId, objectKey])
+  @@index([eventId, role, sortOrder])
 }

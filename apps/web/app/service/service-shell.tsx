@@ -46,10 +46,10 @@ const navigation = [
     available: true,
   },
   {
-    label: "케어콘텐츠",
+    label: "콘텐츠",
     icon: BookOpenText,
-    href: "/service/chatting#contents",
-    available: false,
+    href: "/service/events",
+    available: true,
   },
   {
     label: "원내매뉴얼",
@@ -149,7 +149,7 @@ export function ServiceShell({ user, children }: ServiceShellProps) {
             고객센터
           </Link>
           <Link
-            href="/service/settings/channels"
+            href="/service/settings/profile"
             className={`relative flex w-full flex-col items-center gap-1.5 rounded-xl py-2.5 text-[10px] font-medium ${
               pathname.startsWith("/service/settings")
                 ? "bg-[#eef2ff] text-[#3157f6]"
@@ -160,7 +160,7 @@ export function ServiceShell({ user, children }: ServiceShellProps) {
               <span className="absolute -left-2 top-3 h-7 w-[3px] rounded-r-full bg-[#3157f6]" />
             ) : null}
             <Settings className="size-[18px]" />
-            환경설정
+            병원설정
           </Link>
           <button
             type="button"

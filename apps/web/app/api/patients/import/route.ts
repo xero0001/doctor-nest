@@ -67,8 +67,15 @@ export async function POST(request: Request) {
 
     const nameColumn = headers.get("고객명");
     const phoneColumn = headers.get("휴대폰번호");
+    const countryCodeColumn = headers.get("국가번호");
     const tagsColumn = headers.get("치료태그");
-    const chartNumberColumn = headers.get("차트번호(선택)");
+    const chartNumberColumn =
+      headers.get("차트번호") ?? headers.get("차트번호(선택)");
+    const visitTypeColumn = headers.get("초진/재진");
+    const birthDateColumn = headers.get("생년월일");
+    const genderColumn = headers.get("성별");
+    const nationalityColumn = headers.get("국적");
+    const marketingColumn = headers.get("광고성메시지수신여부");
 
     if (!nameColumn || !phoneColumn) {
       throw new Error("엑셀 첫 행에 ‘고객명*’, ‘휴대폰번호*’ 열이 필요합니다.");
@@ -79,15 +86,57 @@ export async function POST(request: Request) {
       if (rowNumber === 1) return;
       const name = cellText(row.getCell(nameColumn));
       const phone = cellText(row.getCell(phoneColumn));
+      const phoneCountryCode = countryCodeColumn
+        ? cellText(row.getCell(countryCodeColumn))
+        : "+82";
       const treatmentTags = tagsColumn
         ? cellText(row.getCell(tagsColumn)).split(/[,，]/)
         : [];
       const chartNumber = chartNumberColumn
         ? cellText(row.getCell(chartNumberColumn))
         : "";
+      const visitTypeText = visitTypeColumn
+        ? cellText(row.getCell(visitTypeColumn))
+        : "";
+      const genderText = genderColumn
+        ? cellText(row.getCell(genderColumn))
+        : "";
+      const marketingText = marketingColumn
+        ? cellText(row.getCell(marketingColumn)).toLowerCase()
+        : "";
 
       if (!name && !phone && treatmentTags.every((tag) => !tag.trim())) return;
-      patients.push({ name, phone, treatmentTags, chartNumber });
+      patients.push({
+        name,
+        phone,
+        phoneCountryCode:
+          phoneCountryCode as PatientUpsertInput["phoneCountryCode"],
+        treatmentTags,
+        chartNumber,
+        visitType:
+          visitTypeText === "초진"
+            ? "NEW"
+            : visitTypeText === "재진"
+              ? "RETURNING"
+              : "",
+        birthDate: birthDateColumn
+          ? cellText(row.getCell(birthDateColumn))
+          : "",
+        gender:
+          genderText === "남성"
+            ? "MALE"
+            : genderText === "여성"
+              ? "FEMALE"
+              : genderText === "기타"
+                ? "OTHER"
+                : "",
+        nationality: nationalityColumn
+          ? cellText(row.getCell(nationalityColumn))
+          : "",
+        marketingConsent: ["수신", "동의", "yes", "y", "true", "1"].includes(
+          marketingText,
+        ),
+      });
     });
 
     if (patients.length > MAX_PATIENT_IMPORT_ROWS) {

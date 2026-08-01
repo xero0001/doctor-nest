@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { getDatabase } from "@doctornest/database";
 
 import { getCurrentUser } from "@/lib/auth";
 
@@ -9,6 +10,20 @@ export async function GET() {
     return Response.json({ error: "로그인이 필요합니다." }, { status: 401 });
   }
 
+  const hospital = await getDatabase().hospital.findUniqueOrThrow({
+    where: { id: user.hospitalId },
+    select: {
+      customerInputChartNumberEnabled: true,
+      customerInputVisitTypeEnabled: true,
+      customerInputCountryCodeEnabled: true,
+      customerInputBirthDateEnabled: true,
+      customerInputGenderEnabled: true,
+      customerInputTreatmentTagEnabled: true,
+      customerInputNationalityEnabled: true,
+      customerInputMarketingEnabled: true,
+    },
+  });
+
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "DoctorNest";
   workbook.created = new Date();
@@ -16,17 +31,50 @@ export async function GET() {
   const worksheet = workbook.addWorksheet("고객정보 입력", {
     views: [{ state: "frozen", ySplit: 1 }],
   });
-  worksheet.columns = [
+  const columns: Array<{ header: string; key: string; width: number }> = [
     { header: "고객명*", key: "name", width: 22 },
     { header: "휴대폰번호*", key: "phone", width: 22 },
-    { header: "치료태그", key: "treatmentTags", width: 38 },
-    { header: "차트번호(선택)", key: "chartNumber", width: 24 },
   ];
+  if (hospital.customerInputCountryCodeEnabled) {
+    columns.splice(1, 0, { header: "국가번호", key: "countryCode", width: 14 });
+  }
+  if (hospital.customerInputChartNumberEnabled) {
+    columns.push({ header: "차트번호", key: "chartNumber", width: 24 });
+  }
+  if (hospital.customerInputVisitTypeEnabled) {
+    columns.push({ header: "초진/재진", key: "visitType", width: 16 });
+  }
+  if (hospital.customerInputBirthDateEnabled) {
+    columns.push({ header: "생년월일", key: "birthDate", width: 18 });
+  }
+  if (hospital.customerInputGenderEnabled) {
+    columns.push({ header: "성별", key: "gender", width: 12 });
+  }
+  if (hospital.customerInputTreatmentTagEnabled) {
+    columns.push({ header: "치료태그", key: "treatmentTags", width: 38 });
+  }
+  if (hospital.customerInputNationalityEnabled) {
+    columns.push({ header: "국적", key: "nationality", width: 18 });
+  }
+  if (hospital.customerInputMarketingEnabled) {
+    columns.push({
+      header: "광고성메시지 수신여부",
+      key: "marketingConsent",
+      width: 24,
+    });
+  }
+  worksheet.columns = columns;
   worksheet.addRow({
     name: "홍길동",
+    countryCode: "+82",
     phone: "010-1234-5678",
-    treatmentTags: "도수치료, 리프팅",
     chartNumber: "",
+    visitType: "초진",
+    birthDate: "1990-01-01",
+    gender: "남성",
+    treatmentTags: "도수치료, 리프팅",
+    nationality: "대한민국",
+    marketingConsent: "미수신",
   });
 
   const headerRow = worksheet.getRow(1);
@@ -45,8 +93,13 @@ export async function GET() {
   });
 
   worksheet.getColumn("phone").numFmt = "@";
-  worksheet.getColumn("chartNumber").numFmt = "@";
-  worksheet.autoFilter = "A1:D1";
+  if (hospital.customerInputChartNumberEnabled) {
+    worksheet.getColumn("chartNumber").numFmt = "@";
+  }
+  worksheet.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: 1, column: worksheet.columnCount },
+  };
 
   const buffer = await workbook.xlsx.writeBuffer();
 

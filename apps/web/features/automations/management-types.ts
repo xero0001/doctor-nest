@@ -29,5 +29,21 @@ export type AutomationManagementDashboard = {
     color: string;
     count: number;
     rankChange: number | null;
+    popularCombination: {
+      id: string;
+      name: string;
+      color: string;
+    } | null;
   }>;
+  chatting: {
+    channels: Array<{
+      channel:
+        "KAKAO" | "LINE" | "NAVER_TALK" | "WECHAT" | "WHATSAPP" | "INSTAGRAM";
+      consultations: number;
+      newConsultations: number;
+    }>;
+    unansweredOverSixHours: number;
+    averageResponseMinutes: number;
+    responseRate: number;
+  };
 };

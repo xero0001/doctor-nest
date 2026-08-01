@@ -85,6 +85,7 @@ export async function getAutomationManagementDashboard(
     monthlyConsultations,
     monthlyCampaigns,
     treatmentAssignments,
+    monthlyConversations,
   ] = await Promise.all([
     database.patient.count({ where: { hospitalId } }),
     automationTagIds.length > 0
@@ -141,8 +142,28 @@ export async function getAutomationManagementDashboard(
       },
       select: {
         tagId: true,
+        patientId: true,
         createdAt: true,
         tag: { select: { name: true, color: true } },
+      },
+    }),
+    database.conversation.findMany({
+      where: {
+        hospitalId,
+        OR: [
+          { createdAt: monthlyDateFilter },
+          { messages: { some: { sentAt: monthlyDateFilter } } },
+        ],
+      },
+      select: {
+        id: true,
+        channel: true,
+        createdAt: true,
+        messages: {
+          where: { sentAt: { lt: end } },
+          select: { direction: true, sender: true, sentAt: true },
+          orderBy: { sentAt: "asc" },
+        },
       },
     }),
   ]);
@@ -169,6 +190,7 @@ export async function getAutomationManagementDashboard(
     { id: string; name: string; color: string; count: number }
   >();
   const previousTreatmentCounts = new Map<string, number>();
+  const currentTagIdsByPatient = new Map<string, Set<string>>();
   for (const assignment of treatmentAssignments) {
     if (assignment.createdAt >= start) {
       const current = currentTreatmentCounts.get(assignment.tagId) ?? {
@@ -179,6 +201,10 @@ export async function getAutomationManagementDashboard(
       };
       current.count += 1;
       currentTreatmentCounts.set(assignment.tagId, current);
+      const patientTags =
+        currentTagIdsByPatient.get(assignment.patientId) ?? new Set<string>();
+      patientTags.add(assignment.tagId);
+      currentTagIdsByPatient.set(assignment.patientId, patientTags);
     } else {
       previousTreatmentCounts.set(
         assignment.tagId,
@@ -196,6 +222,74 @@ export async function getAutomationManagementDashboard(
       .sort((left, right) => right[1] - left[1])
       .map(([tagId], index) => [tagId, index + 1]),
   );
+  const combinationCounts = new Map<string, Map<string, number>>();
+  for (const patientTags of currentTagIdsByPatient.values()) {
+    const tagIds = [...patientTags];
+    for (const tagId of tagIds) {
+      const peerCounts =
+        combinationCounts.get(tagId) ?? new Map<string, number>();
+      for (const peerTagId of tagIds) {
+        if (peerTagId === tagId) continue;
+        peerCounts.set(peerTagId, (peerCounts.get(peerTagId) ?? 0) + 1);
+      }
+      combinationCounts.set(tagId, peerCounts);
+    }
+  }
+
+  const channelCounts = new Map<
+    AutomationManagementDashboard["chatting"]["channels"][number]["channel"],
+    { consultations: number; newConsultations: number }
+  >();
+  let unansweredOverSixHours = 0;
+  let inboundMessages = 0;
+  let answeredInboundMessages = 0;
+  let totalResponseMinutes = 0;
+  const responseCutoff = Math.min(Date.now(), end.getTime());
+  for (const conversation of monthlyConversations) {
+    const hasMonthlyMessage = conversation.messages.some(
+      (message) => message.sentAt >= start && message.sentAt < end,
+    );
+    const isNewConversation =
+      conversation.createdAt >= start && conversation.createdAt < end;
+    const channel = channelCounts.get(conversation.channel) ?? {
+      consultations: 0,
+      newConsultations: 0,
+    };
+    if (hasMonthlyMessage) channel.consultations += 1;
+    if (isNewConversation) channel.newConsultations += 1;
+    channelCounts.set(conversation.channel, channel);
+
+    const lastMessage = conversation.messages.at(-1);
+    if (
+      lastMessage?.direction === "INBOUND" &&
+      lastMessage.sentAt >= start &&
+      responseCutoff - lastMessage.sentAt.getTime() >= 6 * 60 * 60 * 1_000
+    ) {
+      unansweredOverSixHours += 1;
+    }
+
+    for (let index = 0; index < conversation.messages.length; index += 1) {
+      const message = conversation.messages[index];
+      if (
+        message.direction !== "INBOUND" ||
+        message.sentAt < start ||
+        message.sentAt >= end
+      ) {
+        continue;
+      }
+      inboundMessages += 1;
+      const response = conversation.messages
+        .slice(index + 1)
+        .find((candidate) => candidate.direction === "OUTBOUND");
+      if (response) {
+        answeredInboundMessages += 1;
+        totalResponseMinutes += Math.max(
+          0,
+          (response.sentAt.getTime() - message.sentAt.getTime()) / 60_000,
+        );
+      }
+    }
+  }
 
   const daily = datesInMonth(start, end).map((date) => ({
     date,
@@ -234,11 +328,50 @@ export async function getAutomationManagementDashboard(
       consultations: monthlyConsultations,
     },
     remarketing: { campaigns: monthlyCampaigns },
-    popularTreatments: currentRanked.slice(0, 10).map((item, index) => ({
-      ...item,
-      rankChange: previousRanks.has(item.id)
-        ? previousRanks.get(item.id)! - (index + 1)
-        : null,
-    })),
+    popularTreatments: currentRanked.map((item, index) => {
+      const popularCombinationEntry = [
+        ...(combinationCounts.get(item.id)?.entries() ?? []),
+      ].sort((left, right) => {
+        if (right[1] !== left[1]) return right[1] - left[1];
+        return (
+          (currentTreatmentCounts.get(right[0])?.count ?? 0) -
+          (currentTreatmentCounts.get(left[0])?.count ?? 0)
+        );
+      })[0];
+      const popularCombination = popularCombinationEntry
+        ? currentTreatmentCounts.get(popularCombinationEntry[0])
+        : null;
+      return {
+        ...item,
+        rankChange: previousRanks.has(item.id)
+          ? previousRanks.get(item.id)! - (index + 1)
+          : null,
+        popularCombination: popularCombination
+          ? {
+              id: popularCombination.id,
+              name: popularCombination.name,
+              color: popularCombination.color,
+            }
+          : null,
+      };
+    }),
+    chatting: {
+      channels: [...channelCounts.entries()]
+        .map(([channel, counts]) => ({ channel, ...counts }))
+        .sort(
+          (left, right) =>
+            right.consultations - left.consultations ||
+            right.newConsultations - left.newConsultations,
+        ),
+      unansweredOverSixHours,
+      averageResponseMinutes:
+        answeredInboundMessages > 0
+          ? Math.round(totalResponseMinutes / answeredInboundMessages)
+          : 0,
+      responseRate:
+        inboundMessages > 0
+          ? Math.round((answeredInboundMessages / inboundMessages) * 1_000) / 10
+          : 0,
+    },
   };
 }

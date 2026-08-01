@@ -12,6 +12,11 @@ import {
 import { FormEvent, useState } from "react";
 
 import { HospitalSettingsSidebar } from "@/features/settings/components/hospital-settings-sidebar";
+import {
+  CUSTOMER_TAG_COLOR_PRESETS,
+  DEFAULT_CUSTOMER_TAG_COLOR,
+  normalizeCustomerTagColor,
+} from "@/features/settings/customer-tags/customer-tag-colors";
 
 export type CustomerTagRecord = {
   id: string;
@@ -22,6 +27,53 @@ export type CustomerTagRecord = {
 
 const MAX_CUSTOMER_TAGS = 5;
 
+function PresetColorPicker({
+  value,
+  onChange,
+  label,
+  compact = false,
+}: {
+  value: string;
+  onChange: (color: string) => void;
+  label: string;
+  compact?: boolean;
+}) {
+  return (
+    <fieldset>
+      <legend
+        className={`${compact ? "mb-2 text-xs" : "mb-3 text-sm"} font-bold text-[#596177]`}
+      >
+        {label}
+      </legend>
+      <div className="flex flex-wrap gap-2">
+        {CUSTOMER_TAG_COLOR_PRESETS.map((preset) => {
+          const selected = value === preset.value;
+          return (
+            <button
+              key={preset.value}
+              type="button"
+              title={preset.label}
+              aria-label={`${preset.label} 색상`}
+              aria-pressed={selected}
+              onClick={() => onChange(preset.value)}
+              className={`flex ${compact ? "size-7" : "size-8"} items-center justify-center rounded-full border-2 border-white shadow-sm transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3157f6] focus-visible:ring-offset-2 ${
+                selected
+                  ? "ring-2 ring-[#3157f6] ring-offset-2"
+                  : "ring-1 ring-[#dfe3ea]"
+              }`}
+              style={{ backgroundColor: preset.value }}
+            >
+              {selected ? (
+                <Check className="size-4 text-white drop-shadow-sm" />
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
 export function CustomerTagsClient({
   initialTags,
 }: {
@@ -29,8 +81,16 @@ export function CustomerTagsClient({
 }) {
   const [tags, setTags] = useState(initialTags);
   const [newName, setNewName] = useState("");
+  const [newColor, setNewColor] = useState<string>(
+    CUSTOMER_TAG_COLOR_PRESETS[
+      initialTags.length % CUSTOMER_TAG_COLOR_PRESETS.length
+    ].value,
+  );
   const [editingId, setEditingId] = useState("");
   const [editingName, setEditingName] = useState("");
+  const [editingColor, setEditingColor] = useState<string>(
+    DEFAULT_CUSTOMER_TAG_COLOR,
+  );
   const [deletingId, setDeletingId] = useState("");
   const [pendingId, setPendingId] = useState("");
   const [error, setError] = useState("");
@@ -74,8 +134,13 @@ export function CustomerTagsClient({
     event.preventDefault();
     const name = newName.trim();
     if (!name) return;
-    if (await requestTags("POST", { name })) {
+    if (await requestTags("POST", { name, color: newColor })) {
       setNewName("");
+      setNewColor(
+        CUSTOMER_TAG_COLOR_PRESETS[
+          (tags.length + 1) % CUSTOMER_TAG_COLOR_PRESETS.length
+        ].value,
+      );
       setNotice("고객태그를 추가했습니다.");
     }
   }
@@ -83,7 +148,7 @@ export function CustomerTagsClient({
   async function saveEdit(id: string) {
     const name = editingName.trim();
     if (!name) return;
-    if (await requestTags("PATCH", { id, name })) {
+    if (await requestTags("PATCH", { id, name, color: editingColor })) {
       setEditingId("");
       setEditingName("");
       setNotice("고객태그를 수정했습니다.");
@@ -152,7 +217,15 @@ export function CustomerTagsClient({
                 </span>
               </div>
 
-              <form onSubmit={addTag} className="mt-6 flex gap-3">
+              <div className="mt-6 rounded-2xl border border-[#e4e7ee] bg-[#fafbfe] p-4">
+                <PresetColorPicker
+                  value={newColor}
+                  onChange={setNewColor}
+                  label="새 고객태그 색상"
+                />
+              </div>
+
+              <form onSubmit={addTag} className="mt-4 flex gap-3">
                 <label className="flex h-11 min-w-0 flex-1 items-center rounded-xl border border-[#dfe3ea] px-4 focus-within:border-[#7187f6] focus-within:ring-3 focus-within:ring-[#3157f6]/10">
                   <Tag className="mr-2 size-4 text-[#9ba2b1]" />
                   <input
@@ -195,23 +268,35 @@ export function CustomerTagsClient({
                         >
                           <span
                             className="size-3 shrink-0 rounded-full"
-                            style={{ backgroundColor: tag.color }}
+                            style={{
+                              backgroundColor: editing
+                                ? editingColor
+                                : tag.color,
+                            }}
                           />
                           {editing ? (
-                            <input
-                              value={editingName}
-                              maxLength={30}
-                              autoFocus
-                              onChange={(event) =>
-                                setEditingName(event.target.value)
-                              }
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter")
-                                  void saveEdit(tag.id);
-                                if (event.key === "Escape") setEditingId("");
-                              }}
-                              className="h-10 min-w-0 flex-1 rounded-xl border border-[#7187f6] px-3 text-sm outline-none ring-3 ring-[#3157f6]/10"
-                            />
+                            <div className="min-w-0 flex-1 space-y-3 py-1">
+                              <input
+                                value={editingName}
+                                maxLength={30}
+                                autoFocus
+                                onChange={(event) =>
+                                  setEditingName(event.target.value)
+                                }
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter")
+                                    void saveEdit(tag.id);
+                                  if (event.key === "Escape") setEditingId("");
+                                }}
+                                className="h-10 w-full min-w-0 rounded-xl border border-[#7187f6] px-3 text-sm outline-none ring-3 ring-[#3157f6]/10"
+                              />
+                              <PresetColorPicker
+                                value={editingColor}
+                                onChange={setEditingColor}
+                                label={`${tag.name} 색상`}
+                                compact
+                              />
+                            </div>
                           ) : (
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-extrabold text-[#3b4357]">
@@ -268,6 +353,10 @@ export function CustomerTagsClient({
                                 onClick={() => {
                                   setEditingId(tag.id);
                                   setEditingName(tag.name);
+                                  setEditingColor(
+                                    normalizeCustomerTagColor(tag.color) ??
+                                      DEFAULT_CUSTOMER_TAG_COLOR,
+                                  );
                                   setDeletingId("");
                                 }}
                                 className="flex size-9 items-center justify-center rounded-lg border border-[#dfe3ea] text-[#697187] hover:bg-[#f7f8fb]"

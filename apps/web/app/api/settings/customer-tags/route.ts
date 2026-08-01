@@ -1,9 +1,9 @@
 import { getDatabase } from "@doctornest/database";
 
+import { normalizeCustomerTagColor } from "@/features/settings/customer-tags/customer-tag-colors";
 import { getCurrentUser } from "@/lib/auth";
 
 const MAX_CUSTOMER_TAGS = 5;
-const tagColors = ["#3157F6", "#8B5CF6", "#0EA5E9", "#10B981", "#F59E0B"];
 
 function normalizeName(value: unknown) {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
@@ -38,11 +38,13 @@ export async function POST(request: Request) {
   }
   const body = (await request.json().catch(() => null)) as {
     name?: unknown;
+    color?: unknown;
   } | null;
   const name = normalizeName(body?.name);
-  if (!name || name.length > 30) {
+  const color = normalizeCustomerTagColor(body?.color);
+  if (!name || name.length > 30 || !color) {
     return Response.json(
-      { error: "태그명은 1자 이상 30자 이하로 입력해 주세요." },
+      { error: "태그명과 색상을 확인해 주세요." },
       { status: 400 },
     );
   }
@@ -77,7 +79,7 @@ export async function POST(request: Request) {
       hospitalId: user.hospitalId,
       name,
       category: "STATUS",
-      color: tagColors[count % tagColors.length],
+      color,
     },
   });
   return Response.json(
@@ -94,12 +96,14 @@ export async function PATCH(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     id?: unknown;
     name?: unknown;
+    color?: unknown;
   } | null;
   const id = typeof body?.id === "string" ? body.id : "";
   const name = normalizeName(body?.name);
-  if (!id || !name || name.length > 30) {
+  const color = normalizeCustomerTagColor(body?.color);
+  if (!id || !name || name.length > 30 || !color) {
     return Response.json(
-      { error: "수정할 태그와 태그명을 확인해 주세요." },
+      { error: "수정할 태그의 이름과 색상을 확인해 주세요." },
       { status: 400 },
     );
   }
@@ -128,7 +132,7 @@ export async function PATCH(request: Request) {
     );
   }
 
-  await database.patientTag.update({ where: { id }, data: { name } });
+  await database.patientTag.update({ where: { id }, data: { name, color } });
   return Response.json({ tags: await serializeTags(user.hospitalId) });
 }
 

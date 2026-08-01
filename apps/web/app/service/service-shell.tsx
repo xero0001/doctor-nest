@@ -66,9 +66,10 @@ const navigation = [
   {
     label: "예약관리",
     icon: CalendarDays,
-    href: "/service/chatting#appointments",
+    href: "/service/appointments",
     available: true,
     requiresAppointmentManagement: true,
+    openInNewTab: true,
   },
 ];
 
@@ -127,10 +128,14 @@ export function ServiceShell({
             }
             const { label, icon: Icon, href, available } = item;
             const active = available && pathname.startsWith(href);
+            const openInNewTab =
+              "openInNewTab" in item && item.openInNewTab === true;
             return (
               <Link
                 key={label}
                 href={href}
+                target={openInNewTab ? "_blank" : undefined}
+                rel={openInNewTab ? "noopener noreferrer" : undefined}
                 className={`group relative flex w-full flex-col items-center gap-1.5 rounded-xl py-2.5 text-[10px] font-medium transition-colors ${
                   active
                     ? "bg-[#eef2ff] text-[#3157f6]"

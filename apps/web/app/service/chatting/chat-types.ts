@@ -91,10 +91,15 @@ export type ConversationItem = {
     email: string | null;
     gender: string | null;
     birthDate: string | null;
+    visitType: string | null;
+    nationality: string | null;
     language: string;
     notes: string | null;
     notesUpdatedAt: string | null;
-    tags: string[];
+    tags: Array<{
+      name: string;
+      color: string;
+    }>;
     channels: Array<{
       id: string;
       channel: ChatChannel;

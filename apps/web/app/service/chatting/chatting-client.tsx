@@ -26,9 +26,7 @@ import {
   LoaderCircle,
   LogOut,
   MessageCircleMore,
-  MoreHorizontal,
   Paperclip,
-  Phone,
   Search,
   Save,
   Send,
@@ -169,6 +167,92 @@ function getConversationDisplayName(conversation: ConversationItem) {
 
 function getConversationPhone(conversation: ConversationItem) {
   return conversation.customer?.phone ?? conversation.chatAccount.phone;
+}
+
+const nationalityDialCodes: Record<string, string> = {
+  대한민국: "+82",
+  한국: "+82",
+  korea: "+82",
+  southkorea: "+82",
+  kr: "+82",
+  미국: "+1",
+  usa: "+1",
+  unitedstates: "+1",
+  us: "+1",
+  중국: "+86",
+  china: "+86",
+  cn: "+86",
+  일본: "+81",
+  japan: "+81",
+  jp: "+81",
+};
+
+const knownDialCodes = [
+  "+886",
+  "+852",
+  "+853",
+  "+971",
+  "+86",
+  "+84",
+  "+82",
+  "+81",
+  "+66",
+  "+65",
+  "+61",
+  "+44",
+  "+1",
+];
+
+function getGenderLabel(gender: string | null) {
+  const normalized = gender?.trim().toUpperCase();
+  if (!normalized) return "-";
+  if (["MALE", "M", "남", "남성"].includes(normalized)) return "남";
+  if (["FEMALE", "F", "여", "여성"].includes(normalized)) return "여";
+  if (["OTHER", "기타"].includes(normalized)) return "기타";
+  return gender!.trim();
+}
+
+function formatHeaderBirthDate(value: string | null) {
+  if (!value) return "-";
+
+  const parts = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(value));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+function formatPhoneWithCountry(
+  phone: string | null,
+  nationality: string | null,
+) {
+  if (!phone) return "연락처 미등록";
+
+  const trimmedPhone = phone.trim();
+  const explicitDialCode = knownDialCodes.find((dialCode) =>
+    trimmedPhone.startsWith(dialCode),
+  );
+  const normalizedNationality = nationality
+    ?.replace(/[\s_-]/g, "")
+    .toLowerCase();
+  const inferredDialCode = normalizedNationality
+    ? nationalityDialCodes[normalizedNationality]
+    : undefined;
+  const dialCode =
+    explicitDialCode ??
+    inferredDialCode ??
+    (trimmedPhone.startsWith("0") ? "+82" : null);
+
+  if (!dialCode) return trimmedPhone;
+
+  const localPhone = explicitDialCode
+    ? trimmedPhone.slice(explicitDialCode.length).trim()
+    : trimmedPhone;
+  return `(${dialCode}) ${localPhone}`;
 }
 
 function formatListTime(value: string) {
@@ -2395,85 +2479,108 @@ export function ChattingClient({
       </section>
 
       <section className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#f2f5fb]">
-        <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-[#e5e8f0] bg-white px-5">
-          <div className="flex min-w-0 items-center gap-3">
-            <ChannelBadge channel={currentRoom.channel} large />
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h2 className="truncate text-base font-bold tracking-[-0.03em]">
-                  {getConversationDisplayName(currentRoom)}
-                </h2>
-                {currentRoom.customer?.chartNumber ? (
-                  <button
-                    type="button"
-                    onClick={() => void copyChartNumber()}
-                    aria-label={`차트번호 ${currentRoom.customer.chartNumber} 복사`}
-                    className="shrink-0 rounded-md border border-[#d9deea] bg-white px-1.5 py-0.5 font-mono text-xs font-medium leading-4 text-[#737b8f] transition-colors hover:border-[#bfc7d8] hover:bg-[#f8f9fc]"
-                  >
-                    {copiedChartNumber === currentRoom.customer.chartNumber
-                      ? "복사되었습니다"
-                      : currentRoom.customer.chartNumber}
-                  </button>
-                ) : (
-                  <span className="rounded-md bg-[#fff4df] px-2 py-0.5 text-[10px] font-bold text-[#b7791f]">
-                    {currentRoom.customer ? "차트번호 미등록" : "고객 미연동"}
-                  </span>
-                )}
-                {currentRoom.customer?.tags.includes("VIP") ? (
-                  <span className="rounded-full bg-[#fff3c5] px-2 py-0.5 text-[8px] font-bold text-[#a97500]">
-                    VIP
-                  </span>
-                ) : null}
-              </div>
-              <p className="mt-0.5 text-sm text-[#9298a8]">
-                {currentMeta.label} ·{" "}
-                {getConversationPhone(currentRoom) ?? "연락처 미등록"}
-              </p>
+        <header className="flex min-h-[92px] shrink-0 flex-col gap-2 border-b border-[#e5e8f0] bg-white px-5 py-3">
+          <div className="flex w-full min-w-0 items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => void toggleConversationImportant(currentRoom.id)}
+                aria-pressed={currentRoom.important}
+                aria-label={`중요 표시 ${currentRoom.important ? "해제" : "추가"}`}
+                className="flex size-7 shrink-0 items-center justify-center rounded-lg hover:bg-[#f7f8fb]"
+              >
+                <Star
+                  className={`size-5 transition-colors ${
+                    currentRoom.important
+                      ? "fill-[#ffcf34] text-[#ffbe19]"
+                      : "text-[#cdd1db] hover:text-[#ffbe19]"
+                  }`}
+                />
+              </button>
+              <h2 className="max-w-32 truncate text-base font-extrabold tracking-[-0.03em] text-[#343a4d]">
+                {getConversationDisplayName(currentRoom)}
+              </h2>
+              {currentRoom.customer?.chartNumber ? (
+                <button
+                  type="button"
+                  onClick={() => void copyChartNumber()}
+                  aria-label={`차트번호 ${currentRoom.customer.chartNumber} 복사`}
+                  className="shrink-0 font-mono text-xs font-semibold text-[#7d8495] underline decoration-[#c8ccd5] underline-offset-2 hover:text-[#3157f6]"
+                >
+                  {copiedChartNumber === currentRoom.customer.chartNumber
+                    ? "복사됨"
+                    : `(${currentRoom.customer.chartNumber})`}
+                </button>
+              ) : (
+                <span className="rounded-md bg-[#fff4df] px-2 py-0.5 text-[10px] font-bold text-[#b7791f]">
+                  {currentRoom.customer ? "차트번호 미등록" : "고객 미연동"}
+                </span>
+              )}
+              <span
+                className="flex shrink-0 items-center"
+                title={currentMeta.label}
+                aria-label={`채팅 채널 ${currentMeta.label}`}
+              >
+                <ChannelBadge channel={currentRoom.channel} />
+              </span>
+              {currentRoom.customer ? (
+                <button
+                  type="button"
+                  onClick={() => setIsCustomerModalOpen(true)}
+                  className="shrink-0 text-[11px] font-semibold text-[#8a8292] underline decoration-[#bbb3bf] underline-offset-2 hover:text-[#3157f6]"
+                >
+                  연동 관리
+                </button>
+              ) : null}
+            </div>
+
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setIsCustomerModalOpen(true)}
+                className="flex h-8 items-center gap-1.5 rounded-lg border border-[#cfd5e2] bg-white px-2.5 text-[11px] font-bold text-[#596176] transition hover:border-[#aebcf5] hover:bg-[#f8faff] hover:text-[#3157f6]"
+              >
+                <UserRound className="size-3.5" />
+                고객 정보
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="hidden items-center gap-1.5 rounded-full bg-[#edf8f2] px-2.5 py-1.5 text-[9px] font-bold text-[#1c9a5f] sm:flex">
-              <span className="size-1.5 rounded-full bg-[#1fb46b]" />
-              AI 자동응대
+
+          <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] font-semibold text-[#737b8e]">
+            <span className="rounded-lg bg-[#f7f8fa] px-2.5 py-1">
+              {currentRoom.customer
+                ? `${getGenderLabel(currentRoom.customer.gender)}/${formatHeaderBirthDate(currentRoom.customer.birthDate)}`
+                : "인적정보 미연동"}
             </span>
-            <button
-              type="button"
-              aria-label="고객에게 전화하기"
-              className="flex size-8 items-center justify-center rounded-lg border border-[#e1e5ed] bg-white text-[#657087] hover:text-[#3157f6]"
-            >
-              <Phone className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              aria-label="채팅 더보기"
-              className="flex size-8 items-center justify-center rounded-lg border border-[#e1e5ed] bg-white text-[#657087]"
-            >
-              <MoreHorizontal className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsCustomerModalOpen(true)}
-              className="flex h-8 items-center gap-1.5 rounded-lg border border-[#cfd5e2] bg-white px-3 text-xs font-bold text-[#596176] transition hover:border-[#aebcf5] hover:bg-[#f8faff] hover:text-[#3157f6]"
-            >
-              <UserRound className="size-3.5" />
-              고객 정보
-            </button>
+            <span className="rounded-lg bg-[#f7f8fa] px-2.5 py-1 font-mono">
+              {formatPhoneWithCountry(
+                getConversationPhone(currentRoom),
+                currentRoom.customer?.nationality ?? null,
+              )}
+            </span>
+            <span className="rounded-lg bg-[#f7f8fa] px-2.5 py-1">
+              {currentRoom.customer?.nationality?.trim() || "-"}
+            </span>
           </div>
         </header>
 
         <div className="flex items-center justify-between border-b border-[#e5e8f0] bg-white px-5 py-2">
-          <div className="flex items-center gap-1.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <span className="mr-1 text-xs font-semibold text-[#858c9e]">
               치료태그
             </span>
             {(currentRoom.customer?.tags ?? []).map((tag) => (
               <span
-                key={tag}
-                className="rounded-md bg-[#edf1ff] px-2 py-1 text-xs font-bold text-[#3157f6]"
+                key={tag.name}
+                className="rounded-full px-2.5 py-1 text-[11px] font-bold text-white shadow-sm"
+                style={{ backgroundColor: tag.color }}
               >
-                {tag}
+                {tag.name}
               </span>
             ))}
+            {currentRoom.customer && currentRoom.customer.tags.length === 0 ? (
+              <span className="text-[11px] text-[#a0a6b4]">-</span>
+            ) : null}
           </div>
           <span className="flex items-center gap-1 text-xs text-[#858c9e]">
             <Languages className="size-3.5" />
@@ -2485,7 +2592,7 @@ export function ChattingClient({
         </div>
 
         {loadingRoomId === currentRoom.id ? (
-          <div className="absolute left-1/2 top-[118px] z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#dce2f4] bg-white px-3 py-2 text-[9px] font-semibold text-[#66708a] shadow-lg">
+          <div className="absolute left-1/2 top-[138px] z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#dce2f4] bg-white px-3 py-2 text-[9px] font-semibold text-[#66708a] shadow-lg">
             <LoaderCircle className="size-3.5 animate-spin text-[#3157f6]" />
             DB에서 최신 채팅을 불러오는 중
           </div>
@@ -2494,7 +2601,7 @@ export function ChattingClient({
         {detailError ? (
           <div
             role="alert"
-            className="absolute left-1/2 top-[118px] z-20 -translate-x-1/2 rounded-full bg-[#fff0f2] px-3 py-2 text-[9px] font-semibold text-[#d8465b] shadow-lg"
+            className="absolute left-1/2 top-[138px] z-20 -translate-x-1/2 rounded-full bg-[#fff0f2] px-3 py-2 text-[9px] font-semibold text-[#d8465b] shadow-lg"
           >
             {detailError}
           </div>

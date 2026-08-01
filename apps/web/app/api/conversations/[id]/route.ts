@@ -59,11 +59,16 @@ function serializeConversation(
           email: conversation.patient.email,
           gender: conversation.patient.gender,
           birthDate: conversation.patient.birthDate?.toISOString() ?? null,
+          visitType: conversation.patient.visitType,
+          nationality: conversation.patient.nationality,
           language: conversation.patient.language,
           notes: conversation.patient.notes,
           notesUpdatedAt:
             conversation.patient.notesUpdatedAt?.toISOString() ?? null,
-          tags: conversation.patient.tagAssignments.map(({ tag }) => tag.name),
+          tags: conversation.patient.tagAssignments.map(({ tag }) => ({
+            name: tag.name,
+            color: tag.color,
+          })),
           channels: conversation.patient.channels.map((patientChannel) => ({
             id: patientChannel.id,
             channel: patientChannel.channel,

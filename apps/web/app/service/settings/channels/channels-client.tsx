@@ -5,7 +5,6 @@ import {
   ArrowRight,
   BadgeCheck,
   Bot,
-  Building2,
   Check,
   CircleAlert,
   CircleCheck,
@@ -19,7 +18,6 @@ import {
   MessageCircleMore,
   RotateCcw,
   Save,
-  Settings,
   ShieldCheck,
   Webhook,
   X,
@@ -209,9 +207,6 @@ const statusMeta: Record<
   ERROR: { label: "확인 필요", className: "bg-[#fff0f2] text-[#d8465b]" },
 };
 
-const settingTabs = ["병원 정보", "사용자", "채널", "AI 상담", "보안"] as const;
-type SettingTab = (typeof settingTabs)[number];
-
 type AISettings = {
   translationContextEnabled: boolean;
   translationContextMessageCount: number;
@@ -237,7 +232,7 @@ export function ChannelsClient({
   instagramOAuthConfigured: boolean;
   aiSettings: AISettings;
 }) {
-  const [activeTab, setActiveTab] = useState<SettingTab>("채널");
+  const [activeTab] = useState<"채널" | "AI 상담">("채널");
   const [connections, setConnections] = useState(initialConnections);
   const [selectedChannel, setSelectedChannel] = useState<ChannelType | null>(
     null,
@@ -501,68 +496,6 @@ export function ChannelsClient({
 
   return (
     <div className="h-full overflow-y-auto bg-[#f5f7fb]">
-      <header className="border-b border-[#e5e8f0] bg-white px-8 pt-6">
-        <div className="mx-auto max-w-[1180px]">
-          <div className="flex items-start justify-between gap-6">
-            <div>
-              <div className="flex items-center gap-2 text-xs font-semibold text-[#8b92a5]">
-                <Settings className="size-3.5" />
-                환경설정
-              </div>
-              <h1 className="mt-2 text-2xl font-bold tracking-[-0.04em]">
-                {activeTab === "AI 상담" ? "AI 상담" : "채널 연동"}
-              </h1>
-              <p className="mt-2 text-sm text-[#777f93]">
-                {activeTab === "AI 상담"
-                  ? "번역, AI 상담 코칭과 자동 응대에 사용할 대화 문맥과 응답 시간을 관리하세요."
-                  : `${organizationName}으로 들어오는 모든 고객 문의를 닥터네스트에서 관리하세요.`}
-              </p>
-            </div>
-            <div className="flex items-center gap-3 rounded-2xl border border-[#e0e5f0] bg-[#fafbfe] px-4 py-3">
-              <span className="flex size-9 items-center justify-center rounded-xl bg-[#edf1ff] text-[#3157f6]">
-                <Building2 className="size-4" />
-              </span>
-              <div>
-                <p className="text-xs font-semibold text-[#9198aa]">
-                  현재 병원
-                </p>
-                <p className="mt-0.5 text-xs font-bold">{organizationName}</p>
-              </div>
-            </div>
-          </div>
-
-          <nav className="mt-7 flex gap-7" aria-label="환경설정 탭">
-            {settingTabs.map((tab) => {
-              const available = tab === "채널" || tab === "AI 상담";
-              const active = tab === activeTab;
-
-              return (
-                <button
-                  type="button"
-                  key={tab}
-                  disabled={!available}
-                  onClick={() => {
-                    if (available) setActiveTab(tab);
-                  }}
-                  className={`relative pb-3 text-xs font-semibold ${
-                    active
-                      ? "text-[#3157f6]"
-                      : available
-                        ? "text-[#72798d] hover:text-[#3157f6]"
-                        : "cursor-not-allowed text-[#a0a6b5]"
-                  }`}
-                >
-                  {tab}
-                  {active ? (
-                    <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-[#3157f6]" />
-                  ) : null}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      </header>
-
       {activeTab === "채널" ? (
         <div className="mx-auto max-w-[1180px] px-8 py-7">
           {instagramResultMessage ? (

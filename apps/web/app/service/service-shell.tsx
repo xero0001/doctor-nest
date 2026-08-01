@@ -18,6 +18,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
+import {
+  ServiceNavigationProvider,
+  useServiceNavigation,
+} from "@/features/navigation/service-navigation-context";
 import { authClient } from "@/lib/auth-client";
 
 const navigation = [
@@ -87,8 +91,22 @@ export function ServiceShell({
   appointmentManagementEnabled,
   children,
 }: ServiceShellProps) {
+  return (
+    <ServiceNavigationProvider
+      initialAppointmentManagementEnabled={appointmentManagementEnabled}
+    >
+      <ServiceShellContent user={user}>{children}</ServiceShellContent>
+    </ServiceNavigationProvider>
+  );
+}
+
+function ServiceShellContent({
+  user,
+  children,
+}: Omit<ServiceShellProps, "appointmentManagementEnabled">) {
   const pathname = usePathname();
   const router = useRouter();
+  const { appointmentManagementEnabled } = useServiceNavigation();
 
   async function logout() {
     await authClient.signOut();

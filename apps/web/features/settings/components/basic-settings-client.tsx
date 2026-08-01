@@ -12,10 +12,11 @@ import {
   Trash2,
   Workflow,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { UnsavedChangesDialog } from "@/components/unsaved-changes-dialog";
 import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
+import { useServiceNavigation } from "@/features/navigation/service-navigation-context";
 import { HospitalSettingsSidebar } from "@/features/settings/components/hospital-settings-sidebar";
 import type {
   AutomationTagSelectionMode,
@@ -113,6 +114,10 @@ export function BasicSettingsClient({
 }: {
   initialSettings: BasicServiceSettings;
 }) {
+  const { setAppointmentManagementEnabled } = useServiceNavigation();
+  const savedAppointmentManagementEnabled = useRef(
+    initialSettings.appointmentManagementEnabled,
+  );
   const [settings, setSettings] = useState(() =>
     cloneSettings(initialSettings),
   );
@@ -129,9 +134,17 @@ export function BasicSettingsClient({
     JSON.stringify(settings) !== savedSnapshot || Boolean(newTagName.trim());
   const navigationGuard = useUnsavedChangesGuard(isDirty);
   const normalizedNames = useMemo(
-    () =>
-      new Set(settings.treatmentTags.map((tag) => tag.name.toLowerCase())),
+    () => new Set(settings.treatmentTags.map((tag) => tag.name.toLowerCase())),
     [settings.treatmentTags],
+  );
+
+  useEffect(
+    () => () => {
+      setAppointmentManagementEnabled(
+        savedAppointmentManagementEnabled.current,
+      );
+    },
+    [setAppointmentManagementEnabled],
   );
 
   function resetFeedback() {
@@ -178,7 +191,9 @@ export function BasicSettingsClient({
       ],
     }));
     setNewTagName("");
-    setNewTagColor(tagColors[(settings.treatmentTags.length + 1) % tagColors.length]);
+    setNewTagColor(
+      tagColors[(settings.treatmentTags.length + 1) % tagColors.length],
+    );
     resetFeedback();
   }
 
@@ -224,8 +239,7 @@ export function BasicSettingsClient({
         body: JSON.stringify({
           inputFields: settings.inputFields,
           automationTagSelectionMode: settings.automationTagSelectionMode,
-          appointmentManagementEnabled:
-            settings.appointmentManagementEnabled,
+          appointmentManagementEnabled: settings.appointmentManagementEnabled,
           treatmentTags: treatmentTags.map(({ id, name, color }) => ({
             id,
             name,
@@ -243,6 +257,11 @@ export function BasicSettingsClient({
         );
       }
       const nextSettings = cloneSettings(result.settings);
+      savedAppointmentManagementEnabled.current =
+        nextSettings.appointmentManagementEnabled;
+      setAppointmentManagementEnabled(
+        nextSettings.appointmentManagementEnabled,
+      );
       setSettings(nextSettings);
       setSavedSnapshot(JSON.stringify(nextSettings));
       setNewTagName("");
@@ -402,6 +421,7 @@ export function BasicSettingsClient({
                   checked={settings.appointmentManagementEnabled}
                   label="예약관리 사용"
                   onChange={(checked) => {
+                    setAppointmentManagementEnabled(checked);
                     setSettings((current) => ({
                       ...current,
                       appointmentManagementEnabled: checked,

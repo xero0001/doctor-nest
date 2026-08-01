@@ -19,6 +19,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import type { ChangeEvent, FormEvent } from "react";
 import { Fragment, useMemo, useState } from "react";
@@ -59,6 +60,24 @@ const editorTabs = [
   { value: "EDIT", label: "편집" },
   { value: "PREVIEW", label: "미리보기" },
 ] as const;
+
+const manualImageAccept =
+  "image/jpeg,image/png,image/webp,image/gif,image/avif";
+const manualImageTypes = new Set(manualImageAccept.split(","));
+const maxManualImageSizeBytes = 10 * 1024 * 1024;
+
+const ManualContentEditor = dynamic(
+  () =>
+    import("@/features/manuals/components/manual-content-editor").then(
+      (module) => module.ManualContentEditor,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-[476px] animate-pulse rounded-xl border border-[#e1e5ed] bg-[#fafbfc]" />
+    ),
+  },
+);
 
 function createDraft(
   document: ManualDocumentRecord | undefined,
@@ -159,6 +178,7 @@ export function ManualsClient({
   const [isSaving, setIsSaving] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
+  const [isDraggingImages, setIsDraggingImages] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
@@ -754,13 +774,21 @@ export function ManualsClient({
     }
   }
 
-  async function uploadImages(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
+  async function uploadImageFiles(files: File[]) {
     if (files.length === 0 || isUploadingImages) return;
 
     if (draft.images.length + files.length > 10) {
       setError("이미지는 최대 10개까지 등록할 수 있습니다.");
+      return;
+    }
+
+    if (files.some((file) => !manualImageTypes.has(file.type))) {
+      setError("JPG, PNG, WebP, GIF, AVIF 이미지만 업로드할 수 있습니다.");
+      return;
+    }
+
+    if (files.some((file) => file.size > maxManualImageSizeBytes)) {
+      setError("이미지는 파일당 10MB까지 업로드할 수 있습니다.");
       return;
     }
 
@@ -832,6 +860,12 @@ export function ManualsClient({
     }
   }
 
+  function uploadImages(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    void uploadImageFiles(files);
+  }
+
   function moveDraftImage(index: number, direction: -1 | 1) {
     const targetIndex = index + direction;
     if (targetIndex < 0 || targetIndex >= draft.images.length) return;
@@ -861,11 +895,11 @@ export function ManualsClient({
               <h1 className="text-base font-bold tracking-[-0.03em]">
                 원내매뉴얼
               </h1>
-              <span className="rounded-full bg-[#f0edff] px-2 py-1 text-[9px] font-bold text-[#6657e9]">
+              <span className="rounded-full bg-[#f0edff] px-2 py-1 text-xs font-bold text-[#6657e9]">
                 병원 전용
               </span>
             </div>
-            <p className="mt-0.5 text-[10px] text-[#8c93a5]">
+            <p className="mt-0.5 text-xs text-[#8c93a5]">
               {organizationName}의 상담 기준과 시술 정보를 관리합니다.
             </p>
           </div>
@@ -924,7 +958,7 @@ export function ManualsClient({
             <span className="text-xs font-bold text-[#50586e]">
               폴더 · 치료태그
             </span>
-            <span className="text-[10px] font-semibold text-[#a0a6b5]">
+            <span className="text-xs font-semibold text-[#a0a6b5]">
               {folders.length + documents.length}
             </span>
           </div>
@@ -935,7 +969,7 @@ export function ManualsClient({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="폴더명 또는 치료태그 검색"
-                className="min-w-0 flex-1 bg-transparent text-[11px] text-[#363c50] outline-none"
+                className="min-w-0 flex-1 bg-transparent text-xs text-[#363c50] outline-none"
               />
             </label>
           </div>
@@ -1033,7 +1067,7 @@ export function ManualsClient({
                       <span className="min-w-0 flex-1 truncate">
                         {folder.name}
                       </span>
-                      <span className="text-[9px] font-semibold text-[#a7adba]">
+                      <span className="text-xs font-semibold text-[#a7adba]">
                         {count}
                       </span>
                     </button>
@@ -1065,7 +1099,7 @@ export function ManualsClient({
                     return (
                       <div
                         key={document.id}
-                        className={`flex min-h-10 items-center pr-2 text-[11px] ${
+                        className={`flex min-h-10 items-center pr-2 text-xs ${
                           documentSelected
                             ? "bg-[#f3f6ff] font-bold text-[#3157f6]"
                             : "text-[#687084] hover:bg-[#fafbfc]"
@@ -1133,7 +1167,7 @@ export function ManualsClient({
             })}
 
             {folders.length === 0 ? (
-              <div className="px-5 py-10 text-center text-[11px] leading-5 text-[#9aa1b1]">
+              <div className="px-5 py-10 text-center text-xs leading-5 text-[#9aa1b1]">
                 폴더를 추가한 뒤
                 <br />
                 치료태그 매뉴얼을 작성해 주세요.
@@ -1152,14 +1186,14 @@ export function ManualsClient({
                     parentId: selectedFolder.parentId ?? "",
                   })
                 }
-                className="flex h-8 items-center justify-center gap-1 rounded-lg border border-[#e0e4ec] text-[10px] font-semibold text-[#6e7588] hover:bg-[#f8f9fc]"
+                className="flex h-8 items-center justify-center gap-1 rounded-lg border border-[#e0e4ec] text-xs font-semibold text-[#6e7588] hover:bg-[#f8f9fc]"
               >
                 <Pencil className="size-3" /> 이름 변경
               </button>
               <button
                 type="button"
                 onClick={() => void deleteFolder()}
-                className="flex h-8 items-center justify-center gap-1 rounded-lg border border-[#f1dce1] text-[10px] font-semibold text-[#d34e63] hover:bg-[#fff5f6]"
+                className="flex h-8 items-center justify-center gap-1 rounded-lg border border-[#f1dce1] text-xs font-semibold text-[#d34e63] hover:bg-[#fff5f6]"
               >
                 <Trash2 className="size-3" /> 삭제
               </button>
@@ -1183,7 +1217,7 @@ export function ManualsClient({
                     aria-label="치료태그 이름"
                     className="w-full truncate bg-transparent text-base font-bold tracking-[-0.02em] text-[#2f3549] outline-none"
                   />
-                  <p className="mt-1 text-[9px] text-[#a0a6b4]">
+                  <p className="mt-1 text-xs text-[#a0a6b4]">
                     /{selectedDocument.slug}
                     {isDirty ? " · 저장되지 않은 변경사항" : " · 저장됨"}
                   </p>
@@ -1199,7 +1233,7 @@ export function ManualsClient({
                         isActive: !current.isActive,
                       }))
                     }
-                    className="flex h-9 items-center gap-2 rounded-lg border border-[#dfe3ec] px-3 text-[10px] font-bold text-[#697084]"
+                    className="flex h-9 items-center gap-2 rounded-lg border border-[#dfe3ec] px-3 text-xs font-bold text-[#697084]"
                   >
                     사용 여부
                     <span
@@ -1253,7 +1287,7 @@ export function ManualsClient({
                       }))
                     }
                     aria-label="치료태그 폴더"
-                    className="h-8 min-w-0 flex-1 rounded-lg border border-[#e0e4ec] bg-white px-2.5 text-[10px] font-semibold text-[#626a7d] outline-none"
+                    className="h-8 min-w-0 flex-1 rounded-lg border border-[#e0e4ec] bg-white px-2.5 text-xs font-semibold text-[#626a7d] outline-none"
                   >
                     {orderedFolders.map(({ folder, depth }) => (
                       <option key={folder.id} value={folder.id}>
@@ -1275,7 +1309,7 @@ export function ManualsClient({
                     }
                     placeholder="AI 검색 키워드를 쉼표로 구분"
                     aria-label="AI 검색 키워드"
-                    className="h-8 min-w-0 flex-1 rounded-lg border border-[#e0e4ec] bg-white px-2.5 text-[10px] text-[#626a7d] outline-none"
+                    className="h-8 min-w-0 flex-1 rounded-lg border border-[#e0e4ec] bg-white px-2.5 text-xs text-[#626a7d] outline-none"
                   />
                 </label>
               </div>
@@ -1290,44 +1324,40 @@ export function ManualsClient({
               <div className="min-h-0 flex-1 overflow-y-auto bg-[#f7f8fb]">
                 {editorView === "EDIT" ? (
                   <div className="mx-auto max-w-[980px] space-y-5 px-7 py-6">
-                    <section className="rounded-2xl border border-[#e1e5ed] bg-white p-5">
+                    <section className="rounded-2xl border border-[#e1e5ed] bg-white p-6">
                       <div className="mb-3 flex items-center justify-between">
                         <div>
-                          <h2 className="text-sm font-bold text-[#3d4458]">
-                            마크다운 내용
+                          <h2 className="text-base font-extrabold text-[#3d4458]">
+                            내용
                           </h2>
-                          <p className="mt-1 text-[10px] text-[#969dad]">
-                            제목, 목록, 표, 링크 등 마크다운 문법을 사용할 수
+                          <p className="mt-1 text-xs text-[#969dad]">
+                            서식 도구를 사용해 고객에게 보여줄 내용을 편집할 수
                             있습니다.
                           </p>
                         </div>
-                        <span className="rounded-md bg-[#f1f3f8] px-2 py-1 font-mono text-[9px] text-[#82899b]">
+                        <span className="rounded-md bg-[#f1f3f8] px-2.5 py-1.5 font-mono text-xs text-[#82899b]">
                           {draft.contentMarkdown.length.toLocaleString("ko-KR")}{" "}
                           / 100,000
                         </span>
                       </div>
-                      <textarea
+                      <ManualContentEditor
                         value={draft.contentMarkdown}
-                        onChange={(event) =>
+                        onChange={(contentMarkdown) =>
                           setDraft((current) => ({
                             ...current,
-                            contentMarkdown: event.target.value,
+                            contentMarkdown,
                           }))
                         }
-                        aria-label="매뉴얼 마크다운 내용"
-                        spellCheck={false}
-                        maxLength={100_000}
-                        className="min-h-[380px] w-full resize-y rounded-xl border border-[#e2e5ed] bg-[#fcfcfd] px-4 py-3 font-mono text-[12px] leading-7 text-[#454c60] outline-none focus:border-[#7187f6]"
                       />
                     </section>
 
-                    <section className="rounded-2xl border border-[#e1e5ed] bg-white p-5">
+                    <section className="rounded-2xl border border-[#e1e5ed] bg-white p-6">
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <h2 className="text-sm font-bold text-[#3d4458]">
+                          <h2 className="text-base font-extrabold text-[#3d4458]">
                             이미지
                           </h2>
-                          <p className="mt-1 text-[10px] leading-4 text-[#969dad]">
+                          <p className="mt-1 text-xs leading-4 text-[#969dad]">
                             S3에 직접 업로드하고 CloudFront 주소로 제공합니다.
                             최대 10개, 파일당 10MB입니다.
                           </p>
@@ -1341,12 +1371,12 @@ export function ManualsClient({
                           이미지 추가
                           <input
                             type="file"
-                            accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+                            accept={manualImageAccept}
                             multiple
                             disabled={
                               isUploadingImages || draft.images.length >= 10
                             }
-                            onChange={(event) => void uploadImages(event)}
+                            onChange={uploadImages}
                             className="sr-only"
                           />
                         </label>
@@ -1369,7 +1399,7 @@ export function ManualsClient({
                                 />
                               </div>
                               <div className="space-y-2 p-3">
-                                <p className="truncate text-[10px] font-semibold text-[#656d80]">
+                                <p className="truncate text-xs font-semibold text-[#656d80]">
                                   {image.originalName}
                                 </p>
                                 <input
@@ -1390,7 +1420,7 @@ export function ManualsClient({
                                   maxLength={200}
                                   placeholder="이미지 설명"
                                   aria-label={`${image.originalName} 이미지 설명`}
-                                  className="h-8 w-full rounded-lg border border-[#dfe3ec] bg-white px-2.5 text-[10px] outline-none focus:border-[#7187f6]"
+                                  className="h-8 w-full rounded-lg border border-[#dfe3ec] bg-white px-2.5 text-xs outline-none focus:border-[#7187f6]"
                                 />
                                 <div className="flex items-center justify-end gap-1">
                                   <button
@@ -1439,26 +1469,88 @@ export function ManualsClient({
                           ))}
                         </div>
                       ) : (
-                        <div className="mt-4 flex min-h-32 flex-col items-center justify-center rounded-xl border border-dashed border-[#d9dde6] bg-[#fafbfc] text-[#a0a6b4]">
-                          <ImagePlus className="size-6" />
-                          <p className="mt-2 text-[10px]">
-                            등록된 이미지가 없습니다.
+                        <label
+                          aria-label="이미지 파일 선택 또는 드래그해서 업로드"
+                          onDragEnter={(event) => {
+                            event.preventDefault();
+                            if (
+                              !isUploadingImages &&
+                              draft.images.length < 10
+                            ) {
+                              setIsDraggingImages(true);
+                            }
+                          }}
+                          onDragOver={(event) => {
+                            event.preventDefault();
+                            event.dataTransfer.dropEffect = "copy";
+                          }}
+                          onDragLeave={(event) => {
+                            event.preventDefault();
+                            setIsDraggingImages(false);
+                          }}
+                          onDrop={(event) => {
+                            event.preventDefault();
+                            setIsDraggingImages(false);
+                            if (
+                              isUploadingImages ||
+                              draft.images.length >= 10
+                            ) {
+                              return;
+                            }
+                            void uploadImageFiles(
+                              Array.from(event.dataTransfer.files),
+                            );
+                          }}
+                          className={`mt-4 flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed px-6 text-center transition ${
+                            isUploadingImages || draft.images.length >= 10
+                              ? "cursor-not-allowed border-[#d9dde6] bg-[#f6f7f9] text-[#a0a6b4] opacity-70"
+                              : isDraggingImages
+                                ? "cursor-copy border-[#3157f6] bg-[#eef2ff] text-[#3157f6] ring-4 ring-[#3157f6]/10"
+                                : "cursor-pointer border-[#ccd3df] bg-[#fafbfc] text-[#8d95a7] hover:border-[#7187f6] hover:bg-[#f5f7ff] hover:text-[#3157f6]"
+                          }`}
+                        >
+                          <span className="flex size-12 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#3157f6]">
+                            {isUploadingImages ? (
+                              <LoaderCircle className="size-6 animate-spin" />
+                            ) : (
+                              <ImagePlus className="size-6" />
+                            )}
+                          </span>
+                          <p className="mt-4 text-sm font-bold">
+                            {isUploadingImages
+                              ? "이미지를 업로드하고 있습니다."
+                              : isDraggingImages
+                                ? "여기에 놓아 업로드"
+                                : "클릭하거나 이미지를 드래그해 업로드"}
                           </p>
-                        </div>
+                          <p className="mt-1 text-xs text-[#969dad]">
+                            JPG, PNG, WebP, GIF, AVIF · 파일당 최대 10MB
+                          </p>
+                          <input
+                            type="file"
+                            accept={manualImageAccept}
+                            multiple
+                            disabled={
+                              isUploadingImages || draft.images.length >= 10
+                            }
+                            onChange={uploadImages}
+                            className="sr-only"
+                          />
+                        </label>
                       )}
                     </section>
 
-                    <section className="rounded-2xl border border-[#e1e5ed] bg-white p-5">
+                    <section className="rounded-2xl border border-[#e1e5ed] bg-white p-6">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-start gap-2.5">
                           <span className="mt-0.5 flex size-8 items-center justify-center rounded-lg bg-[#fff4df] text-[#d58b21]">
                             <AlertTriangle className="size-4" />
                           </span>
                           <div>
-                            <h2 className="text-sm font-bold text-[#3d4458]">
+                            <h2 className="text-base font-extrabold text-[#3d4458]">
                               주의사항 메시지
                             </h2>
-                            <p className="mt-1 text-[10px] leading-4 text-[#969dad]">
+                            <p className="mt-1 text-xs leading-4 text-[#969dad]">
                               활성화하면 상담 시 전달할 주의사항으로 사용됩니다.
                             </p>
                           </div>
@@ -1497,7 +1589,7 @@ export function ManualsClient({
                         aria-label="주의사항 메시지"
                         maxLength={20_000}
                         placeholder="시술 후 주의사항과 고객에게 전달할 메시지를 마크다운으로 입력해 주세요."
-                        className={`mt-4 min-h-40 w-full resize-y rounded-xl border border-[#e2e5ed] px-4 py-3 font-mono text-[12px] leading-6 text-[#454c60] outline-none focus:border-[#7187f6] ${
+                        className={`mt-4 min-h-40 w-full resize-y rounded-xl border border-[#e2e5ed] px-4 py-3 font-mono text-xs leading-6 text-[#454c60] outline-none focus:border-[#7187f6] ${
                           draft.cautionEnabled ? "bg-white" : "bg-[#f5f6f8]"
                         }`}
                       />
@@ -1505,7 +1597,7 @@ export function ManualsClient({
                   </div>
                 ) : (
                   <div className="mx-auto max-w-[900px] space-y-6 px-8 py-7">
-                    <article className="rounded-2xl border border-[#e1e5ed] bg-white px-7 py-6 text-[12px] leading-7 text-[#4e5568] [&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-[#8066ec] [&_blockquote]:bg-[#f7f5ff] [&_blockquote]:px-4 [&_blockquote]:py-2 [&_h1]:mb-5 [&_h1]:text-xl [&_h1]:font-bold [&_h1]:text-[#292f43] [&_h2]:mb-3 [&_h2]:mt-7 [&_h2]:text-base [&_h2]:font-bold [&_h2]:text-[#31384d] [&_h3]:mb-2 [&_h3]:mt-5 [&_h3]:text-sm [&_h3]:font-bold [&_li]:ml-5 [&_li]:list-disc [&_p]:mb-3 [&_strong]:font-bold [&_strong]:text-[#31384d]">
+                    <article className="rounded-2xl border border-[#e1e5ed] bg-white px-7 py-6 text-xs leading-7 text-[#4e5568] [&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-[#8066ec] [&_blockquote]:bg-[#f7f5ff] [&_blockquote]:px-4 [&_blockquote]:py-2 [&_h1]:mb-5 [&_h1]:text-xl [&_h1]:font-bold [&_h1]:text-[#292f43] [&_h2]:mb-3 [&_h2]:mt-7 [&_h2]:text-base [&_h2]:font-bold [&_h2]:text-[#31384d] [&_h3]:mb-2 [&_h3]:mt-5 [&_h3]:text-sm [&_h3]:font-bold [&_li]:ml-5 [&_li]:list-disc [&_p]:mb-3 [&_strong]:font-bold [&_strong]:text-[#31384d]">
                       <ReactMarkdown>{draft.contentMarkdown}</ReactMarkdown>
                     </article>
                     {draft.images.length > 0 ? (
@@ -1525,7 +1617,7 @@ export function ManualsClient({
                               />
                             </div>
                             {image.altText ? (
-                              <figcaption className="px-4 py-3 text-[10px] text-[#737b8f]">
+                              <figcaption className="px-4 py-3 text-xs text-[#737b8f]">
                                 {image.altText}
                               </figcaption>
                             ) : null}
@@ -1538,7 +1630,7 @@ export function ManualsClient({
                         <h2 className="flex items-center gap-2 text-sm font-bold text-[#9a681d]">
                           <AlertTriangle className="size-4" /> 주의사항
                         </h2>
-                        <article className="mt-3 text-[12px] leading-7 text-[#6f5b3e] [&_li]:ml-5 [&_li]:list-disc [&_p]:mb-2">
+                        <article className="mt-3 text-xs leading-7 text-[#6f5b3e] [&_li]:ml-5 [&_li]:list-disc [&_p]:mb-2">
                           <ReactMarkdown>{draft.cautionMarkdown}</ReactMarkdown>
                         </article>
                       </section>
@@ -1573,7 +1665,7 @@ export function ManualsClient({
               <h2 className="text-sm font-bold text-[#41485c]">
                 편집할 매뉴얼을 선택해 주세요
               </h2>
-              <p className="mt-2 text-[11px] leading-5 text-[#939aab]">
+              <p className="mt-2 text-xs leading-5 text-[#939aab]">
                 병원 상담팀이 함께 참고할 시술 정보와
                 <br />
                 응대 기준을 문서로 관리할 수 있습니다.
@@ -1618,7 +1710,7 @@ export function ManualsClient({
                 <X className="size-4" />
               </button>
             </div>
-            <label className="mt-5 block text-[10px] font-bold text-[#697084]">
+            <label className="mt-5 block text-xs font-bold text-[#697084]">
               폴더 이름
               <input
                 autoFocus
@@ -1633,7 +1725,7 @@ export function ManualsClient({
               />
             </label>
             {folderDialog.mode === "create" ? (
-              <label className="mt-4 block text-[10px] font-bold text-[#697084]">
+              <label className="mt-4 block text-xs font-bold text-[#697084]">
                 상위 폴더
                 <select
                   value={folderDialog.parentId}
@@ -1657,7 +1749,7 @@ export function ManualsClient({
               </label>
             ) : null}
             {error ? (
-              <p className="mt-4 rounded-lg bg-[#fff0f2] px-3 py-2 text-[10px] font-semibold text-[#d8465b]">
+              <p className="mt-4 rounded-lg bg-[#fff0f2] px-3 py-2 text-xs font-semibold text-[#d8465b]">
                 {error}
               </p>
             ) : null}

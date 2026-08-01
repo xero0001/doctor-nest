@@ -44,6 +44,8 @@ model Hospital {
   patientTags                      PatientTag[]
   patientTagHistories              PatientTagHistory[]
   careAutomations                  CareAutomation[]
+  marketingEntitlement             MarketingEntitlement?
+  marketingCampaigns               MarketingCampaign[]
   conversations                    Conversation[]
   appointments                     Appointment[]
   manualFolders                    ManualFolder[]
@@ -430,6 +432,53 @@ model CareAutomationTag {
   tag          PatientTag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([automationId, tagId])
+}
+
+enum MarketingMessageType {
+  IMAGE
+  CAROUSEL_FEED
+}
+
+enum MarketingCampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model MarketingEntitlement {
+  id                  String   @id @default(cuid())
+  hospitalId          String   @unique @map("organizationId")
+  imageMessageCredits Int      @default(0)
+  carouselFeedCredits Int      @default(0)
+  hospital            Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model MarketingCampaign {
+  id            String                  @id @default(cuid())
+  hospitalId    String                  @map("organizationId")
+  name          String
+  messageName   String
+  messageType   MarketingMessageType    @default(IMAGE)
+  targetCount   Int                     @default(0)
+  sentCount     Int                     @default(0)
+  successCount  Int                     @default(0)
+  readCount     Int                     @default(0)
+  status        MarketingCampaignStatus @default(DRAFT)
+  scheduledAt   DateTime?
+  sentAt        DateTime?
+  createdById   String?
+  createdByName String
+  hospital      Hospital                @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@index([hospitalId, status, sentAt])
+  @@index([hospitalId, createdAt])
 }
 
 enum ConversationStatus {

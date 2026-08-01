@@ -183,7 +183,7 @@ export function ChannelAutoReplyClient({
                 자동응대 메시지
               </h1>
               <p className="mt-0.5 text-xs text-[#9299a9]">
-                고객의 첫 문의에 보낼 채널별 안내 메시지를 설정합니다.
+                고객 메시지에 보낼 채널별 안내 메시지를 설정합니다.
               </p>
             </div>
           </div>
@@ -255,7 +255,7 @@ export function ChannelAutoReplyClient({
                 <div className="flex items-center gap-2 border-b border-[#e8ebf1] pb-5">
                   <Clock3 className="size-5 text-[#3157f6]" />
                   <span className="text-sm font-extrabold text-[#3b4357]">
-                    고객이 첫 메시지를 보낸 후
+                    고객이 메시지를 보낸 후
                   </span>
                   <select
                     value={selected.delayMinutes}
@@ -285,7 +285,7 @@ export function ChannelAutoReplyClient({
                           운영시간 내
                         </h3>
                         <p className="mt-1 text-xs text-[#9299aa]">
-                          병원 운영시간 중 첫 문의에 안내합니다.
+                          병원 운영시간 중 고객 메시지에 안내합니다.
                         </p>
                       </div>
                       <AutoReplySwitch
@@ -320,7 +320,7 @@ export function ChannelAutoReplyClient({
                           운영시간 외
                         </h3>
                         <p className="mt-1 text-xs text-[#9299aa]">
-                          휴진 또는 운영시간 종료 후 첫 문의에 안내합니다.
+                          휴진 또는 운영시간 종료 후 고객 메시지에 안내합니다.
                         </p>
                       </div>
                       <AutoReplySwitch

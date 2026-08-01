@@ -28,6 +28,7 @@ model Hospital {
   users                           User[]
   authUsers                       AuthUser[]
   channelConnections              ChannelConnection[]
+  channelAutoReplySettings        ChannelAutoReplySetting[]
   patients                        Patient[]
   patientTags                     PatientTag[]
   patientTagHistories             PatientTagHistory[]
@@ -203,6 +204,23 @@ model ChannelConnection {
 
   @@unique([hospitalId, channel])
   @@index([hospitalId, status])
+}
+
+model ChannelAutoReplySetting {
+  id                          String      @id @default(cuid())
+  hospitalId                  String      @map("organizationId")
+  channel                     ChatChannel
+  delayMinutes                Int         @default(1)
+  businessHoursEnabled        Boolean     @default(false)
+  businessHoursMessage        String      @default("")
+  outsideBusinessHoursEnabled Boolean     @default(true)
+  outsideBusinessHoursMessage String      @default("")
+  hospital                    Hospital    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  createdAt                   DateTime    @default(now())
+  updatedAt                   DateTime    @updatedAt
+
+  @@unique([hospitalId, channel])
+  @@index([hospitalId, channel])
 }
 
 model Patient {

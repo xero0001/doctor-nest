@@ -34,6 +34,7 @@ import { WhatsAppChannelIcon } from "@/features/channels/components/whatsapp-cha
 
 type ChannelType =
   "KAKAO" | "LINE" | "NAVER_TALK" | "WECHAT" | "WHATSAPP" | "INSTAGRAM";
+type ChannelCardType = ChannelType | "KAKAO_ALIMTALK" | "KAKAO_BRAND_MESSAGE";
 
 type ConnectionStatus = "DISCONNECTED" | "CONFIGURING" | "CONNECTED" | "ERROR";
 
@@ -59,8 +60,10 @@ type ChannelDefinition = {
   guideUrl: string;
 };
 
-const channelOrder: ChannelType[] = [
+const channelOrder: ChannelCardType[] = [
+  "KAKAO_ALIMTALK",
   "KAKAO",
+  "KAKAO_BRAND_MESSAGE",
   "LINE",
   "NAVER_TALK",
   "WECHAT",
@@ -68,10 +71,22 @@ const channelOrder: ChannelType[] = [
   "INSTAGRAM",
 ];
 
-const definitions: Record<ChannelType, ChannelDefinition> = {
+const definitions: Record<ChannelCardType, ChannelDefinition> = {
+  KAKAO_ALIMTALK: {
+    label: "카카오 알림톡",
+    summary: "정보성 알림과 자동화 안내 메시지를 알림톡으로 발송합니다.",
+    owner: "병원 명의 카카오 비즈니스 채널",
+    accountIdLabel: "발신 프로필 키",
+    accountIdPlaceholder: "발신 프로필 키",
+    badge: "K",
+    badgeClass: "bg-[#fee500] text-[#252525]",
+    requirements: ["비즈니스 채널", "발신프로필", "템플릿 승인"],
+    steps: [],
+    guideUrl: "https://business.kakao.com/info/bizmessage/",
+  },
   KAKAO: {
-    label: "카카오",
-    summary: "알림톡과 카카오톡 채널 1:1 상담을 고객채팅으로 연결합니다.",
+    label: "카카오 상담톡",
+    summary: "카카오톡 채널로 문의한 고객과 실시간 메시지를 주고받습니다.",
     owner: "병원 명의 카카오 비즈니스 채널",
     accountIdLabel: "채널 검색용 ID",
     accountIdPlaceholder: "@병원채널",
@@ -84,6 +99,18 @@ const definitions: Record<ChannelType, ChannelDefinition> = {
       "닥터네스트 상담 웹훅 승인",
     ],
     guideUrl: "https://business.kakao.com/info/kakaotalkchannel/",
+  },
+  KAKAO_BRAND_MESSAGE: {
+    label: "카카오 브랜드메시지",
+    summary: "친구 여부와 관계없이 마케팅 자동화 메시지를 발송합니다.",
+    owner: "병원 명의 카카오 비즈니스 채널",
+    accountIdLabel: "채널 검색용 ID",
+    accountIdPlaceholder: "@병원채널",
+    badge: "K",
+    badgeClass: "bg-[#fee500] text-[#252525]",
+    requirements: ["비즈니스 채널", "브랜드메시지 계약", "수신 동의"],
+    steps: [],
+    guideUrl: "https://business.kakao.com/info/bizmessage/",
   },
   LINE: {
     label: "LINE",
@@ -558,7 +585,7 @@ export function ChannelsClient({
           <section className="mb-6 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-[#e1e5ef] bg-white p-4">
               <p className="text-xs font-semibold text-[#8d94a6]">지원 채널</p>
-              <p className="mt-2 text-2xl font-bold">6개</p>
+              <p className="mt-2 text-2xl font-bold">{channelOrder.length}개</p>
             </div>
             <div className="rounded-2xl border border-[#e1e5ef] bg-white p-4">
               <p className="text-xs font-semibold text-[#8d94a6]">연동 완료</p>
@@ -591,10 +618,18 @@ export function ChannelsClient({
           <section className="grid gap-4 lg:grid-cols-2">
             {channelOrder.map((channel) => {
               const definition = definitions[channel];
-              const connection = connections.find(
-                (item) => item.channel === channel,
-              )!;
-              const status = statusMeta[connection.status];
+              const isComingSoon =
+                channel === "KAKAO_ALIMTALK" ||
+                channel === "KAKAO_BRAND_MESSAGE";
+              const connection = isComingSoon
+                ? null
+                : connections.find((item) => item.channel === channel)!;
+              const status = connection
+                ? statusMeta[connection.status]
+                : {
+                    label: "준비 중",
+                    className: "bg-[#f1f3f7] text-[#8b92a2]",
+                  };
 
               return (
                 <article
@@ -603,7 +638,7 @@ export function ChannelsClient({
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex min-w-0 items-center gap-3">
-                      {channel === "KAKAO" ? (
+                      {channel.startsWith("KAKAO") ? (
                         <KakaoChannelIcon size={44} />
                       ) : channel === "LINE" ? (
                         <LineChannelIcon size={44} />
@@ -634,11 +669,11 @@ export function ChannelsClient({
                           </span>
                         </div>
                         <p className="mt-1 truncate text-xs text-[#8c93a5]">
-                          {connection.externalAccountId ?? definition.owner}
+                          {connection?.externalAccountId ?? definition.owner}
                         </p>
                       </div>
                     </div>
-                    {connection.status !== "DISCONNECTED" ? (
+                    {connection && connection.status !== "DISCONNECTED" ? (
                       <CircleCheck className="size-5 shrink-0 text-[#1aa464]" />
                     ) : (
                       <Link2 className="size-5 shrink-0 text-[#b2b7c4]" />
@@ -662,17 +697,24 @@ export function ChannelsClient({
 
                   <button
                     type="button"
-                    onClick={() => openConnection(channel)}
+                    disabled={isComingSoon}
+                    onClick={() => {
+                      if (!isComingSoon) openConnection(channel);
+                    }}
                     className={`mt-5 flex h-10 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold ${
-                      connection.status === "DISCONNECTED"
-                        ? "bg-[#3157f6] text-white"
-                        : "border border-[#dce1eb] bg-white text-[#59617a] hover:bg-[#f8f9fc]"
+                      isComingSoon
+                        ? "cursor-not-allowed bg-[#eef0f4] text-[#9da3b1]"
+                        : connection?.status === "DISCONNECTED"
+                          ? "bg-[#3157f6] text-white"
+                          : "border border-[#dce1eb] bg-white text-[#59617a] hover:bg-[#f8f9fc]"
                     }`}
                   >
-                    {connection.status === "DISCONNECTED"
-                      ? "연동 시작"
-                      : "연동 설정 보기"}
-                    <ArrowRight className="size-3.5" />
+                    {isComingSoon
+                      ? "준비 중"
+                      : connection?.status === "DISCONNECTED"
+                        ? "연동 시작"
+                        : "연동 설정 보기"}
+                    {!isComingSoon ? <ArrowRight className="size-3.5" /> : null}
                   </button>
                 </article>
               );
@@ -991,14 +1033,19 @@ export function ChannelsClient({
       )}
 
       {selectedChannel && selectedDefinition && selectedConnection ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-[#13182c]/30 backdrop-blur-[2px]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#13182c]/35 p-6 backdrop-blur-[2px]">
           <button
             type="button"
             className="absolute inset-0 cursor-default"
             onClick={() => setSelectedChannel(null)}
             aria-label="연동 설정 닫기"
           />
-          <aside className="relative flex h-full w-full max-w-[520px] flex-col bg-white shadow-[-20px_0_60px_rgba(27,34,70,0.16)]">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${selectedDefinition.label} 연동 설정`}
+            className="relative flex max-h-[calc(100vh-48px)] w-full max-w-[680px] flex-col overflow-hidden rounded-3xl border border-[#e2e6ee] bg-white shadow-2xl"
+          >
             <header className="flex items-center justify-between border-b border-[#e5e8ef] px-6 py-5">
               <div className="flex items-center gap-3">
                 {selectedChannel === "KAKAO" ? (
@@ -1355,7 +1402,7 @@ export function ChannelsClient({
                 <ExternalLink className="size-3" />
               </a>
             </form>
-          </aside>
+          </section>
         </div>
       ) : null}
     </div>

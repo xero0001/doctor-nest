@@ -28,9 +28,16 @@ export function HospitalSettingsSidebar() {
         <span className="block px-8 py-2.5 text-[#a0a6b4]">
           앱 가입 링크 설정
         </span>
-        <span className="block px-8 py-2.5 text-[#a0a6b4]">
+        <Link
+          href="/service/settings/auto-replies"
+          className={`block rounded-lg px-8 py-2.5 font-bold ${
+            pathname === "/service/settings/auto-replies"
+              ? "bg-[#f2f5ff] text-[#3157f6]"
+              : "text-[#6f7789] hover:bg-[#f6f7fa]"
+          }`}
+        >
           자동응대 메시지
-        </span>
+        </Link>
 
         <div className="mt-4 flex items-center justify-between px-4 py-3 font-extrabold text-[#4d5569]">
           서비스설정

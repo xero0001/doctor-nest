@@ -20,6 +20,7 @@ import {
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
+import { UnsavedChangesDialog } from "@/components/unsaved-changes-dialog";
 import type {
   ContentEventDetailType,
   ContentEventImageRecord,
@@ -1028,41 +1029,11 @@ export function EventsClient({
         <MobilePreview draft={draft} />
       </div>
 
-      {showLeaveDialog ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1d2433]/45 px-4">
-          <div className="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl">
-            <div className="flex items-start gap-4">
-              <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#fff0f2] text-[#d64558]">
-                <Megaphone className="size-5" />
-              </span>
-              <div>
-                <h2 className="text-lg font-extrabold text-[#30374a]">
-                  저장하지 않고 나가시겠어요?
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-[#858c9d]">
-                  화면을 이동하면 입력한 내용이 사라집니다.
-                </p>
-              </div>
-            </div>
-            <div className="mt-7 grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => closeEditor(true)}
-                className="h-11 rounded-xl bg-[#d94758] text-sm font-bold text-white"
-              >
-                나가기
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowLeaveDialog(false)}
-                className="h-11 rounded-xl border border-[#d9dde5] text-sm font-bold text-[#6d7486]"
-              >
-                계속 편집
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <UnsavedChangesDialog
+        open={showLeaveDialog}
+        onConfirm={() => closeEditor(true)}
+        onCancel={() => setShowLeaveDialog(false)}
+      />
     </div>
   );
 }

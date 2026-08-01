@@ -15,6 +15,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { SectionTabs } from "@/components/section-tabs";
+import { UnsavedChangesDialog } from "@/components/unsaved-changes-dialog";
 import {
   TreatmentTagPicker,
   type TreatmentTagOption,
@@ -61,6 +62,11 @@ type MessageDraft = {
 const duplicateTagMessage =
   "현재 설정된 치료태그로 설정된 자동화가 이미 존재합니다.";
 
+const editorStepTabs = [
+  { value: "BASIC", label: "1. 기본설정" },
+  { value: "MESSAGES", label: "2. 메시지" },
+] as const;
+
 function safeColor(color: string) {
   return /^#[0-9a-f]{6}$/i.test(color) ? color : "#3157f6";
 }
@@ -88,6 +94,9 @@ export function AutomationsClient({
   treatmentTags: TreatmentTagOption[];
 }) {
   const [automations, setAutomations] = useState(initialAutomations);
+  const [automationSection, setAutomationSection] = useState<
+    "AUTOMATIONS" | "MANAGEMENT"
+  >("AUTOMATIONS");
   const [query, setQuery] = useState("");
   const [statusTab, setStatusTab] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
   const [viewer, setViewer] = useState<AutomationItem | null>(null);
@@ -134,6 +143,20 @@ export function AutomationsClient({
       { value: "INACTIVE", label: "사용 안 함", count: inactiveCount },
     ] as const;
   }, [automations]);
+  const managementSummary = useMemo(
+    () =>
+      automations.reduce(
+        (summary, automation) => ({
+          activeCount: summary.activeCount + Number(automation.isActive),
+          appliedCount: summary.appliedCount + automation.appliedCount,
+          sentCount: summary.sentCount + automation.sentCount,
+          messageCount:
+            summary.messageCount + normalizedMessages(automation).length,
+        }),
+        { activeCount: 0, appliedCount: 0, sentCount: 0, messageCount: 0 },
+      ),
+    [automations],
+  );
 
   useEffect(() => {
     isDirtyRef.current = isDirty;
@@ -230,6 +253,7 @@ export function AutomationsClient({
 
   function goToMessageStep() {
     if (!editor) return;
+    if (!editor.name.trim() || editor.tagNames.length === 0) return;
     if (hasConflictingTag(editor)) {
       showToast(duplicateTagMessage);
       return;
@@ -471,15 +495,24 @@ export function AutomationsClient({
               <X className="size-5" />
             </button>
           </header>
-          <div className="flex shrink-0 justify-center border-b border-[#e4e8f1] bg-white">
-            {[1, 2].map((value) => (
-              <div
-                key={value}
-                className={`w-72 border-b-2 py-4 text-center text-sm font-bold ${step === value ? "border-[#3157f6] text-[#3157f6]" : "border-transparent text-[#a0a6b4]"}`}
-              >
-                {value}. {value === 1 ? "기본설정" : "메시지"}
-              </div>
-            ))}
+          <div className="shrink-0 bg-white">
+            <SectionTabs
+              ariaLabel="자동화 등록 단계"
+              options={editorStepTabs.map((tab) => ({
+                ...tab,
+                disabled:
+                  tab.value === "MESSAGES" &&
+                  (!editor.name.trim() || editor.tagNames.length === 0),
+              }))}
+              value={step === 1 ? "BASIC" : "MESSAGES"}
+              onValueChange={(nextStep) => {
+                if (nextStep === "MESSAGES") {
+                  goToMessageStep();
+                  return;
+                }
+                setStep(1);
+              }}
+            />
           </div>
           <main className="min-h-0 flex-1 overflow-y-auto p-8">
             <div
@@ -734,148 +767,307 @@ export function AutomationsClient({
           </footer>
         </>
       ) : (
-        <>
-          <header className="flex h-20 shrink-0 items-center justify-between border-b border-[#e4e8f0] bg-white px-7">
-            <div>
-              <h1 className="text-xl font-extrabold tracking-[-0.03em] text-[#30364a]">
-                자동화
-              </h1>
-              <p className="mt-1 text-xs text-[#8d94a6]">
-                치료태그를 기준으로 고객에게 전달할 상담 메시지를 설정합니다.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => openEditor()}
-              className="flex h-10 items-center gap-2 rounded-xl bg-[#3157f6] px-4 text-sm font-bold text-white"
-            >
-              <Plus className="size-4" /> 등록
-            </button>
-          </header>
-          <SectionTabs
-            ariaLabel="자동화 상태"
-            options={statusTabs}
-            value={statusTab}
-            onValueChange={setStatusTab}
-            layout="fit"
-          />
-          <div className="flex shrink-0 items-center border-b border-[#e5e9f1] bg-white px-7 py-4">
-            <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-[#dfe3ec] px-4 focus-within:border-[#7187f6]">
-              <Search className="size-4 text-[#9ba2b1]" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="자동화명 또는 치료태그로 검색"
-                className="min-w-0 flex-1 bg-transparent text-sm outline-none"
-              />
-            </label>
-          </div>
-          <main className="min-h-0 flex-1 overflow-y-auto p-7">
-            {error ? (
-              <p
-                role="alert"
-                className="mb-5 rounded-xl bg-[#fff1f3] px-4 py-3 text-xs font-semibold text-[#d8465b]"
-              >
-                {error}
-              </p>
-            ) : null}
-            {filteredAutomations.length > 0 ? (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
-                {filteredAutomations.map((automation) => (
-                  <article
-                    key={automation.id}
-                    className="rounded-2xl border border-[#e2e6ef] bg-white p-5 shadow-sm"
+        <div className="flex min-h-0 flex-1">
+          <aside className="w-[280px] shrink-0 border-r border-[#e2e6ef] bg-white px-5 py-6">
+            <h1 className="px-2 text-lg font-extrabold text-[#30374a]">
+              자동화
+            </h1>
+            <nav className="mt-6 space-y-1" aria-label="자동화 메뉴">
+              {(
+                [
+                  ["AUTOMATIONS", "상담자동화"],
+                  ["MANAGEMENT", "관리현황"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setAutomationSection(value)}
+                  className={`flex h-11 w-full items-center rounded-xl px-4 text-left text-sm font-bold transition ${
+                    automationSection === value
+                      ? "bg-[#eaf3ff] text-[#3157f6]"
+                      : "text-[#4d556a] hover:bg-[#f7f8fb]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
+          </aside>
+
+          <section className="flex min-w-0 flex-1 flex-col">
+            {automationSection === "AUTOMATIONS" ? (
+              <>
+                <header className="flex h-20 shrink-0 items-center justify-between border-b border-[#e4e8f0] bg-white px-7">
+                  <div>
+                    <h1 className="text-xl font-extrabold tracking-[-0.03em] text-[#30364a]">
+                      상담자동화
+                    </h1>
+                    <p className="mt-1 text-xs text-[#8d94a6]">
+                      치료태그를 기준으로 고객에게 전달할 상담 메시지를
+                      설정합니다.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openEditor()}
+                    className="flex h-10 items-center gap-2 rounded-xl bg-[#3157f6] px-4 text-sm font-bold text-white"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setViewer(automation)}
-                        className="min-w-0 text-left"
-                      >
-                        <h2 className="truncate text-base font-extrabold text-[#30364a] hover:text-[#3157f6]">
-                          {automation.name}
-                        </h2>
-                        <span className="mt-1 inline-block text-[10px] font-semibold text-[#8c93a5]">
-                          메시지 {normalizedMessages(automation).length}개
-                          {automation.nationality
-                            ? ` · ${automation.nationality}`
-                            : ""}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={automation.isActive}
-                        aria-label={`${automation.name} 사용 여부`}
-                        onClick={() => void toggleAutomation(automation)}
-                        disabled={pendingId === automation.id}
-                        className={`relative h-6 w-11 shrink-0 rounded-full ${automation.isActive ? "bg-[#3157f6]" : "bg-[#c8cdd8]"}`}
-                      >
-                        <span
-                          className={`absolute left-1 top-1 size-4 rounded-full bg-white shadow transition-transform ${automation.isActive ? "translate-x-5" : "translate-x-0"}`}
-                        />
-                      </button>
-                    </div>
-                    <div className="mt-4 flex min-h-10 flex-wrap gap-1.5 rounded-xl bg-[#f6f7fa] p-2.5">
-                      {automation.tags.map((tag) => (
-                        <span
-                          key={tag.id}
-                          className="rounded-full px-2.5 py-1 text-[10px] font-bold text-white"
-                          style={{ backgroundColor: safeColor(tag.color) }}
+                    <Plus className="size-4" /> 등록
+                  </button>
+                </header>
+                <SectionTabs
+                  ariaLabel="자동화 상태"
+                  options={statusTabs}
+                  value={statusTab}
+                  onValueChange={setStatusTab}
+                  layout="fit"
+                />
+                <div className="flex shrink-0 items-center border-b border-[#e5e9f1] bg-white px-7 py-4">
+                  <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-[#dfe3ec] px-4 focus-within:border-[#7187f6]">
+                    <Search className="size-4 text-[#9ba2b1]" />
+                    <input
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      placeholder="자동화명 또는 치료태그로 검색"
+                      className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                    />
+                  </label>
+                </div>
+                <main className="min-h-0 flex-1 overflow-y-auto p-7">
+                  {error ? (
+                    <p
+                      role="alert"
+                      className="mb-5 rounded-xl bg-[#fff1f3] px-4 py-3 text-xs font-semibold text-[#d8465b]"
+                    >
+                      {error}
+                    </p>
+                  ) : null}
+                  {filteredAutomations.length > 0 ? (
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-5">
+                      {filteredAutomations.map((automation) => (
+                        <article
+                          key={automation.id}
+                          className="rounded-2xl border border-[#e2e6ef] bg-white p-5 shadow-sm"
                         >
-                          {tag.name}
-                        </span>
+                          <div className="flex items-start justify-between gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setViewer(automation)}
+                              className="min-w-0 text-left"
+                            >
+                              <h2 className="truncate text-base font-extrabold text-[#30364a] hover:text-[#3157f6]">
+                                {automation.name}
+                              </h2>
+                              <span className="mt-1 inline-block text-[10px] font-semibold text-[#8c93a5]">
+                                메시지 {normalizedMessages(automation).length}개
+                                {automation.nationality
+                                  ? ` · ${automation.nationality}`
+                                  : ""}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={automation.isActive}
+                              aria-label={`${automation.name} 사용 여부`}
+                              onClick={() => void toggleAutomation(automation)}
+                              disabled={pendingId === automation.id}
+                              className={`relative h-6 w-11 shrink-0 rounded-full ${automation.isActive ? "bg-[#3157f6]" : "bg-[#c8cdd8]"}`}
+                            >
+                              <span
+                                className={`absolute left-1 top-1 size-4 rounded-full bg-white shadow transition-transform ${automation.isActive ? "translate-x-5" : "translate-x-0"}`}
+                              />
+                            </button>
+                          </div>
+                          <div className="mt-4 flex min-h-10 flex-wrap gap-1.5 rounded-xl bg-[#f6f7fa] p-2.5">
+                            {automation.tags.map((tag) => (
+                              <span
+                                key={tag.id}
+                                className="rounded-full px-2.5 py-1 text-[10px] font-bold text-white"
+                                style={{
+                                  backgroundColor: safeColor(tag.color),
+                                }}
+                              >
+                                {tag.name}
+                              </span>
+                            ))}
+                          </div>
+                          <div className="mt-4 grid grid-cols-2 divide-x divide-[#e8ebf1]">
+                            <div>
+                              <p className="text-[10px] text-[#9299aa]">
+                                총 자동화 적용 건수
+                              </p>
+                              <strong className="mt-1 block text-lg">
+                                {automation.appliedCount.toLocaleString(
+                                  "ko-KR",
+                                )}
+                                건
+                              </strong>
+                            </div>
+                            <div className="pl-4">
+                              <p className="text-[10px] text-[#9299aa]">
+                                메시지 전송 건수
+                              </p>
+                              <strong className="mt-1 block text-lg">
+                                {automation.sentCount.toLocaleString("ko-KR")}건
+                              </strong>
+                            </div>
+                          </div>
+                          <div className="mt-5 grid grid-cols-2 gap-2 border-t border-[#edf0f4] pt-4">
+                            <button
+                              type="button"
+                              onClick={() => openEditor(automation)}
+                              className="flex items-center justify-center gap-1 rounded-lg border border-[#dce1eb] py-2 text-xs font-bold text-[#697187]"
+                            >
+                              <Pencil className="size-3.5" /> 수정
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void deleteAutomation(automation)}
+                              className="flex items-center justify-center gap-1 rounded-lg border border-[#dce1eb] py-2 text-xs font-bold text-[#9a6570]"
+                            >
+                              <Trash2 className="size-3.5" /> 삭제
+                            </button>
+                          </div>
+                        </article>
                       ))}
                     </div>
-                    <div className="mt-4 grid grid-cols-2 divide-x divide-[#e8ebf1]">
-                      <div>
-                        <p className="text-[10px] text-[#9299aa]">
-                          총 자동화 적용 건수
-                        </p>
-                        <strong className="mt-1 block text-lg">
-                          {automation.appliedCount.toLocaleString("ko-KR")}건
-                        </strong>
-                      </div>
-                      <div className="pl-4">
-                        <p className="text-[10px] text-[#9299aa]">
-                          메시지 전송 건수
-                        </p>
-                        <strong className="mt-1 block text-lg">
-                          {automation.sentCount.toLocaleString("ko-KR")}건
-                        </strong>
-                      </div>
+                  ) : (
+                    <div className="flex h-full min-h-80 flex-col items-center justify-center text-[#939aac]">
+                      <Workflow className="mb-3 size-9" />
+                      <p className="text-sm font-bold">
+                        {query
+                          ? "검색 결과가 없습니다."
+                          : "등록된 상담자동화가 없습니다."}
+                      </p>
                     </div>
-                    <div className="mt-5 grid grid-cols-2 gap-2 border-t border-[#edf0f4] pt-4">
-                      <button
-                        type="button"
-                        onClick={() => openEditor(automation)}
-                        className="flex items-center justify-center gap-1 rounded-lg border border-[#dce1eb] py-2 text-xs font-bold text-[#697187]"
-                      >
-                        <Pencil className="size-3.5" /> 수정
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void deleteAutomation(automation)}
-                        className="flex items-center justify-center gap-1 rounded-lg border border-[#dce1eb] py-2 text-xs font-bold text-[#9a6570]"
-                      >
-                        <Trash2 className="size-3.5" /> 삭제
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
+                  )}
+                </main>
+              </>
             ) : (
-              <div className="flex h-full min-h-80 flex-col items-center justify-center text-[#939aac]">
-                <Workflow className="mb-3 size-9" />
-                <p className="text-sm font-bold">
-                  {query
-                    ? "검색 결과가 없습니다."
-                    : "등록된 상담자동화가 없습니다."}
-                </p>
-              </div>
+              <>
+                <header className="flex h-20 shrink-0 items-center border-b border-[#e4e8f0] bg-white px-7">
+                  <div>
+                    <h1 className="text-xl font-extrabold tracking-[-0.03em] text-[#30364a]">
+                      관리현황
+                    </h1>
+                    <p className="mt-1 text-xs text-[#8d94a6]">
+                      상담자동화 적용과 메시지 전송 현황을 확인합니다.
+                    </p>
+                  </div>
+                </header>
+                <main className="min-h-0 flex-1 overflow-y-auto p-7">
+                  <div className="grid grid-cols-4 gap-4">
+                    {(
+                      [
+                        ["전체 자동화", automations.length],
+                        ["진행 중", managementSummary.activeCount],
+                        ["총 적용 건수", managementSummary.appliedCount],
+                        ["메시지 전송 건수", managementSummary.sentCount],
+                      ] as const
+                    ).map(([label, count]) => (
+                      <article
+                        key={label}
+                        className="rounded-2xl border border-[#e2e6ef] bg-white p-5 shadow-sm"
+                      >
+                        <p className="text-xs font-semibold text-[#8d94a6]">
+                          {label}
+                        </p>
+                        <strong className="mt-2 block text-2xl font-extrabold text-[#30364a]">
+                          {count.toLocaleString("ko-KR")}건
+                        </strong>
+                      </article>
+                    ))}
+                  </div>
+
+                  <section className="mt-6 overflow-hidden rounded-2xl border border-[#e2e6ef] bg-white shadow-sm">
+                    <div className="flex items-center justify-between border-b border-[#e7eaf0] px-6 py-5">
+                      <div>
+                        <h2 className="text-base font-extrabold text-[#30364a]">
+                          자동화별 현황
+                        </h2>
+                        <p className="mt-1 text-xs text-[#9299aa]">
+                          등록된 메시지{" "}
+                          {managementSummary.messageCount.toLocaleString(
+                            "ko-KR",
+                          )}
+                          개
+                        </p>
+                      </div>
+                    </div>
+                    {automations.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[760px] border-collapse text-sm">
+                          <thead className="bg-[#f5f7fb] text-left text-xs font-bold text-[#697187]">
+                            <tr>
+                              <th className="px-6 py-3">자동화명</th>
+                              <th className="px-6 py-3">치료태그</th>
+                              <th className="px-6 py-3">상태</th>
+                              <th className="px-6 py-3 text-right">
+                                적용 건수
+                              </th>
+                              <th className="px-6 py-3 text-right">
+                                전송 건수
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {automations.map((automation) => (
+                              <tr
+                                key={automation.id}
+                                className="border-t border-[#edf0f4] text-[#4f576b]"
+                              >
+                                <td className="px-6 py-4 font-bold text-[#30364a]">
+                                  {automation.name}
+                                </td>
+                                <td className="px-6 py-4">
+                                  {automation.tags
+                                    .map((tag) => tag.name)
+                                    .join(", ") || "-"}
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span
+                                    className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                                      automation.isActive
+                                        ? "bg-[#eaf9f1] text-[#15945d]"
+                                        : "bg-[#eef0f4] text-[#8d94a5]"
+                                    }`}
+                                  >
+                                    {automation.isActive
+                                      ? "진행 중"
+                                      : "사용 안 함"}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-right font-semibold">
+                                  {automation.appliedCount.toLocaleString(
+                                    "ko-KR",
+                                  )}
+                                  건
+                                </td>
+                                <td className="px-6 py-4 text-right font-semibold">
+                                  {automation.sentCount.toLocaleString("ko-KR")}
+                                  건
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="flex min-h-64 flex-col items-center justify-center text-[#939aac]">
+                        <Workflow className="mb-3 size-9" />
+                        <p className="text-sm font-bold">
+                          표시할 자동화 현황이 없습니다.
+                        </p>
+                      </div>
+                    )}
+                  </section>
+                </main>
+              </>
             )}
-          </main>
-        </>
+          </section>
+        </div>
       )}
 
       {messageDraft ? (
@@ -979,47 +1171,12 @@ export function AutomationsClient({
         </div>
       ) : null}
 
-      {pendingExit ? (
-        <div className="absolute inset-0 z-[60] flex items-center justify-center bg-[#20243a]/35 p-6">
-          <div
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="exit-dialog-title"
-            className="w-full max-w-xl rounded-3xl bg-white p-8 shadow-2xl"
-          >
-            <div className="flex items-start gap-4">
-              <CircleAlert className="mt-0.5 size-8 shrink-0 fill-[#e60012] text-white" />
-              <div>
-                <h2
-                  id="exit-dialog-title"
-                  className="text-2xl font-extrabold tracking-[-0.03em] text-[#30364a]"
-                >
-                  저장하지 않고 나가시겠어요?
-                </h2>
-                <p className="mt-4 text-base text-[#8a91a2]">
-                  화면을 이동할 경우 입력한 내용이 사라집니다.
-                </p>
-              </div>
-            </div>
-            <div className="mt-8 grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={confirmExit}
-                className="h-14 rounded-xl bg-[#e00000] text-base font-extrabold text-white"
-              >
-                네
-              </button>
-              <button
-                type="button"
-                onClick={() => setPendingExit(null)}
-                className="h-14 rounded-xl border border-[#cbd0da] text-base font-extrabold text-[#687086]"
-              >
-                아니요
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <UnsavedChangesDialog
+        open={Boolean(pendingExit)}
+        position="absolute"
+        onConfirm={confirmExit}
+        onCancel={() => setPendingExit(null)}
+      />
 
       {toast ? (
         <div

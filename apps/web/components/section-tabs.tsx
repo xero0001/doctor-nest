@@ -47,7 +47,7 @@ export function SectionTabs<T extends string>({
             title={option.title}
             key={option.value}
             onClick={() => onValueChange(option.value)}
-            className={`relative flex h-11 items-center justify-center gap-1.5 text-xs font-semibold disabled:cursor-not-allowed ${
+            className={`relative flex h-12 items-center justify-center gap-1.5 text-sm font-semibold disabled:cursor-not-allowed ${
               layout === "fit" ? "min-w-44 px-6" : ""
             } ${
               selected

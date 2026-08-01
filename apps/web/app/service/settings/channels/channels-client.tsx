@@ -23,16 +23,13 @@ import {
   X,
 } from "lucide-react";
 
-import { LineChannelIcon } from "@/features/channels/components/line-channel-icon";
-import { InstagramChannelIcon } from "@/features/channels/components/instagram-channel-icon";
-import { KakaoChannelIcon } from "@/features/channels/components/kakao-channel-icon";
-import { NaverTalkChannelIcon } from "@/features/channels/components/naver-talk-channel-icon";
-import { WeChatChannelIcon } from "@/features/channels/components/wechat-channel-icon";
-import { WhatsAppChannelIcon } from "@/features/channels/components/whatsapp-channel-icon";
-
-type ChannelType =
-  "KAKAO" | "LINE" | "NAVER_TALK" | "WECHAT" | "WHATSAPP" | "INSTAGRAM";
-type ChannelCardType = ChannelType | "KAKAO_ALIMTALK" | "KAKAO_BRAND_MESSAGE";
+import {
+  CHANNEL_CARD_ORDER,
+  ChannelIcon,
+  CHANNEL_METADATA,
+  type ChannelCardType,
+  type ChannelType,
+} from "@/features/channels/channel-metadata";
 
 type ConnectionStatus = "DISCONNECTED" | "CONFIGURING" | "CONNECTED" | "ERROR";
 
@@ -51,45 +48,28 @@ type ChannelDefinition = {
   owner: string;
   accountIdLabel: string;
   accountIdPlaceholder: string;
-  badge: string;
-  badgeClass: string;
   requirements: string[];
   steps: string[];
   guideUrl: string;
 };
 
-const channelOrder: ChannelCardType[] = [
-  "KAKAO_ALIMTALK",
-  "KAKAO",
-  "KAKAO_BRAND_MESSAGE",
-  "LINE",
-  "NAVER_TALK",
-  "WECHAT",
-  "WHATSAPP",
-  "INSTAGRAM",
-];
-
 const definitions: Record<ChannelCardType, ChannelDefinition> = {
   KAKAO_ALIMTALK: {
-    label: "카카오 알림톡",
+    label: CHANNEL_METADATA.KAKAO_ALIMTALK.label,
     summary: "정보성 알림과 자동화 안내 메시지를 알림톡으로 발송합니다.",
     owner: "병원 명의 카카오 비즈니스 채널",
     accountIdLabel: "발신 프로필 키",
     accountIdPlaceholder: "발신 프로필 키",
-    badge: "K",
-    badgeClass: "bg-[#fee500] text-[#252525]",
     requirements: ["비즈니스 채널", "발신프로필", "템플릿 승인"],
     steps: [],
     guideUrl: "https://business.kakao.com/info/bizmessage/",
   },
   KAKAO: {
-    label: "카카오 상담톡",
+    label: CHANNEL_METADATA.KAKAO.label,
     summary: "카카오톡 채널로 문의한 고객과 실시간 메시지를 주고받습니다.",
     owner: "병원 명의 카카오 비즈니스 채널",
     accountIdLabel: "채널 검색용 ID",
     accountIdPlaceholder: "@병원채널",
-    badge: "K",
-    badgeClass: "bg-[#fee500] text-[#252525]",
     requirements: ["비즈니스 채널", "비즈고 발신프로필", "상담톡 계약"],
     steps: [
       "병원 채널의 비즈니스 인증",
@@ -99,26 +79,22 @@ const definitions: Record<ChannelCardType, ChannelDefinition> = {
     guideUrl: "https://business.kakao.com/info/kakaotalkchannel/",
   },
   KAKAO_BRAND_MESSAGE: {
-    label: "카카오 브랜드메시지",
+    label: CHANNEL_METADATA.KAKAO_BRAND_MESSAGE.label,
     summary: "친구 여부와 관계없이 마케팅 자동화 메시지를 발송합니다.",
     owner: "병원 명의 카카오 비즈니스 채널",
     accountIdLabel: "채널 검색용 ID",
     accountIdPlaceholder: "@병원채널",
-    badge: "K",
-    badgeClass: "bg-[#fee500] text-[#252525]",
     requirements: ["비즈니스 채널", "브랜드메시지 계약", "수신 동의"],
     steps: [],
     guideUrl: "https://business.kakao.com/info/bizmessage/",
   },
   LINE: {
-    label: "LINE",
+    label: CHANNEL_METADATA.LINE.label,
     summary:
       "병원 LINE Official Account의 메시지를 Messaging API로 연결합니다.",
     owner: "",
     accountIdLabel: "Official Account Basic ID",
     accountIdPlaceholder: "@648wzhlw",
-    badge: "L",
-    badgeClass: "bg-[#06c755] text-white",
     requirements: ["Business ID", "Official Account", "Messaging API"],
     steps: [
       "병원 Provider 선택",
@@ -129,13 +105,11 @@ const definitions: Record<ChannelCardType, ChannelDefinition> = {
       "https://developers.line.biz/en/docs/messaging-api/getting-started/",
   },
   NAVER_TALK: {
-    label: "네이버 톡톡",
+    label: CHANNEL_METADATA.NAVER_TALK.label,
     summary: "스마트플레이스와 연결된 병원 톡톡 문의를 통합합니다.",
     owner: "병원 사업자로 등록된 톡톡 계정",
     accountIdLabel: "톡톡 프로필 ID",
     accountIdPlaceholder: "w12345",
-    badge: "N",
-    badgeClass: "bg-[#03c75a] text-white",
     requirements: ["톡톡 파트너 계정", "챗봇 API", "Authorization"],
     steps: [
       "챗봇 API 사용 신청 및 약관 동의",
@@ -145,13 +119,11 @@ const definitions: Record<ChannelCardType, ChannelDefinition> = {
     guideUrl: "https://github.com/navertalk/chatbot-api",
   },
   WECHAT: {
-    label: "WeChat",
+    label: CHANNEL_METADATA.WECHAT.label,
     summary: "인증된 Service Official Account의 고객 문의를 연결합니다.",
     owner: "병원 명의 인증 Service Account",
     accountIdLabel: "Official Account AppID",
     accountIdPlaceholder: "wx1234567890",
-    badge: "微",
-    badgeClass: "bg-[#07c160] text-white",
     requirements: ["Service Account", "사업자 인증", "AppID·AppSecret"],
     steps: [
       "병원 Official Account 인증",
@@ -162,13 +134,11 @@ const definitions: Record<ChannelCardType, ChannelDefinition> = {
       "https://developers.weixin.qq.com/doc/offiaccount/en/Getting_Started/Overview.html",
   },
   WHATSAPP: {
-    label: "WhatsApp",
+    label: CHANNEL_METADATA.WHATSAPP.label,
     summary: "병원의 WABA와 전화번호를 Meta Cloud API로 연결합니다.",
     owner: "병원 소유 WABA와 WhatsApp 전화번호",
     accountIdLabel: "WABA ID",
     accountIdPlaceholder: "123456789012345",
-    badge: "W",
-    badgeClass: "bg-[#25d366] text-white",
     requirements: ["Meta Business", "WABA", "전화번호 인증"],
     steps: [
       "Embedded Signup 진행",
@@ -178,14 +148,11 @@ const definitions: Record<ChannelCardType, ChannelDefinition> = {
     guideUrl: "https://developers.facebook.com/docs/whatsapp/embedded-signup/",
   },
   INSTAGRAM: {
-    label: "Instagram",
+    label: CHANNEL_METADATA.INSTAGRAM.label,
     summary: "병원 Instagram Professional 계정의 DM을 고객채팅으로 연결합니다.",
     owner: "병원 소유 Professional Account",
     accountIdLabel: "Instagram Account ID",
     accountIdPlaceholder: "17841400000000000",
-    badge: "IG",
-    badgeClass:
-      "bg-gradient-to-br from-[#833ab4] via-[#fd1d1d] to-[#fcb045] text-white",
     requirements: ["Professional 계정", "Meta Business 앱", "Messaging 권한"],
     steps: [
       "Professional 계정 확인",
@@ -518,7 +485,9 @@ export function ChannelsClient({
           <section className="mb-6 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-[#e1e5ef] bg-white p-4">
               <p className="text-xs font-semibold text-[#8d94a6]">지원 채널</p>
-              <p className="mt-2 text-2xl font-bold">{channelOrder.length}개</p>
+              <p className="mt-2 text-2xl font-bold">
+                {CHANNEL_CARD_ORDER.length}개
+              </p>
             </div>
             <div className="rounded-2xl border border-[#e1e5ef] bg-white p-4">
               <p className="text-xs font-semibold text-[#8d94a6]">연동 완료</p>
@@ -549,7 +518,7 @@ export function ChannelsClient({
           </div>
 
           <section className="grid gap-4 lg:grid-cols-2">
-            {channelOrder.map((channel) => {
+            {CHANNEL_CARD_ORDER.map((channel) => {
               const definition = definitions[channel];
               const isComingSoon =
                 channel === "KAKAO_ALIMTALK" ||
@@ -571,25 +540,7 @@ export function ChannelsClient({
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex min-w-0 items-center gap-3">
-                      {channel.startsWith("KAKAO") ? (
-                        <KakaoChannelIcon size={44} />
-                      ) : channel === "LINE" ? (
-                        <LineChannelIcon size={44} />
-                      ) : channel === "NAVER_TALK" ? (
-                        <NaverTalkChannelIcon size={44} />
-                      ) : channel === "WECHAT" ? (
-                        <WeChatChannelIcon size={44} />
-                      ) : channel === "WHATSAPP" ? (
-                        <WhatsAppChannelIcon size={44} />
-                      ) : channel === "INSTAGRAM" ? (
-                        <InstagramChannelIcon size={44} />
-                      ) : (
-                        <span
-                          className={`flex size-11 shrink-0 items-center justify-center rounded-2xl text-xs font-extrabold shadow-sm ${definition.badgeClass}`}
-                        >
-                          {definition.badge}
-                        </span>
-                      )}
+                      <ChannelIcon channel={channel} size={44} />
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <h3 className="text-base font-bold">
@@ -981,25 +932,7 @@ export function ChannelsClient({
           >
             <header className="flex items-center justify-between border-b border-[#e5e8ef] px-6 py-5">
               <div className="flex items-center gap-3">
-                {selectedChannel === "KAKAO" ? (
-                  <KakaoChannelIcon size={40} />
-                ) : selectedChannel === "LINE" ? (
-                  <LineChannelIcon size={40} />
-                ) : selectedChannel === "NAVER_TALK" ? (
-                  <NaverTalkChannelIcon size={40} />
-                ) : selectedChannel === "WECHAT" ? (
-                  <WeChatChannelIcon size={40} />
-                ) : selectedChannel === "WHATSAPP" ? (
-                  <WhatsAppChannelIcon size={40} />
-                ) : selectedChannel === "INSTAGRAM" ? (
-                  <InstagramChannelIcon size={40} />
-                ) : (
-                  <span
-                    className={`flex size-10 items-center justify-center rounded-xl text-xs font-extrabold ${selectedDefinition.badgeClass}`}
-                  >
-                    {selectedDefinition.badge}
-                  </span>
-                )}
+                <ChannelIcon channel={selectedChannel} size={40} />
                 <div>
                   <h2 className="text-base font-bold">
                     {selectedDefinition.label} 연동

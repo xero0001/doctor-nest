@@ -3,10 +3,15 @@
 import { Clock3, LoaderCircle, MessageCircleMore, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import {
+  AUTO_REPLY_CHANNEL_ORDER,
+  ChannelIcon,
+  CHANNEL_METADATA,
+  type ChannelType,
+} from "@/features/channels/channel-metadata";
 import { HospitalSettingsSidebar } from "@/features/settings/components/hospital-settings-sidebar";
 
-export type AutoReplyChannel =
-  "KAKAO" | "LINE" | "NAVER_TALK" | "WECHAT" | "WHATSAPP" | "INSTAGRAM";
+export type AutoReplyChannel = ChannelType;
 
 export type ChannelAutoReplyRecord = {
   channel: AutoReplyChannel;
@@ -17,51 +22,6 @@ export type ChannelAutoReplyRecord = {
   outsideBusinessHoursEnabled: boolean;
   outsideBusinessHoursMessage: string;
 };
-
-const channelDefinitions: Array<{
-  channel: AutoReplyChannel;
-  label: string;
-  badge: string;
-  badgeClass: string;
-}> = [
-  {
-    channel: "KAKAO",
-    label: "카카오 상담톡",
-    badge: "K",
-    badgeClass: "bg-[#fee500] text-[#252525]",
-  },
-  {
-    channel: "INSTAGRAM",
-    label: "인스타그램",
-    badge: "IG",
-    badgeClass:
-      "bg-gradient-to-br from-[#833ab4] via-[#fd1d1d] to-[#fcb045] text-white",
-  },
-  {
-    channel: "NAVER_TALK",
-    label: "네이버 톡톡",
-    badge: "N",
-    badgeClass: "bg-[#03c75a] text-white",
-  },
-  {
-    channel: "LINE",
-    label: "LINE",
-    badge: "L",
-    badgeClass: "bg-[#06c755] text-white",
-  },
-  {
-    channel: "WECHAT",
-    label: "WeChat",
-    badge: "微",
-    badgeClass: "bg-[#07c160] text-white",
-  },
-  {
-    channel: "WHATSAPP",
-    label: "WhatsApp",
-    badge: "W",
-    badgeClass: "bg-[#25d366] text-white",
-  },
-];
 
 function AutoReplySwitch({
   checked,
@@ -213,26 +173,23 @@ export function ChannelAutoReplyClient({
                   연동된 채널은 연결 상태를 함께 표시합니다.
                 </p>
                 <div className="mt-5 space-y-3">
-                  {channelDefinitions.map((definition) => {
+                  {AUTO_REPLY_CHANNEL_ORDER.map((channel) => {
+                    const definition = CHANNEL_METADATA[channel];
                     const setting = settings.find(
-                      (item) => item.channel === definition.channel,
+                      (item) => item.channel === channel,
                     );
                     return (
                       <button
-                        key={definition.channel}
+                        key={channel}
                         type="button"
-                        onClick={() => setSelectedChannel(definition.channel)}
+                        onClick={() => setSelectedChannel(channel)}
                         className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-4 text-left transition ${
-                          selectedChannel === definition.channel
+                          selectedChannel === channel
                             ? "border-[#6aaee8] bg-[#eaf5ff]"
                             : "border-[#e0e4ec] bg-white hover:bg-[#f8f9fc]"
                         }`}
                       >
-                        <span
-                          className={`flex size-9 shrink-0 items-center justify-center rounded-xl text-xs font-extrabold ${definition.badgeClass}`}
-                        >
-                          {definition.badge}
-                        </span>
+                        <ChannelIcon channel={channel} size={36} />
                         <span className="min-w-0 flex-1 text-sm font-extrabold text-[#3b4357]">
                           {definition.label}
                         </span>

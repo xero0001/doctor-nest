@@ -71,20 +71,20 @@ model Session {
 }
 
 model AuthUser {
-  id              String        @id
-  name            String
-  email           String        @unique
-  emailVerified   Boolean       @default(false)
-  image           String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  username        String?       @unique
-  displayUsername String?
-  hospitalId      String?       @map("organizationId")
-  role            String        @default("AGENT")
-  hospital        Hospital?     @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
-  authsessions    AuthSession[]
-  authaccounts    AuthAccount[]
+  id                      String                 @id
+  name                    String
+  email                   String                 @unique
+  emailVerified           Boolean                @default(false)
+  image                   String?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  username                String?                @unique
+  displayUsername         String?
+  hospitalId              String?                @map("organizationId")
+  role                    String                 @default("AGENT")
+  hospital                Hospital?              @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  authsessions            AuthSession[]
+  authaccounts            AuthAccount[]
   conversationAssignments ConversationAssignee[]
 
   @@index([hospitalId])
@@ -169,26 +169,30 @@ model ChannelConnection {
 }
 
 model Patient {
-  id              String                 @id @default(cuid())
-  hospitalId      String                 @map("organizationId")
-  chartNumber     String                 @map("externalRef")
-  name            String
-  phone           String?
-  phoneNormalized String?
-  email           String?
-  gender          String?
-  birthDate       DateTime?
-  language        String                 @default("ko")
-  notes           String?
-  notesUpdatedAt  DateTime?
-  legacyTags      String[]               @default([]) @map("tags")
-  hospital        Hospital               @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  channels        PatientChannel[]
-  tagAssignments  PatientTagAssignment[]
-  conversations   Conversation[]
-  appointments    Appointment[]
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
+  id               String                 @id @default(cuid())
+  hospitalId       String                 @map("organizationId")
+  chartNumber      String?                @map("externalRef")
+  name             String
+  phone            String?
+  phoneNormalized  String?
+  email            String?
+  gender           String?
+  birthDate        DateTime?
+  language         String                 @default("ko")
+  visitType        String?
+  nationality      String?
+  marketingConsent Boolean                @default(false)
+  notes            String?
+  managementNotes  String?
+  notesUpdatedAt   DateTime?
+  legacyTags       String[]               @default([]) @map("tags")
+  hospital         Hospital               @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  channels         PatientChannel[]
+  tagAssignments   PatientTagAssignment[]
+  conversations    Conversation[]
+  appointments     Appointment[]
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
 
   @@unique([hospitalId, chartNumber])
   @@index([hospitalId, name])
@@ -197,23 +201,31 @@ model Patient {
 }
 
 model PatientChannel {
-  id                 String         @id @default(cuid())
+  id                 String                    @id @default(cuid())
   hospitalId         String
-  patientId          String
+  patientId          String?
   channel            ChatChannel
   externalCustomerId String
   displayName        String?
   phone              String?
   phoneNormalized    String?
-  hospital           Hospital       @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  patient            Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  isPrimary          Boolean                   @default(false)
+  linkMethod         PatientChannelLinkMethod?
+  linkedAt           DateTime?
+  hospital           Hospital                  @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patient            Patient?                  @relation(fields: [patientId], references: [id], onDelete: SetNull)
   conversations      Conversation[]
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
 
   @@unique([hospitalId, channel, externalCustomerId])
   @@index([hospitalId, phoneNormalized])
   @@index([patientId, channel])
+}
+
+enum PatientChannelLinkMethod {
+  AUTO
+  MANUAL
 }
 
 enum PatientTagCategory {
@@ -256,7 +268,7 @@ enum ConversationStatus {
 model Conversation {
   id                      String                   @id @default(cuid())
   hospitalId              String                   @map("organizationId")
-  patientId               String                   @map("customerId")
+  patientId               String?                  @map("customerId")
   patientChannelId        String?
   channel                 ChatChannel
   externalThreadId        String?
@@ -267,7 +279,7 @@ model Conversation {
   unreadCount             Int                      @default(0)
   lastMessageAt           DateTime                 @default(now())
   hospital                Hospital                 @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
-  patient                 Patient                  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patient                 Patient?                 @relation(fields: [patientId], references: [id], onDelete: SetNull)
   patientChannel          PatientChannel?          @relation(fields: [patientChannelId], references: [id], onDelete: SetNull)
   messages                Message[]
   assignees               ConversationAssignee[]

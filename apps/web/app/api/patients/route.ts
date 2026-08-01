@@ -128,7 +128,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    const savedPatients = await upsertPatients(user.hospitalId, patients);
+    const savedPatients = await upsertPatients(user.hospitalId, patients, {
+      createOnly: true,
+    });
 
     return Response.json({
       savedCount: savedPatients.length,

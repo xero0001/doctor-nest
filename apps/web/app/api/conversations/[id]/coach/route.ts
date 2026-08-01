@@ -150,7 +150,7 @@ export async function POST(_request: Request, { params }: RouteContext) {
     );
   }
 
-  const treatmentTags = conversation.patient.tagAssignments.map(
+  const treatmentTags = (conversation.patient?.tagAssignments ?? []).map(
     ({ tag }) => tag.name,
   );
   const customerMessage =

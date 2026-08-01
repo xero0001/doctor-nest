@@ -332,7 +332,7 @@ async function processConversation(
 
   const customerMessage =
     sourceMessage.translatedContent || sourceMessage.content;
-  const treatmentTags = conversation.patient.tagAssignments.map(
+  const treatmentTags = (conversation.patient?.tagAssignments ?? []).map(
     ({ tag }) => tag.name,
   );
   const retrievedDocuments = retrieveKnowledgeDocuments(
@@ -461,7 +461,7 @@ async function processConversation(
       });
       translation = await translateStaffReply(
         generatedContent,
-        conversation.patient.language,
+        conversation.patient?.language ?? "ko",
         conversation.hospitalId,
         translationContext,
       );

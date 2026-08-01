@@ -25,7 +25,7 @@ export type ConversationAppointment = {
 
 export type PatientSearchResult = {
   id: string;
-  chartNumber: string;
+  chartNumber: string | null;
   name: string;
   phone: string | null;
   email: string | null;
@@ -73,9 +73,19 @@ export type ConversationItem = {
   unreadCount: number;
   lastMessageAt: string;
   assignees: StaffMember[];
+  chatAccount: {
+    id: string | null;
+    channel: ChatChannel;
+    externalCustomerId: string | null;
+    displayName: string | null;
+    phone: string | null;
+    isPrimary: boolean;
+    linkMethod: "AUTO" | "MANUAL" | null;
+    linkedAt: string | null;
+  };
   customer: {
     id: string;
-    chartNumber: string;
+    chartNumber: string | null;
     name: string;
     phone: string | null;
     email: string | null;
@@ -92,7 +102,7 @@ export type ConversationItem = {
       phone: string | null;
     }>;
     appointments: ConversationAppointment[];
-  };
+  } | null;
   messages: ConversationMessage[];
   coachSuggestions: ChatCoachSuggestion[];
 };

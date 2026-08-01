@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import { getDatabase } from "@doctornest/database";
 
 export const MAX_PATIENT_IMPORT_ROWS = 500;
@@ -31,13 +29,10 @@ export function normalizeTreatmentTags(tags: string[]) {
   ).slice(0, 20);
 }
 
-function createChartNumber() {
-  return `MANUAL-${randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
-}
-
 export async function upsertPatients(
   hospitalId: string,
   inputRows: PatientUpsertInput[],
+  options: { createOnly?: boolean } = {},
 ) {
   const rows = inputRows
     .map((row) => ({
@@ -97,6 +92,11 @@ export async function upsertPatients(
         if (row.id && !existingPatient) {
           throw new Error("수정할 고객 정보를 찾을 수 없습니다.");
         }
+        if (!row.id && existingPatient && options.createOnly) {
+          throw new Error(
+            `${row.name} 고객과 동일한 휴대폰번호가 이미 등록되어 있습니다. 기존 고객은 ‘전체’에서 수정해 주세요.`,
+          );
+        }
 
         const patient = existingPatient
           ? await transaction.patient.update({
@@ -105,13 +105,14 @@ export async function upsertPatients(
                 name: row.name,
                 phone: row.phone,
                 phoneNormalized,
+                ...(row.chartNumber ? { chartNumber: row.chartNumber } : {}),
               },
               select: { id: true },
             })
           : await transaction.patient.create({
               data: {
                 hospitalId,
-                chartNumber: row.chartNumber ?? createChartNumber(),
+                chartNumber: row.chartNumber ?? null,
                 name: row.name,
                 phone: row.phone,
                 phoneNormalized,
@@ -121,21 +122,33 @@ export async function upsertPatients(
 
         const treatmentTagIds: string[] = [];
         for (const tagName of row.treatmentTags) {
-          const tag = await transaction.patientTag.upsert({
-            where: {
-              hospitalId_name: {
-                hospitalId,
-                name: tagName,
-              },
-            },
-            update: { category: "TREATMENT" },
-            create: {
-              hospitalId,
-              name: tagName,
-              category: "TREATMENT",
-            },
-            select: { id: true },
-          });
+          const tag = options.createOnly
+            ? await transaction.patientTag.findFirst({
+                where: {
+                  hospitalId,
+                  name: tagName,
+                  category: "TREATMENT",
+                },
+                select: { id: true },
+              })
+            : await transaction.patientTag.upsert({
+                where: {
+                  hospitalId_name: {
+                    hospitalId,
+                    name: tagName,
+                  },
+                },
+                update: { category: "TREATMENT" },
+                create: {
+                  hospitalId,
+                  name: tagName,
+                  category: "TREATMENT",
+                },
+                select: { id: true },
+              });
+          if (!tag) {
+            throw new Error(`등록되지 않은 치료태그입니다: ${tagName}`);
+          }
           treatmentTagIds.push(tag.id);
         }
 

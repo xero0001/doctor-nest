@@ -28,6 +28,7 @@ export async function GET() {
           },
         },
       },
+      patientChannel: true,
       messages: {
         orderBy: [{ sentAt: "desc" }, { id: "desc" }],
         take: 1,
@@ -59,35 +60,49 @@ export async function GET() {
           id: assignedUser.id,
           name: assignedUser.name,
         })),
-        customer: {
-          id: conversation.patient.id,
-          chartNumber: conversation.patient.chartNumber,
-          name: conversation.patient.name,
-          phone: conversation.patient.phone,
-          email: conversation.patient.email,
-          gender: conversation.patient.gender,
-          birthDate: conversation.patient.birthDate?.toISOString() ?? null,
-          language: conversation.patient.language,
-          notes: conversation.patient.notes,
-          notesUpdatedAt:
-            conversation.patient.notesUpdatedAt?.toISOString() ?? null,
-          tags: conversation.patient.tagAssignments.map(({ tag }) => tag.name),
-          channels: conversation.patient.channels.map((patientChannel) => ({
-            id: patientChannel.id,
-            channel: patientChannel.channel,
-            displayName: patientChannel.displayName,
-            phone: patientChannel.phone,
-          })),
-          appointments: conversation.patient.appointments.map(
-            (appointment) => ({
-              id: appointment.id,
-              scheduledAt: appointment.scheduledAt.toISOString(),
-              doctorName: appointment.doctorName,
-              treatment: appointment.treatment,
-              status: appointment.status,
-            }),
-          ),
+        chatAccount: {
+          id: conversation.patientChannel?.id ?? null,
+          channel: conversation.channel,
+          externalCustomerId:
+            conversation.patientChannel?.externalCustomerId ?? null,
+          displayName: conversation.patientChannel?.displayName ?? null,
+          phone: conversation.patientChannel?.phone ?? null,
+          isPrimary: conversation.patientChannel?.isPrimary ?? false,
+          linkMethod: conversation.patientChannel?.linkMethod ?? null,
+          linkedAt:
+            conversation.patientChannel?.linkedAt?.toISOString() ?? null,
         },
+        customer: conversation.patient
+          ? {
+              id: conversation.patient.id,
+              chartNumber: conversation.patient.chartNumber,
+              name: conversation.patient.name,
+              phone: conversation.patient.phone,
+              email: conversation.patient.email,
+              gender: conversation.patient.gender,
+              birthDate: conversation.patient.birthDate?.toISOString() ?? null,
+              language: conversation.patient.language,
+              notes: conversation.patient.notes,
+              notesUpdatedAt:
+                conversation.patient.notesUpdatedAt?.toISOString() ?? null,
+              tags: conversation.patient.tagAssignments.map(({ tag }) => tag.name),
+              channels: conversation.patient.channels.map((patientChannel) => ({
+                id: patientChannel.id,
+                channel: patientChannel.channel,
+                displayName: patientChannel.displayName,
+                phone: patientChannel.phone,
+              })),
+              appointments: conversation.patient.appointments.map(
+                (appointment) => ({
+                  id: appointment.id,
+                  scheduledAt: appointment.scheduledAt.toISOString(),
+                  doctorName: appointment.doctorName,
+                  treatment: appointment.treatment,
+                  status: appointment.status,
+                }),
+              ),
+            }
+          : null,
         messages: conversation.messages
           .slice()
           .reverse()

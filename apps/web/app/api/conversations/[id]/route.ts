@@ -39,33 +39,46 @@ function serializeConversation(
       id: assignedUser.id,
       name: assignedUser.name,
     })),
-    customer: {
-      id: conversation.patient.id,
-      chartNumber: conversation.patient.chartNumber,
-      name: conversation.patient.name,
-      phone: conversation.patient.phone,
-      email: conversation.patient.email,
-      gender: conversation.patient.gender,
-      birthDate: conversation.patient.birthDate?.toISOString() ?? null,
-      language: conversation.patient.language,
-      notes: conversation.patient.notes,
-      notesUpdatedAt:
-        conversation.patient.notesUpdatedAt?.toISOString() ?? null,
-      tags: conversation.patient.tagAssignments.map(({ tag }) => tag.name),
-      channels: conversation.patient.channels.map((patientChannel) => ({
-        id: patientChannel.id,
-        channel: patientChannel.channel,
-        displayName: patientChannel.displayName,
-        phone: patientChannel.phone,
-      })),
-      appointments: conversation.patient.appointments.map((appointment) => ({
-        id: appointment.id,
-        scheduledAt: appointment.scheduledAt.toISOString(),
-        doctorName: appointment.doctorName,
-        treatment: appointment.treatment,
-        status: appointment.status,
-      })),
+    chatAccount: {
+      id: conversation.patientChannel?.id ?? null,
+      channel: conversation.channel,
+      externalCustomerId:
+        conversation.patientChannel?.externalCustomerId ?? null,
+      displayName: conversation.patientChannel?.displayName ?? null,
+      phone: conversation.patientChannel?.phone ?? null,
+      isPrimary: conversation.patientChannel?.isPrimary ?? false,
+      linkMethod: conversation.patientChannel?.linkMethod ?? null,
+      linkedAt: conversation.patientChannel?.linkedAt?.toISOString() ?? null,
     },
+    customer: conversation.patient
+      ? {
+          id: conversation.patient.id,
+          chartNumber: conversation.patient.chartNumber,
+          name: conversation.patient.name,
+          phone: conversation.patient.phone,
+          email: conversation.patient.email,
+          gender: conversation.patient.gender,
+          birthDate: conversation.patient.birthDate?.toISOString() ?? null,
+          language: conversation.patient.language,
+          notes: conversation.patient.notes,
+          notesUpdatedAt:
+            conversation.patient.notesUpdatedAt?.toISOString() ?? null,
+          tags: conversation.patient.tagAssignments.map(({ tag }) => tag.name),
+          channels: conversation.patient.channels.map((patientChannel) => ({
+            id: patientChannel.id,
+            channel: patientChannel.channel,
+            displayName: patientChannel.displayName,
+            phone: patientChannel.phone,
+          })),
+          appointments: conversation.patient.appointments.map((appointment) => ({
+            id: appointment.id,
+            scheduledAt: appointment.scheduledAt.toISOString(),
+            doctorName: appointment.doctorName,
+            treatment: appointment.treatment,
+            status: appointment.status,
+          })),
+        }
+      : null,
     messages: conversation.messages.map((message) => ({
       id: message.id,
       direction: message.direction,
@@ -106,6 +119,7 @@ function findConversationForHospital(id: string, hospitalId: string) {
           },
         },
       },
+      patientChannel: true,
       messages: {
         orderBy: { sentAt: "asc" },
       },
@@ -190,6 +204,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         body.notes.length > MAX_PATIENT_NOTES_LENGTH)) ||
     (body &&
       Object.hasOwn(body, "patientId") &&
+      body.patientId !== null &&
       (typeof body.patientId !== "string" || !body.patientId.trim()));
 
   if (invalidSetting) {
@@ -228,6 +243,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     body?.status === "OPEN" ||
     body?.status === "CLOSED";
   const hasPatientNotes = typeof body?.notes === "string";
+  const hasPatientLinkUpdate = Boolean(
+    body && Object.hasOwn(body, "patientId"),
+  );
   const requestedPatientId =
     typeof body?.patientId === "string" ? body.patientId.trim() : null;
   const normalizedPatientNotes =
@@ -252,8 +270,21 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     }
   }
 
+  if (hasPatientNotes && !existingConversation.patientId) {
+    return Response.json(
+      { error: "고객 정보를 먼저 연결한 뒤 상담 메모를 저장해 주세요." },
+      { status: 409 },
+    );
+  }
+
+  const shouldBecomePrimary = requestedPatientId
+    ? (await database.patientChannel.count({
+        where: { patientId: requestedPatientId, isPrimary: true },
+      })) === 0
+    : false;
+
   await database.$transaction([
-    ...(hasPatientNotes
+    ...(hasPatientNotes && existingConversation.patientId
       ? [
           database.patient.update({
             where: { id: existingConversation.patientId },
@@ -264,11 +295,16 @@ export async function PATCH(request: Request, { params }: RouteContext) {
           }),
         ]
       : []),
-    ...(requestedPatientId && existingConversation.patientChannelId
+    ...(hasPatientLinkUpdate && existingConversation.patientChannelId
       ? [
           database.patientChannel.update({
             where: { id: existingConversation.patientChannelId },
-            data: { patientId: requestedPatientId },
+            data: {
+              patientId: requestedPatientId,
+              isPrimary: shouldBecomePrimary,
+              linkMethod: requestedPatientId ? "MANUAL" : null,
+              linkedAt: requestedPatientId ? new Date() : null,
+            },
           }),
           database.conversation.updateMany({
             where: {
@@ -278,7 +314,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
             data: { patientId: requestedPatientId },
           }),
         ]
-      : requestedPatientId
+      : hasPatientLinkUpdate
         ? [
             database.conversation.update({
               where: { id: existingConversation.id },
@@ -404,7 +440,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       });
       translation = await translateStaffReply(
         content,
-        conversation.patient.language,
+        conversation.patient?.language ?? "ko",
         user.hospitalId,
         context,
       );

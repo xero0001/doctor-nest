@@ -9,7 +9,8 @@ export default async function CustomersPage() {
   const user = await requireUser("/service/customers");
   const database = getDatabase();
 
-  const [patients, totalCount, missingTreatmentTagCount] = await Promise.all([
+  const [patients, totalCount, missingTreatmentTagCount, treatmentTags] =
+    await Promise.all([
     database.patient.findMany({
       where: { hospitalId: user.hospitalId },
       include: {
@@ -33,18 +34,27 @@ export default async function CustomersPage() {
         },
       },
     }),
+    database.patientTag.findMany({
+      where: { hospitalId: user.hospitalId, category: "TREATMENT" },
+      select: { id: true, name: true, color: true },
+      orderBy: [{ name: "asc" }],
+    }),
   ]);
 
   return (
     <CustomerInputClient
       totalCount={totalCount}
       missingTreatmentTagCount={missingTreatmentTagCount}
+      availableTreatmentTags={treatmentTags}
       initialPatients={patients.map((patient) => ({
         id: patient.id,
-        chartNumber: patient.chartNumber,
+        chartNumber: patient.chartNumber ?? "",
         name: patient.name,
         phone: patient.phone ?? "",
+        birthDate: patient.birthDate?.toISOString() ?? null,
+        gender: patient.gender,
         treatmentTags: patient.tagAssignments.map(({ tag }) => tag.name),
+        createdAt: patient.createdAt.toISOString(),
         updatedAt: patient.updatedAt.toISOString(),
       }))}
     />

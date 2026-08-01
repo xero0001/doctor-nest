@@ -159,6 +159,18 @@ const languageLabels: Record<string, string> = {
   zh: "中文",
 };
 
+function getConversationDisplayName(conversation: ConversationItem) {
+  return (
+    conversation.customer?.name ??
+    conversation.chatAccount.displayName ??
+    `${channelMeta[conversation.channel].label} 미연동 고객`
+  );
+}
+
+function getConversationPhone(conversation: ConversationItem) {
+  return conversation.customer?.phone ?? conversation.chatAccount.phone;
+}
+
 function formatListTime(value: string) {
   return new Intl.DateTimeFormat("ko-KR", {
     hour: "numeric",
@@ -601,6 +613,9 @@ function CustomerNotesEditor({
         throw new Error(result.error ?? "상담 메모를 저장하지 못했습니다.");
       }
 
+      if (!result.conversation.customer) {
+        throw new Error("연결된 고객 정보를 찾을 수 없습니다.");
+      }
       const persistedNotes = result.conversation.customer.notes ?? "";
       const persistedAt = result.conversation.customer.notesUpdatedAt;
       setDraftNotes(persistedNotes);
@@ -772,8 +787,8 @@ function CustomerLinkModal({
     (patient) => patient.id === selectedPatientId,
   );
 
-  async function linkPatient() {
-    if (!selectedPatient || isLinking) return;
+  async function updatePatientLink(patientId: string | null) {
+    if ((patientId && !selectedPatient) || isLinking) return;
 
     setIsLinking(true);
     setError("");
@@ -782,7 +797,7 @@ function CustomerLinkModal({
       const response = await fetch(`/api/conversations/${conversation.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patientId: selectedPatient.id }),
+        body: JSON.stringify({ patientId }),
         cache: "no-store",
       });
       const result = (await response.json()) as {
@@ -791,7 +806,7 @@ function CustomerLinkModal({
       };
 
       if (!response.ok || !result.conversation) {
-        throw new Error(result.error ?? "고객 정보를 연결하지 못했습니다.");
+        throw new Error(result.error ?? "고객 연동을 변경하지 못했습니다.");
       }
 
       onLinked(result.conversation);
@@ -799,7 +814,7 @@ function CustomerLinkModal({
       setError(
         linkError instanceof Error
           ? linkError.message
-          : "고객 정보를 연결하지 못했습니다.",
+          : "고객 연동을 변경하지 못했습니다.",
       );
     } finally {
       setIsLinking(false);
@@ -891,7 +906,7 @@ function CustomerLinkModal({
             <div className="mt-3 max-h-[350px] space-y-2 overflow-y-auto pr-1">
               {patients.map((patient) => {
                 const selected = selectedPatientId === patient.id;
-                const current = conversation.customer.id === patient.id;
+                const current = conversation.customer?.id === patient.id;
 
                 return (
                   <button
@@ -912,7 +927,9 @@ function CustomerLinkModal({
                         {patient.name}
                       </span>
                       <span className="shrink-0 font-mono text-[10px] text-[#8b92a5]">
-                        {current ? "현재 연결" : patient.chartNumber}
+                        {current
+                          ? "현재 연결"
+                          : patient.chartNumber ?? "차트번호 미등록"}
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-[#858c9e]">
@@ -936,22 +953,29 @@ function CustomerLinkModal({
           <div className="space-y-4">
             <div className="rounded-2xl bg-[#f7f8fb] p-5">
               <h3 className="text-sm font-bold text-[#555d72]">
-                현재 채팅 정보
+                현재 채팅 계정
               </h3>
               <div className="mt-4 rounded-xl border border-[#e1e5ed] bg-white p-4">
                 <div className="flex items-center gap-3">
                   <ChannelBadge channel={conversation.channel} large />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold text-[#3f465a]">
-                      {conversation.customer.name}
+                      {conversation.chatAccount.displayName ??
+                        `${channelMeta[conversation.channel].label} 고객`}
                     </p>
                     <p className="mt-1 font-mono text-xs text-[#858c9e]">
-                      {conversation.customer.chartNumber}
+                      {conversation.chatAccount.externalCustomerId ??
+                        "외부 계정 ID 미등록"}
                     </p>
                   </div>
                 </div>
                 <p className="mt-3 text-xs text-[#747b8f]">
-                  {conversation.customer.phone ?? "전화번호 미등록"}
+                  {conversation.chatAccount.phone ?? "전화번호 미등록"}
+                </p>
+                <p className="mt-2 text-[10px] font-bold text-[#9298aa]">
+                  {conversation.customer
+                    ? `${conversation.customer.name} 고객과 ${conversation.chatAccount.linkMethod === "AUTO" ? "자동" : "수동"} 연동됨`
+                    : "아직 고객 정보와 연동되지 않았습니다."}
                 </p>
               </div>
             </div>
@@ -968,7 +992,7 @@ function CustomerLinkModal({
                         {selectedPatient.name}
                       </p>
                       <p className="mt-1 font-mono text-xs text-[#3157f6]">
-                        {selectedPatient.chartNumber}
+                        {selectedPatient.chartNumber ?? "차트번호 미등록"}
                       </p>
                     </div>
                     <Check className="size-5 text-[#3157f6]" />
@@ -1001,6 +1025,16 @@ function CustomerLinkModal({
         ) : null}
 
         <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-[#e7eaf1] px-7 py-4">
+          {conversation.customer ? (
+            <button
+              type="button"
+              onClick={() => void updatePatientLink(null)}
+              disabled={isLinking}
+              className="mr-auto h-10 rounded-xl border border-[#f0cbd1] px-4 text-sm font-bold text-[#d8465b] hover:bg-[#fff5f6] disabled:opacity-50"
+            >
+              연동 해제
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onClose}
@@ -1011,7 +1045,9 @@ function CustomerLinkModal({
           </button>
           <button
             type="button"
-            onClick={() => void linkPatient()}
+            onClick={() =>
+              void updatePatientLink(selectedPatient?.id ?? null)
+            }
             disabled={!selectedPatient || isLinking}
             className="flex h-10 items-center gap-2 rounded-xl bg-[#3157f6] px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-[#d9dde6]"
           >
@@ -1155,13 +1191,14 @@ export function ChattingClient({
 
       if (normalizedQuery) {
         if (searchField === "CUSTOMER_NAME") {
-          matchesQuery = conversation.customer.name
+          matchesQuery = getConversationDisplayName(conversation)
             .toLowerCase()
             .includes(normalizedQuery);
         } else if (searchField === "PHONE") {
           const phoneValues = [
-            conversation.customer.phone,
-            ...conversation.customer.channels.map((channel) => channel.phone),
+            conversation.customer?.phone,
+            conversation.chatAccount.phone,
+            ...(conversation.customer?.channels.map((channel) => channel.phone) ?? []),
           ];
           matchesQuery = phoneValues.some((phone) => {
             if (!phone) return false;
@@ -1170,9 +1207,11 @@ export function ChattingClient({
               : phone.toLowerCase().includes(normalizedQuery);
           });
         } else if (searchField === "CHART_NUMBER") {
-          matchesQuery = conversation.customer.chartNumber
-            .toLowerCase()
-            .includes(normalizedQuery);
+          matchesQuery = Boolean(
+            conversation.customer?.chartNumber
+              ?.toLowerCase()
+              .includes(normalizedQuery),
+          );
         } else if (searchField === "ASSIGNEE") {
           matchesQuery = conversation.assignees.some((assignee) =>
             assignee.name.toLowerCase().includes(normalizedQuery),
@@ -1210,11 +1249,11 @@ export function ChattingClient({
     ) => {
       setRooms((current) =>
         current.map((room) =>
-          room.customer.id === patientId
+          room.customer?.id === patientId
             ? {
                 ...room,
                 customer: {
-                  ...room.customer,
+                  ...room.customer!,
                   notes,
                   notesUpdatedAt,
                 },
@@ -2015,11 +2054,12 @@ export function ChattingClient({
   }
 
   async function copyChartNumber() {
-    if (!currentRoom) return;
+    const chartNumber = currentRoom?.customer?.chartNumber;
+    if (!chartNumber) return;
 
     try {
-      await navigator.clipboard.writeText(currentRoom.customer.chartNumber);
-      setCopiedChartNumber(currentRoom.customer.chartNumber);
+      await navigator.clipboard.writeText(chartNumber);
+      setCopiedChartNumber(chartNumber);
 
       if (chartNumberCopyTimeoutRef.current) {
         window.clearTimeout(chartNumberCopyTimeoutRef.current);
@@ -2220,7 +2260,7 @@ export function ChattingClient({
                   <div className="flex min-w-0 items-center gap-2">
                     <ChannelBadge channel={room.channel} />
                     <span className="truncate text-base font-bold text-[#2f3449]">
-                      {room.customer.name}
+                      {getConversationDisplayName(room)}
                     </span>
                     {room.unreadCount > 0 ? (
                       <span className="flex min-w-4 items-center justify-center rounded-full bg-[#f04f68] px-1 text-[9px] font-bold text-white">
@@ -2243,7 +2283,7 @@ export function ChattingClient({
                   type="button"
                   onClick={() => void toggleConversationImportant(room.id)}
                   aria-pressed={room.important}
-                  aria-label={`${room.customer.name} 중요 표시 ${room.important ? "해제" : "추가"}`}
+                  aria-label={`${getConversationDisplayName(room)} 중요 표시 ${room.important ? "해제" : "추가"}`}
                   className="absolute right-2.5 top-2.5 z-10 flex size-8 items-center justify-center rounded-lg hover:bg-white/70"
                 >
                   <Star
@@ -2361,19 +2401,25 @@ export function ChattingClient({
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h2 className="truncate text-base font-bold tracking-[-0.03em]">
-                  {currentRoom.customer.name}
+                  {getConversationDisplayName(currentRoom)}
                 </h2>
-                <button
-                  type="button"
-                  onClick={() => void copyChartNumber()}
-                  aria-label={`차트번호 ${currentRoom.customer.chartNumber} 복사`}
-                  className="shrink-0 rounded-md border border-[#d9deea] bg-white px-1.5 py-0.5 font-mono text-xs font-medium leading-4 text-[#737b8f] transition-colors hover:border-[#bfc7d8] hover:bg-[#f8f9fc]"
-                >
-                  {copiedChartNumber === currentRoom.customer.chartNumber
-                    ? "복사되었습니다"
-                    : currentRoom.customer.chartNumber}
-                </button>
-                {currentRoom.customer.tags.includes("VIP") ? (
+                {currentRoom.customer?.chartNumber ? (
+                  <button
+                    type="button"
+                    onClick={() => void copyChartNumber()}
+                    aria-label={`차트번호 ${currentRoom.customer.chartNumber} 복사`}
+                    className="shrink-0 rounded-md border border-[#d9deea] bg-white px-1.5 py-0.5 font-mono text-xs font-medium leading-4 text-[#737b8f] transition-colors hover:border-[#bfc7d8] hover:bg-[#f8f9fc]"
+                  >
+                    {copiedChartNumber === currentRoom.customer.chartNumber
+                      ? "복사되었습니다"
+                      : currentRoom.customer.chartNumber}
+                  </button>
+                ) : (
+                  <span className="rounded-md bg-[#fff4df] px-2 py-0.5 text-[10px] font-bold text-[#b7791f]">
+                    {currentRoom.customer ? "차트번호 미등록" : "고객 미연동"}
+                  </span>
+                )}
+                {currentRoom.customer?.tags.includes("VIP") ? (
                   <span className="rounded-full bg-[#fff3c5] px-2 py-0.5 text-[8px] font-bold text-[#a97500]">
                     VIP
                   </span>
@@ -2381,7 +2427,7 @@ export function ChattingClient({
               </div>
               <p className="mt-0.5 text-sm text-[#9298a8]">
                 {currentMeta.label} ·{" "}
-                {currentRoom.customer.phone ?? "연락처 미등록"}
+                {getConversationPhone(currentRoom) ?? "연락처 미등록"}
               </p>
             </div>
           </div>
@@ -2420,7 +2466,7 @@ export function ChattingClient({
             <span className="mr-1 text-xs font-semibold text-[#858c9e]">
               치료태그
             </span>
-            {currentRoom.customer.tags.map((tag) => (
+            {(currentRoom.customer?.tags ?? []).map((tag) => (
               <span
                 key={tag}
                 className="rounded-md bg-[#edf1ff] px-2 py-1 text-xs font-bold text-[#3157f6]"
@@ -2431,8 +2477,10 @@ export function ChattingClient({
           </div>
           <span className="flex items-center gap-1 text-xs text-[#858c9e]">
             <Languages className="size-3.5" />
-            {languageLabels[currentRoom.customer.language] ??
-              currentRoom.customer.language}
+            {currentRoom.customer
+              ? languageLabels[currentRoom.customer.language] ??
+                currentRoom.customer.language
+              : "고객 연동 전"}
           </span>
         </div>
 
@@ -2492,7 +2540,7 @@ export function ChattingClient({
                   <div className={`max-w-[72%] ${inbound ? "" : "text-right"}`}>
                     {inbound ? (
                       <p className="mb-1.5 pl-1 text-base font-semibold text-[#596176]">
-                        {currentRoom.customer.name}
+                        {getConversationDisplayName(currentRoom)}
                       </p>
                     ) : null}
                     {message.sender === "AI" ? (
@@ -2719,19 +2767,30 @@ export function ChattingClient({
                 <h3 className="text-xs font-bold">상담 메모</h3>
               </div>
               <span className="text-[10px] text-[#9aa0af]">
-                {currentRoom.customer.name}
+                {getConversationDisplayName(currentRoom)}
               </span>
             </div>
-            <CustomerNotesEditor
-              key={`${currentRoom.id}:${currentRoom.customer.notesUpdatedAt ?? "never"}`}
-              conversationId={currentRoom.id}
-              patientId={currentRoom.customer.id}
-              chartNumber={currentRoom.customer.chartNumber}
-              initialNotes={currentRoom.customer.notes}
-              initialNotesUpdatedAt={currentRoom.customer.notesUpdatedAt}
-              onSaved={handleCustomerNotesSaved}
-              onError={setDetailError}
-            />
+            {currentRoom.customer ? (
+              <CustomerNotesEditor
+                key={`${currentRoom.id}:${currentRoom.customer.notesUpdatedAt ?? "never"}`}
+                conversationId={currentRoom.id}
+                patientId={currentRoom.customer.id}
+                chartNumber={
+                  currentRoom.customer.chartNumber ?? "차트번호 미등록"
+                }
+                initialNotes={currentRoom.customer.notes}
+                initialNotesUpdatedAt={currentRoom.customer.notesUpdatedAt}
+                onSaved={handleCustomerNotesSaved}
+                onError={setDetailError}
+              />
+            ) : (
+              <div className="rounded-xl border border-dashed border-[#d9dde6] bg-[#f8f9fb] px-4 py-6 text-center">
+                <Link2 className="mx-auto size-5 text-[#a0a6b4]" />
+                <p className="mt-2 text-xs font-semibold text-[#858c9e]">
+                  고객 정보를 연결하면 상담 메모를 사용할 수 있습니다.
+                </p>
+              </div>
+            )}
           </section>
 
           <section className="border-b border-[#e5e8ef] bg-white">
@@ -2782,7 +2841,7 @@ export function ChattingClient({
                   {bookmarkedMessages.map((message) => {
                     const inbound = message.direction === "INBOUND";
                     const senderLabel = inbound
-                      ? currentRoom.customer.name
+                      ? getConversationDisplayName(currentRoom)
                       : message.sender === "AI"
                         ? "AI"
                         : "직원";
@@ -2949,7 +3008,7 @@ export function ChattingClient({
           />
           <div
             role="menu"
-            aria-label={`${contextRoom.customer.name} 채팅 메뉴`}
+            aria-label={`${getConversationDisplayName(contextRoom)} 채팅 메뉴`}
             style={{ left: contextMenu.x, top: contextMenu.y }}
             className="fixed z-[70] w-52 rounded-xl border border-[#e0e3eb] bg-white p-1.5 shadow-[0_12px_32px_rgba(37,43,63,0.18)]"
             onMouseDown={(event) => event.stopPropagation()}

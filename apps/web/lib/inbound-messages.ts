@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import { getDatabase } from "@doctornest/database";
 import { after } from "next/server";
 
@@ -31,11 +29,11 @@ export type WebhookConnection = {
 };
 
 export type PersistedInboundEvent = {
-  patientId: string;
+  patientId: string | null;
   patientChannelId: string;
   conversationId: string;
   messageId: string;
-  matchedBy: "CHANNEL" | "CHART_NUMBER" | "PHONE" | "NEW";
+  matchedBy: "CHANNEL" | "CHART_NUMBER" | "PHONE" | "UNLINKED";
   duplicate: boolean;
 };
 
@@ -94,9 +92,8 @@ export async function persistInboundEvent(
     });
 
     let patient = existingPatientChannel?.patient ?? null;
-    let matchedBy: PersistedInboundEvent["matchedBy"] = existingPatientChannel
-      ? "CHANNEL"
-      : "NEW";
+    let matchedBy: PersistedInboundEvent["matchedBy"] =
+      existingPatientChannel?.patient ? "CHANNEL" : "UNLINKED";
 
     if (!patient && chartNumber) {
       patient = await transaction.patient.findUnique({
@@ -111,49 +108,27 @@ export async function persistInboundEvent(
     }
 
     if (!patient && phoneNormalized) {
-      patient = await transaction.patient.findFirst({
+      const phoneMatches = await transaction.patient.findMany({
         where: {
           hospitalId: connection.hospitalId,
-          OR: [
-            { phoneNormalized },
-            { channels: { some: { phoneNormalized } } },
-          ],
+          phoneNormalized,
         },
         orderBy: { createdAt: "asc" },
+        take: 2,
       });
-      if (patient) matchedBy = "PHONE";
+      if (phoneMatches.length === 1) {
+        patient = phoneMatches[0];
+        matchedBy = "PHONE";
+      }
     }
 
-    if (patient) {
-      patient = await transaction.patient.update({
-        where: { id: patient.id },
-        data: {
-          name: event.customerName?.trim() || undefined,
-          phone: phone ?? undefined,
-          phoneNormalized: phoneNormalized ?? undefined,
-          email: event.email?.trim() || undefined,
-          gender: event.gender?.trim() || undefined,
-          birthDate: birthDate ?? undefined,
-          language: event.language?.trim() || undefined,
-        },
-      });
-    } else {
-      patient = await transaction.patient.create({
-        data: {
-          hospitalId: connection.hospitalId,
-          chartNumber:
-            chartNumber ?? `AUTO-${randomUUID().slice(0, 8).toUpperCase()}`,
-          name: event.customerName?.trim() || `${channel} 환자`,
-          phone,
-          phoneNormalized,
-          email: event.email?.trim() || null,
-          gender: event.gender?.trim() || null,
-          birthDate,
-          language: event.language?.trim() || "ko",
-          legacyTags: [],
-        },
-      });
-    }
+    const shouldBecomePrimary = patient
+      ? existingPatientChannel?.patientId === patient.id
+        ? existingPatientChannel.isPrimary
+        : (await transaction.patientChannel.count({
+            where: { patientId: patient.id, isPrimary: true },
+          })) === 0
+      : false;
 
     const patientChannel = await transaction.patientChannel.upsert({
       where: {
@@ -164,19 +139,29 @@ export async function persistInboundEvent(
         },
       },
       update: {
-        patientId: patient.id,
+        ...(patient
+          ? {
+              patientId: patient.id,
+              isPrimary: shouldBecomePrimary,
+              linkMethod: "AUTO" as const,
+              linkedAt: new Date(),
+            }
+          : {}),
         displayName: event.customerName?.trim() || undefined,
         phone: phone ?? undefined,
         phoneNormalized: phoneNormalized ?? undefined,
       },
       create: {
         hospitalId: connection.hospitalId,
-        patientId: patient.id,
+        patientId: patient?.id ?? null,
         channel,
         externalCustomerId,
         displayName: event.customerName?.trim() || null,
         phone,
         phoneNormalized,
+        isPrimary: shouldBecomePrimary,
+        linkMethod: patient ? "AUTO" : null,
+        linkedAt: patient ? new Date() : null,
       },
     });
 
@@ -204,7 +189,7 @@ export async function persistInboundEvent(
 
       if (existingMessage) {
         return {
-          patientId: patient.id,
+          patientId: patient?.id ?? null,
           patientChannelId: patientChannel.id,
           conversationId: existingConversation.id,
           messageId: existingMessage.id,
@@ -218,7 +203,7 @@ export async function persistInboundEvent(
       ? await transaction.conversation.update({
           where: { id: existingConversation.id },
           data: {
-            patientId: patient.id,
+            patientId: patient?.id ?? null,
             patientChannelId: patientChannel.id,
             status: "OPEN",
             unreadCount: { increment: 1 },
@@ -228,7 +213,7 @@ export async function persistInboundEvent(
       : await transaction.conversation.create({
           data: {
             ...conversationKey,
-            patientId: patient.id,
+            patientId: patient?.id ?? null,
             patientChannelId: patientChannel.id,
             unreadCount: 1,
             lastMessageAt: sentAt,
@@ -247,7 +232,7 @@ export async function persistInboundEvent(
     });
 
     return {
-      patientId: patient.id,
+      patientId: patient?.id ?? null,
       patientChannelId: patientChannel.id,
       conversationId: conversation.id,
       messageId: storedMessage.id,
@@ -291,7 +276,7 @@ export function scheduleInboundTranslation(
           translatedLanguageName: translation.translatedLanguageName,
         },
       }),
-      ...(shouldUpdatePatientLanguage
+      ...(shouldUpdatePatientLanguage && result.patientId
         ? [
             database.patient.update({
               where: { id: result.patientId },

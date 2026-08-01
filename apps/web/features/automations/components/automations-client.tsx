@@ -16,6 +16,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { SectionTabs } from "@/components/section-tabs";
 import { UnsavedChangesDialog } from "@/components/unsaved-changes-dialog";
+import { AutomationManagementDashboardView } from "@/features/automations/components/automation-management-dashboard";
+import type { AutomationManagementDashboard } from "@/features/automations/management-types";
 import {
   TreatmentTagPicker,
   type TreatmentTagOption,
@@ -89,9 +91,11 @@ function normalizedMessages(automation: AutomationItem) {
 export function AutomationsClient({
   initialAutomations,
   treatmentTags,
+  initialManagementDashboard,
 }: {
   initialAutomations: AutomationItem[];
   treatmentTags: TreatmentTagOption[];
+  initialManagementDashboard: AutomationManagementDashboard;
 }) {
   const [automations, setAutomations] = useState(initialAutomations);
   const [automationSection, setAutomationSection] = useState<
@@ -143,20 +147,6 @@ export function AutomationsClient({
       { value: "INACTIVE", label: "사용 안 함", count: inactiveCount },
     ] as const;
   }, [automations]);
-  const managementSummary = useMemo(
-    () =>
-      automations.reduce(
-        (summary, automation) => ({
-          activeCount: summary.activeCount + Number(automation.isActive),
-          appliedCount: summary.appliedCount + automation.appliedCount,
-          sentCount: summary.sentCount + automation.sentCount,
-          messageCount:
-            summary.messageCount + normalizedMessages(automation).length,
-        }),
-        { activeCount: 0, appliedCount: 0, sentCount: 0, messageCount: 0 },
-      ),
-    [automations],
-  );
 
   useEffect(() => {
     isDirtyRef.current = isDirty;
@@ -946,125 +936,9 @@ export function AutomationsClient({
                 </main>
               </>
             ) : (
-              <>
-                <header className="flex h-20 shrink-0 items-center border-b border-[#e4e8f0] bg-white px-7">
-                  <div>
-                    <h1 className="text-xl font-extrabold tracking-[-0.03em] text-[#30364a]">
-                      관리현황
-                    </h1>
-                    <p className="mt-1 text-xs text-[#8d94a6]">
-                      상담자동화 적용과 메시지 전송 현황을 확인합니다.
-                    </p>
-                  </div>
-                </header>
-                <main className="min-h-0 flex-1 overflow-y-auto p-7">
-                  <div className="grid grid-cols-4 gap-4">
-                    {(
-                      [
-                        ["전체 자동화", automations.length],
-                        ["진행 중", managementSummary.activeCount],
-                        ["총 적용 건수", managementSummary.appliedCount],
-                        ["메시지 전송 건수", managementSummary.sentCount],
-                      ] as const
-                    ).map(([label, count]) => (
-                      <article
-                        key={label}
-                        className="rounded-2xl border border-[#e2e6ef] bg-white p-5 shadow-sm"
-                      >
-                        <p className="text-xs font-semibold text-[#8d94a6]">
-                          {label}
-                        </p>
-                        <strong className="mt-2 block text-2xl font-extrabold text-[#30364a]">
-                          {count.toLocaleString("ko-KR")}건
-                        </strong>
-                      </article>
-                    ))}
-                  </div>
-
-                  <section className="mt-6 overflow-hidden rounded-2xl border border-[#e2e6ef] bg-white shadow-sm">
-                    <div className="flex items-center justify-between border-b border-[#e7eaf0] px-6 py-5">
-                      <div>
-                        <h2 className="text-base font-extrabold text-[#30364a]">
-                          자동화별 현황
-                        </h2>
-                        <p className="mt-1 text-xs text-[#9299aa]">
-                          등록된 메시지{" "}
-                          {managementSummary.messageCount.toLocaleString(
-                            "ko-KR",
-                          )}
-                          개
-                        </p>
-                      </div>
-                    </div>
-                    {automations.length > 0 ? (
-                      <div className="overflow-x-auto">
-                        <table className="w-full min-w-[760px] border-collapse text-sm">
-                          <thead className="bg-[#f5f7fb] text-left text-xs font-bold text-[#697187]">
-                            <tr>
-                              <th className="px-6 py-3">자동화명</th>
-                              <th className="px-6 py-3">치료태그</th>
-                              <th className="px-6 py-3">상태</th>
-                              <th className="px-6 py-3 text-right">
-                                적용 건수
-                              </th>
-                              <th className="px-6 py-3 text-right">
-                                전송 건수
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {automations.map((automation) => (
-                              <tr
-                                key={automation.id}
-                                className="border-t border-[#edf0f4] text-[#4f576b]"
-                              >
-                                <td className="px-6 py-4 font-bold text-[#30364a]">
-                                  {automation.name}
-                                </td>
-                                <td className="px-6 py-4">
-                                  {automation.tags
-                                    .map((tag) => tag.name)
-                                    .join(", ") || "-"}
-                                </td>
-                                <td className="px-6 py-4">
-                                  <span
-                                    className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                                      automation.isActive
-                                        ? "bg-[#eaf9f1] text-[#15945d]"
-                                        : "bg-[#eef0f4] text-[#8d94a5]"
-                                    }`}
-                                  >
-                                    {automation.isActive
-                                      ? "진행 중"
-                                      : "사용 안 함"}
-                                  </span>
-                                </td>
-                                <td className="px-6 py-4 text-right font-semibold">
-                                  {automation.appliedCount.toLocaleString(
-                                    "ko-KR",
-                                  )}
-                                  건
-                                </td>
-                                <td className="px-6 py-4 text-right font-semibold">
-                                  {automation.sentCount.toLocaleString("ko-KR")}
-                                  건
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="flex min-h-64 flex-col items-center justify-center text-[#939aac]">
-                        <Workflow className="mb-3 size-9" />
-                        <p className="text-sm font-bold">
-                          표시할 자동화 현황이 없습니다.
-                        </p>
-                      </div>
-                    )}
-                  </section>
-                </main>
-              </>
+              <AutomationManagementDashboardView
+                initialDashboard={initialManagementDashboard}
+              />
             )}
           </section>
         </div>

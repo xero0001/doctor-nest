@@ -1,6 +1,7 @@
 import { getDatabase } from "@doctornest/database";
 
 import { AutomationsClient } from "@/features/automations/components/automations-client";
+import { getAutomationManagementDashboard } from "@/features/automations/server/get-automation-management";
 import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function AutomationsPage() {
   const user = await requireUser("/service/automations");
   const database = getDatabase();
-  const [automations, treatmentTags] = await Promise.all([
+  const [automations, treatmentTags, managementDashboard] = await Promise.all([
     database.careAutomation.findMany({
       where: { hospitalId: user.hospitalId },
       include: {
@@ -27,6 +28,7 @@ export default async function AutomationsPage() {
       select: { id: true, name: true, color: true },
       orderBy: { name: "asc" },
     }),
+    getAutomationManagementDashboard(user.hospitalId),
   ]);
 
   const items = await Promise.all(
@@ -71,6 +73,7 @@ export default async function AutomationsPage() {
     <AutomationsClient
       initialAutomations={items}
       treatmentTags={treatmentTags}
+      initialManagementDashboard={managementDashboard}
     />
   );
 }

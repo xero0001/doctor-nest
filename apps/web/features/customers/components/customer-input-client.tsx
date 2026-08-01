@@ -124,13 +124,15 @@ export function CustomerInputClient({
   totalCount,
   missingTreatmentTagCount,
   availableTreatmentTags,
+  initialMode = "INPUT",
 }: {
   initialPatients: InitialPatient[];
   totalCount: number;
   missingTreatmentTagCount: number;
   availableTreatmentTags: TreatmentTagOption[];
+  initialMode?: CustomerViewMode;
 }) {
-  const [mode, setMode] = useState<CustomerViewMode>("INPUT");
+  const [mode, setMode] = useState<CustomerViewMode>(initialMode);
   const [rows, setRows] = useState(createEmptyRows);
   const [dirtyRowKeys, setDirtyRowKeys] = useState<Set<string>>(
     () => new Set(),

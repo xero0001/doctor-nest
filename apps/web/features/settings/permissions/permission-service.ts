@@ -43,10 +43,7 @@ export async function listAccessProfiles(hospitalId: string) {
   return profiles.map(serializeAccessProfile);
 }
 
-export async function ensurePermissionSettings(
-  hospitalId: string,
-  currentUserId: string,
-) {
+export async function ensurePermissionSettings(hospitalId: string) {
   const database = getDatabase();
 
   await database.$transaction(async (transaction) => {
@@ -106,8 +103,8 @@ export async function ensurePermissionSettings(
     });
 
     await transaction.authUser.updateMany({
-      where: { id: currentUserId, hospitalId },
-      data: { role: "OWNER", accessProfileId: masterProfileId },
+      where: { hospitalId, role: "OWNER" },
+      data: { accessProfileId: masterProfileId },
     });
   });
 

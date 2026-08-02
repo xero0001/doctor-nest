@@ -12,6 +12,7 @@ import {
 import { FormEvent, useState } from "react";
 
 import { HospitalSettingsSidebar } from "@/features/settings/components/hospital-settings-sidebar";
+import { TagColorSelect } from "@/features/settings/components/tag-color-select";
 import {
   CUSTOMER_TAG_COLOR_PRESETS,
   DEFAULT_CUSTOMER_TAG_COLOR,
@@ -26,53 +27,6 @@ export type CustomerTagRecord = {
 };
 
 const MAX_CUSTOMER_TAGS = 5;
-
-function PresetColorPicker({
-  value,
-  onChange,
-  label,
-  compact = false,
-}: {
-  value: string;
-  onChange: (color: string) => void;
-  label: string;
-  compact?: boolean;
-}) {
-  return (
-    <fieldset>
-      <legend
-        className={`${compact ? "mb-2 text-xs" : "mb-3 text-sm"} font-bold text-[#596177]`}
-      >
-        {label}
-      </legend>
-      <div className="flex flex-wrap gap-2">
-        {CUSTOMER_TAG_COLOR_PRESETS.map((preset) => {
-          const selected = value === preset.value;
-          return (
-            <button
-              key={preset.value}
-              type="button"
-              title={preset.label}
-              aria-label={`${preset.label} 색상`}
-              aria-pressed={selected}
-              onClick={() => onChange(preset.value)}
-              className={`flex ${compact ? "size-7" : "size-8"} items-center justify-center rounded-full border-2 border-white shadow-sm transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3157f6] focus-visible:ring-offset-2 ${
-                selected
-                  ? "ring-2 ring-[#3157f6] ring-offset-2"
-                  : "ring-1 ring-[#dfe3ea]"
-              }`}
-              style={{ backgroundColor: preset.value }}
-            >
-              {selected ? (
-                <Check className="size-4 text-white drop-shadow-sm" />
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
-    </fieldset>
-  );
-}
 
 export function CustomerTagsClient({
   initialTags,
@@ -155,6 +109,13 @@ export function CustomerTagsClient({
     }
   }
 
+  async function changeTagColor(tag: CustomerTagRecord, color: string) {
+    if (tag.color.toUpperCase() === color) return;
+    if (await requestTags("PATCH", { id: tag.id, name: tag.name, color })) {
+      setNotice("고객태그 색상을 수정했습니다.");
+    }
+  }
+
   async function deleteTag(id: string) {
     if (deletingId !== id) {
       setDeletingId(id);
@@ -217,26 +178,24 @@ export function CustomerTagsClient({
                 </span>
               </div>
 
-              <div className="mt-6 rounded-2xl border border-[#e4e7ee] bg-[#fafbfe] p-4">
-                <PresetColorPicker
-                  value={newColor}
-                  onChange={setNewColor}
-                  label="새 고객태그 색상"
-                />
-              </div>
-
-              <form onSubmit={addTag} className="mt-4 flex gap-3">
-                <label className="flex h-11 min-w-0 flex-1 items-center rounded-xl border border-[#dfe3ea] px-4 focus-within:border-[#7187f6] focus-within:ring-3 focus-within:ring-[#3157f6]/10">
-                  <Tag className="mr-2 size-4 text-[#9ba2b1]" />
+              <form onSubmit={addTag} className="mt-6 flex gap-3">
+                <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-[#dfe3ea] px-2.5 focus-within:border-[#7187f6] focus-within:ring-3 focus-within:ring-[#3157f6]/10">
+                  <TagColorSelect
+                    value={newColor}
+                    onChange={setNewColor}
+                    label="새 고객태그 색상 선택"
+                    disabled={tags.length >= MAX_CUSTOMER_TAGS}
+                  />
                   <input
                     value={newName}
                     maxLength={30}
+                    aria-label="새 고객태그명"
                     disabled={tags.length >= MAX_CUSTOMER_TAGS}
                     onChange={(event) => setNewName(event.target.value)}
                     placeholder="태그명을 입력해 주세요."
                     className="min-w-0 flex-1 bg-transparent text-sm outline-none disabled:cursor-not-allowed"
                   />
-                </label>
+                </div>
                 <button
                   type="submit"
                   disabled={
@@ -266,16 +225,20 @@ export function CustomerTagsClient({
                           key={tag.id}
                           className="flex min-h-16 items-center gap-3 rounded-2xl border border-[#e1e5ed] px-5 py-3"
                         >
-                          <span
-                            className="size-3 shrink-0 rounded-full"
-                            style={{
-                              backgroundColor: editing
-                                ? editingColor
-                                : tag.color,
+                          <TagColorSelect
+                            value={editing ? editingColor : tag.color}
+                            onChange={(color) => {
+                              if (editing) {
+                                setEditingColor(color);
+                                return;
+                              }
+                              void changeTagColor(tag, color);
                             }}
+                            label={`${tag.name} 색상 선택`}
+                            disabled={Boolean(pendingId)}
                           />
                           {editing ? (
-                            <div className="min-w-0 flex-1 space-y-3 py-1">
+                            <div className="min-w-0 flex-1 py-1">
                               <input
                                 value={editingName}
                                 maxLength={30}
@@ -289,12 +252,6 @@ export function CustomerTagsClient({
                                   if (event.key === "Escape") setEditingId("");
                                 }}
                                 className="h-10 w-full min-w-0 rounded-xl border border-[#7187f6] px-3 text-sm outline-none ring-3 ring-[#3157f6]/10"
-                              />
-                              <PresetColorPicker
-                                value={editingColor}
-                                onChange={setEditingColor}
-                                label={`${tag.name} 색상`}
-                                compact
                               />
                             </div>
                           ) : (

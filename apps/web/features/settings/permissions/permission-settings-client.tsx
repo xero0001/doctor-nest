@@ -43,10 +43,10 @@ function permissionSnapshot(permissions: PermissionKey[]) {
 
 export function PermissionSettingsClient({
   initialProfiles,
-  masterAccount,
+  currentAccount,
 }: {
   initialProfiles: AccessProfileRecord[];
-  masterAccount: { name: string; username: string };
+  currentAccount: { name: string; username: string; accessName: string };
 }) {
   const [profiles, setProfiles] = useState(initialProfiles);
   const [selectedId, setSelectedId] = useState(
@@ -68,9 +68,14 @@ export function PermissionSettingsClient({
     () => profiles.find((profile) => profile.id === selectedId),
     [profiles, selectedId],
   );
+  const selectedProfileReadOnly = Boolean(
+    selectedProfile?.isLocked ||
+    (currentAccount.accessName === "관리자" &&
+      selectedProfile?.key === "ADMIN"),
+  );
   const isDirty = Boolean(
     selectedProfile &&
-    !selectedProfile.isLocked &&
+    !selectedProfileReadOnly &&
     permissionSnapshot(draftPermissions) !==
       permissionSnapshot(selectedProfile.permissions),
   );
@@ -101,7 +106,7 @@ export function PermissionSettingsClient({
   }
 
   function togglePermission(permission: PermissionKey) {
-    if (!selectedProfile || selectedProfile.isLocked) return;
+    if (!selectedProfile || selectedProfileReadOnly) return;
     setNotice("");
     setError("");
     setDraftPermissions((current) =>
@@ -112,7 +117,7 @@ export function PermissionSettingsClient({
   }
 
   async function savePermissions() {
-    if (!selectedProfile || selectedProfile.isLocked || !isDirty) return;
+    if (!selectedProfile || selectedProfileReadOnly || !isDirty) return;
     setSaving(true);
     setNotice("");
     setError("");
@@ -193,19 +198,20 @@ export function PermissionSettingsClient({
                 </span>
                 <div className="min-w-0">
                   <p className="text-xs font-bold text-[#3157f6]">
-                    현재 접속 계정 · 마스터
+                    현재 접속 계정 · {currentAccount.accessName}
                   </p>
                   <p className="mt-0.5 truncate text-sm font-extrabold text-[#30374a]">
-                    {masterAccount.name}
-                    {masterAccount.username
-                      ? ` (@${masterAccount.username})`
+                    {currentAccount.name}
+                    {currentAccount.username
+                      ? ` (@${currentAccount.username})`
                       : ""}
                   </p>
                 </div>
               </div>
               <p className="max-w-[440px] text-right text-xs leading-5 text-[#788198]">
-                마스터는 병원 운영에 필요한 모든 기능에 접근하며 권한을 변경할
-                수 없습니다.
+                {currentAccount.accessName === "마스터"
+                  ? "마스터는 모든 기능에 접근하며 권한을 변경할 수 없습니다."
+                  : "관리자는 부여된 운영 관리 권한에 따라 접근 범위를 설정할 수 있습니다."}
               </p>
             </div>
 
@@ -316,7 +322,7 @@ export function PermissionSettingsClient({
                             <label
                               key={permission.key}
                               className={`flex min-h-10 items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${
-                                selectedProfile?.isLocked
+                                selectedProfileReadOnly
                                   ? "cursor-default text-[#8f96a6]"
                                   : "cursor-pointer text-[#566076] hover:bg-[#f7f8fb]"
                               }`}
@@ -324,7 +330,7 @@ export function PermissionSettingsClient({
                               <input
                                 type="checkbox"
                                 checked={checked}
-                                disabled={selectedProfile?.isLocked}
+                                disabled={selectedProfileReadOnly}
                                 onChange={() =>
                                   togglePermission(permission.key)
                                 }

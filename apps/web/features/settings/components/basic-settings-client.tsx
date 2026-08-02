@@ -18,12 +18,14 @@ import { UnsavedChangesDialog } from "@/components/unsaved-changes-dialog";
 import { useUnsavedChangesGuard } from "@/components/use-unsaved-changes-guard";
 import { useServiceNavigation } from "@/features/navigation/service-navigation-context";
 import { HospitalSettingsSidebar } from "@/features/settings/components/hospital-settings-sidebar";
+import { TagColorSelect } from "@/features/settings/components/tag-color-select";
 import type {
   AutomationTagSelectionMode,
   BasicServiceSettings,
   CustomerInputFieldKey,
   TreatmentTagSetting,
 } from "@/features/settings/service-settings-types";
+import { TAG_COLOR_PRESETS } from "@/features/settings/tag-colors";
 
 const inputFieldDefinitions: Array<{
   key: CustomerInputFieldKey;
@@ -37,17 +39,6 @@ const inputFieldDefinitions: Array<{
   { key: "treatmentTag", label: "치료태그" },
   { key: "nationality", label: "국적" },
   { key: "marketingConsent", label: "광고성메시지 수신여부" },
-];
-
-const tagColors = [
-  "#1687F8",
-  "#3157F6",
-  "#8B5CF6",
-  "#EC4899",
-  "#EF4444",
-  "#F59E0B",
-  "#10B981",
-  "#64748B",
 ];
 
 function cloneSettings(settings: BasicServiceSettings): BasicServiceSettings {
@@ -125,7 +116,9 @@ export function BasicSettingsClient({
     JSON.stringify(initialSettings),
   );
   const [newTagName, setNewTagName] = useState("");
-  const [newTagColor, setNewTagColor] = useState(tagColors[0]);
+  const [newTagColor, setNewTagColor] = useState<string>(
+    TAG_COLOR_PRESETS[0].value,
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -192,7 +185,9 @@ export function BasicSettingsClient({
     }));
     setNewTagName("");
     setNewTagColor(
-      tagColors[(settings.treatmentTags.length + 1) % tagColors.length],
+      TAG_COLOR_PRESETS[
+        (settings.treatmentTags.length + 1) % TAG_COLOR_PRESETS.length
+      ].value,
     );
     resetFeedback();
   }
@@ -517,21 +512,16 @@ export function BasicSettingsClient({
               </div>
 
               <div className="mt-6 flex items-center gap-3">
-                <label className="relative flex h-11 min-w-0 flex-1 items-center rounded-xl border border-[#dfe3ea] px-3 focus-within:border-[#7187f6] focus-within:ring-3 focus-within:ring-[#3157f6]/10">
-                  <input
-                    type="color"
+                <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-[#dfe3ea] px-2.5 focus-within:border-[#7187f6] focus-within:ring-3 focus-within:ring-[#3157f6]/10">
+                  <TagColorSelect
                     value={newTagColor}
-                    onChange={(event) => setNewTagColor(event.target.value)}
-                    aria-label="새 치료태그 색상"
-                    className="absolute left-3 size-6 cursor-pointer opacity-0"
-                  />
-                  <span
-                    className="mr-3 size-5 shrink-0 rounded-full ring-2 ring-white shadow"
-                    style={{ backgroundColor: newTagColor }}
+                    onChange={setNewTagColor}
+                    label="새 치료태그 색상 선택"
                   />
                   <input
                     value={newTagName}
                     maxLength={30}
+                    aria-label="새 치료태그명"
                     onChange={(event) => {
                       setNewTagName(event.target.value);
                       resetFeedback();
@@ -545,7 +535,7 @@ export function BasicSettingsClient({
                     placeholder="새로운 치료태그를 입력해 주세요."
                     className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[#b0b6c2]"
                   />
-                </label>
+                </div>
                 <button
                   type="button"
                   disabled={
@@ -568,21 +558,11 @@ export function BasicSettingsClient({
                         key={tag.id}
                         className="flex min-h-12 items-center gap-3 rounded-xl border border-[#e0e4eb] px-3 py-2"
                       >
-                        <label className="relative flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-[#f7f8fa]">
-                          <input
-                            type="color"
-                            value={tag.color}
-                            onChange={(event) =>
-                              updateTag(tag.id, { color: event.target.value })
-                            }
-                            aria-label={`${tag.name} 색상`}
-                            className="absolute inset-0 cursor-pointer opacity-0"
-                          />
-                          <span
-                            className="size-5 rounded-full shadow-sm"
-                            style={{ backgroundColor: tag.color }}
-                          />
-                        </label>
+                        <TagColorSelect
+                          value={tag.color}
+                          onChange={(color) => updateTag(tag.id, { color })}
+                          label={`${tag.name} 색상 선택`}
+                        />
                         <input
                           value={tag.name}
                           maxLength={30}

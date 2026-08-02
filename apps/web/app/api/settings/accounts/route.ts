@@ -8,19 +8,49 @@ import {
   listHospitalAccounts,
   MAX_HOSPITAL_ACCOUNTS,
 } from "@/features/settings/server/account-records";
-import type { AccountRole } from "@/features/settings/types/accounts";
+import { ensurePermissionSettings } from "@/features/settings/permissions/permission-service";
+import type {
+  AccountAccessProfileKey,
+  AccountRole,
+} from "@/features/settings/types/accounts";
 import { getCurrentUser } from "@/lib/auth";
 
 const usernamePattern = /^[a-zA-Z0-9._-]{3,30}$/;
-const roles = new Set<AccountRole>(["OWNER", "ADMIN", "AGENT"]);
+const accessProfileKeys = new Set<AccountAccessProfileKey>([
+  "MASTER",
+  "ADMIN",
+  "STAFF",
+  "STAFF_2",
+  "STAFF_3",
+]);
 
 function normalizeText(value: unknown, maxLength: number) {
   if (typeof value !== "string") return "";
   return value.trim().replace(/\s+/g, " ").slice(0, maxLength);
 }
 
-function isAccountRole(value: unknown): value is AccountRole {
-  return typeof value === "string" && roles.has(value as AccountRole);
+function isAccessProfileKey(value: unknown): value is AccountAccessProfileKey {
+  return (
+    typeof value === "string" &&
+    accessProfileKeys.has(value as AccountAccessProfileKey)
+  );
+}
+
+function authRoleForProfile(key: AccountAccessProfileKey): AccountRole {
+  if (key === "MASTER") return "OWNER";
+  if (key === "ADMIN") return "ADMIN";
+  return "AGENT";
+}
+
+async function resolveAccessProfile(
+  hospitalId: string,
+  key: AccountAccessProfileKey,
+) {
+  await ensurePermissionSettings(hospitalId);
+  return getDatabase().hospitalAccessProfile.findUnique({
+    where: { hospitalId_key: { hospitalId, key } },
+    select: { id: true },
+  });
 }
 
 function errorResponse(error: string, status: number) {
@@ -47,7 +77,7 @@ export async function POST(request: Request) {
     username?: unknown;
     password?: unknown;
     jobTitle?: unknown;
-    role?: unknown;
+    accessProfileKey?: unknown;
     isDefaultAssignee?: unknown;
   } | null;
   const name = normalizeText(body?.name, 40);
@@ -55,10 +85,10 @@ export async function POST(request: Request) {
     typeof body?.username === "string" ? body.username.trim() : "";
   const password = typeof body?.password === "string" ? body.password : "";
   const jobTitle = normalizeText(body?.jobTitle, 30);
-  const role = body?.role;
+  const accessProfileKey = body?.accessProfileKey;
   const isDefaultAssignee = body?.isDefaultAssignee === true;
 
-  if (!name || !jobTitle || !isAccountRole(role)) {
+  if (!name || !jobTitle || !isAccessProfileKey(accessProfileKey)) {
     return errorResponse("이름, 직급과 권한을 확인해 주세요.", 400);
   }
   if (!usernamePattern.test(username)) {
@@ -70,11 +100,25 @@ export async function POST(request: Request) {
   if (password.length < 8 || password.length > 72) {
     return errorResponse("임시 비밀번호는 8~72자로 입력해 주세요.", 400);
   }
-  if (role === "OWNER" && user.role !== "OWNER") {
+  if (accessProfileKey === "MASTER" && user.role !== "OWNER") {
     return errorResponse("마스터 권한은 마스터만 지정할 수 있습니다.", 403);
+  }
+  if (
+    user.role === "ADMIN" &&
+    (accessProfileKey === "MASTER" || accessProfileKey === "ADMIN")
+  ) {
+    return errorResponse("관리자는 직원 권한만 지정할 수 있습니다.", 403);
   }
 
   const database = getDatabase();
+  const accessProfile = await resolveAccessProfile(
+    user.hospitalId,
+    accessProfileKey,
+  );
+  if (!accessProfile) {
+    return errorResponse("선택한 권한을 찾을 수 없습니다.", 400);
+  }
+  const role = authRoleForProfile(accessProfileKey);
   const [accountCount, duplicate] = await Promise.all([
     database.authUser.count({ where: { hospitalId: user.hospitalId } }),
     database.authUser.findFirst({
@@ -114,6 +158,7 @@ export async function POST(request: Request) {
           hospitalId: user.hospitalId,
           jobTitle,
           role,
+          accessProfileId: accessProfile.id,
           isDefaultAssignee,
         },
       });
@@ -156,17 +201,17 @@ export async function PATCH(request: Request) {
     name?: unknown;
     password?: unknown;
     jobTitle?: unknown;
-    role?: unknown;
+    accessProfileKey?: unknown;
     isDefaultAssignee?: unknown;
   } | null;
   const id = typeof body?.id === "string" ? body.id : "";
   const name = normalizeText(body?.name, 40);
   const password = typeof body?.password === "string" ? body.password : "";
   const jobTitle = normalizeText(body?.jobTitle, 30);
-  const role = body?.role;
+  const accessProfileKey = body?.accessProfileKey;
   const isDefaultAssignee = body?.isDefaultAssignee === true;
 
-  if (!id || !name || !jobTitle || !isAccountRole(role)) {
+  if (!id || !name || !jobTitle || !isAccessProfileKey(accessProfileKey)) {
     return errorResponse("수정할 계정 정보를 확인해 주세요.", 400);
   }
   if (password && (password.length < 8 || password.length > 72)) {
@@ -179,8 +224,9 @@ export async function PATCH(request: Request) {
     select: { id: true, role: true },
   });
   if (!target) return errorResponse("계정을 찾을 수 없습니다.", 404);
+  const role = authRoleForProfile(accessProfileKey);
   if (user.role === "ADMIN" && (target.role !== "AGENT" || role !== "AGENT")) {
-    return errorResponse("관리자는 상담사 계정만 수정할 수 있습니다.", 403);
+    return errorResponse("관리자는 직원 계정만 수정할 수 있습니다.", 403);
   }
   if (role === "OWNER" && user.role !== "OWNER") {
     return errorResponse("마스터 권한은 마스터만 지정할 수 있습니다.", 403);
@@ -197,6 +243,14 @@ export async function PATCH(request: Request) {
     }
   }
 
+  const accessProfile = await resolveAccessProfile(
+    user.hospitalId,
+    accessProfileKey,
+  );
+  if (!accessProfile) {
+    return errorResponse("선택한 권한을 찾을 수 없습니다.", 400);
+  }
+
   const passwordHash = password ? await hashPassword(password) : null;
   await database.$transaction(async (transaction) => {
     if (isDefaultAssignee) {
@@ -207,7 +261,13 @@ export async function PATCH(request: Request) {
     }
     await transaction.authUser.update({
       where: { id },
-      data: { name, jobTitle, role, isDefaultAssignee },
+      data: {
+        name,
+        jobTitle,
+        role,
+        accessProfileId: accessProfile.id,
+        isDefaultAssignee,
+      },
     });
     if (passwordHash) {
       const credential = await transaction.authAccount.findFirst({

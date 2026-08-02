@@ -1,6 +1,7 @@
 import { getDatabase } from "@doctornest/database";
 
 import type {
+  AccountAccessProfileKey,
   AccountRole,
   ManagedAccount,
 } from "@/features/settings/types/accounts";
@@ -25,6 +26,7 @@ export async function listHospitalAccounts(
       displayUsername: true,
       jobTitle: true,
       role: true,
+      accessProfile: { select: { key: true } },
       isDefaultAssignee: true,
     },
   });
@@ -35,6 +37,12 @@ export async function listHospitalAccounts(
     username: account.displayUsername ?? account.username ?? "",
     jobTitle: account.jobTitle,
     role: account.role as AccountRole,
+    accessProfileKey: (account.accessProfile?.key ??
+      (account.role === "OWNER"
+        ? "MASTER"
+        : account.role === "ADMIN"
+          ? "ADMIN"
+          : "STAFF")) as AccountAccessProfileKey,
     isDefaultAssignee: account.isDefaultAssignee,
     isCurrentUser: account.id === currentUserId,
   }));

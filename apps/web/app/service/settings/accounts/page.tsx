@@ -7,6 +7,7 @@ import {
   MAX_HOSPITAL_ACCOUNTS,
 } from "@/features/settings/server/account-records";
 import type { AccountRole } from "@/features/settings/types/accounts";
+import { ensurePermissionSettings } from "@/features/settings/permissions/permission-service";
 import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +24,7 @@ const channelLabels = {
 export default async function AccountsSettingsPage() {
   const user = await requireUser("/service/settings/accounts");
   const database = getDatabase();
+  await ensurePermissionSettings(user.hospitalId);
   const [accounts, connections, assignments] = await Promise.all([
     listHospitalAccounts(user.hospitalId, user.id),
     database.channelConnection.findMany({

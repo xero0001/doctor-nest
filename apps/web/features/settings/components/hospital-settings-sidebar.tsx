@@ -4,8 +4,13 @@ import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { authClient } from "@/lib/auth-client";
+
 export function HospitalSettingsSidebar() {
   const pathname = usePathname();
+  const session = authClient.useSession();
+  const role = (session.data?.user as { role?: string } | undefined)?.role;
+  const canViewPermissions = role === "OWNER" || role === "ADMIN";
 
   return (
     <aside className="w-[280px] shrink-0 border-r border-[#e2e6ef] bg-white px-5 py-6">
@@ -94,16 +99,18 @@ export function HospitalSettingsSidebar() {
         >
           전체계정
         </Link>
-        <Link
-          href="/service/settings/permissions"
-          className={`block rounded-lg px-8 py-2.5 font-bold ${
-            pathname === "/service/settings/permissions"
-              ? "bg-[#f2f5ff] text-[#3157f6]"
-              : "text-[#6f7789] hover:bg-[#f6f7fa]"
-          }`}
-        >
-          권한설정
-        </Link>
+        {canViewPermissions ? (
+          <Link
+            href="/service/settings/permissions"
+            className={`block rounded-lg px-8 py-2.5 font-bold ${
+              pathname === "/service/settings/permissions"
+                ? "bg-[#f2f5ff] text-[#3157f6]"
+                : "text-[#6f7789] hover:bg-[#f6f7fa]"
+            }`}
+          >
+            권한설정
+          </Link>
+        ) : null}
         <div className="mt-4 px-4 py-3 font-extrabold text-[#4d5569]">
           카드 결제관리
         </div>

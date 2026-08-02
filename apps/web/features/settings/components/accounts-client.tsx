@@ -15,10 +15,12 @@ import { FormEvent, useState } from "react";
 
 import { HospitalSettingsSidebar } from "@/features/settings/components/hospital-settings-sidebar";
 import type {
+  AccountAccessProfileKey,
   AccountRole,
   ChannelAssignee,
   ManagedAccount,
 } from "@/features/settings/types/accounts";
+import { ACCOUNT_ACCESS_PROFILE_OPTIONS } from "@/features/settings/types/accounts";
 
 type AccountDraft = {
   id: string;
@@ -27,6 +29,7 @@ type AccountDraft = {
   password: string;
   jobTitle: string;
   role: AccountRole;
+  accessProfileKey: AccountAccessProfileKey;
   isDefaultAssignee: boolean;
 };
 
@@ -37,6 +40,7 @@ const emptyDraft: AccountDraft = {
   password: "",
   jobTitle: "직원",
   role: "AGENT",
+  accessProfileKey: "STAFF",
   isDefaultAssignee: false,
 };
 
@@ -129,7 +133,9 @@ export function AccountsClient({
 
   async function updateAccount(
     account: ManagedAccount,
-    changes: Partial<Pick<ManagedAccount, "role" | "isDefaultAssignee">>,
+    changes: Partial<
+      Pick<ManagedAccount, "accessProfileKey" | "isDefaultAssignee">
+    >,
   ) {
     setPendingId(account.id);
     setError("");
@@ -344,20 +350,29 @@ export function AccountsClient({
                         <td className="px-4 py-3">
                           <select
                             aria-label={`${account.name} 권한`}
-                            value={account.role}
+                            value={account.accessProfileKey}
                             disabled={disabled}
                             onChange={(event) =>
                               void updateAccount(account, {
-                                role: event.target.value as AccountRole,
+                                accessProfileKey: event.target
+                                  .value as AccountAccessProfileKey,
                               })
                             }
                             className="h-9 w-full rounded-lg border border-[#dfe3ea] bg-white px-2 text-sm outline-none disabled:bg-[#f5f6f8]"
                           >
-                            {currentRole === "OWNER" ? (
-                              <option value="OWNER">마스터</option>
-                            ) : null}
-                            <option value="ADMIN">관리자</option>
-                            <option value="AGENT">상담사</option>
+                            {ACCOUNT_ACCESS_PROFILE_OPTIONS.map((option) => (
+                              <option
+                                key={option.value}
+                                value={option.value}
+                                disabled={
+                                  currentRole !== "OWNER" &&
+                                  (option.value === "MASTER" ||
+                                    option.value === "ADMIN")
+                                }
+                              >
+                                {option.label}
+                              </option>
+                            ))}
                           </select>
                         </td>
                         <td className="px-4 py-3">
@@ -619,20 +634,29 @@ export function AccountsClient({
               <div className="grid grid-cols-2 gap-4">
                 <Field label="권한 *">
                   <select
-                    value={draft.role}
+                    value={draft.accessProfileKey}
                     onChange={(event) =>
                       setDraft((current) => ({
                         ...current,
-                        role: event.target.value as AccountRole,
+                        accessProfileKey: event.target
+                          .value as AccountAccessProfileKey,
                       }))
                     }
                     className="h-11 w-full rounded-xl border border-[#dfe3ea] bg-white px-3 font-normal outline-none focus:border-[#7187f6]"
                   >
-                    {currentRole === "OWNER" ? (
-                      <option value="OWNER">마스터</option>
-                    ) : null}
-                    <option value="ADMIN">관리자</option>
-                    <option value="AGENT">상담사</option>
+                    {ACCOUNT_ACCESS_PROFILE_OPTIONS.map((option) => (
+                      <option
+                        key={option.value}
+                        value={option.value}
+                        disabled={
+                          currentRole !== "OWNER" &&
+                          (option.value === "MASTER" ||
+                            option.value === "ADMIN")
+                        }
+                      >
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
                 </Field>
                 <label className="flex items-end pb-3 text-sm font-bold text-[#4d5569]">

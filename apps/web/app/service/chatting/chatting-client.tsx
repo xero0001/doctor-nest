@@ -16,6 +16,7 @@ import {
   Bot,
   Bookmark,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   CircleAlert,
@@ -34,6 +35,7 @@ import {
   Smile,
   Sparkles,
   Star,
+  RotateCcw,
   UserPlus,
   UserRound,
   WandSparkles,
@@ -1763,8 +1765,8 @@ export function ChattingClient({
         throw new Error(
           result.error ??
             (nextStatus === "CLOSED"
-              ? "채팅을 종료하지 못했습니다."
-              : "채팅을 다시 열지 못했습니다."),
+              ? "상담을 완료하지 못했습니다."
+              : "상담을 다시 열지 못했습니다."),
         );
       }
 
@@ -1774,7 +1776,11 @@ export function ChattingClient({
         ),
       );
 
-      if (selectedRoomId === roomId) {
+      if (
+        selectedRoomId === roomId &&
+        statusFilter !== "ALL" &&
+        statusFilter !== "IMPORTANT"
+      ) {
         const nextRoom = rooms.find(
           (conversation) =>
             conversation.id !== roomId && conversation.status === room.status,
@@ -1792,7 +1798,7 @@ export function ChattingClient({
       setDetailError(
         error instanceof Error
           ? error.message
-          : "채팅 상태를 변경하지 못했습니다.",
+          : "상담 상태를 변경하지 못했습니다.",
       );
     } finally {
       setPendingStatusRoomId((current) =>
@@ -2714,21 +2720,42 @@ export function ChattingClient({
             </div>
           </div>
 
-          <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] font-semibold text-[#737b8e]">
-            <span className="rounded-lg bg-[#f7f8fa] px-2.5 py-1">
-              {currentRoom.customer
-                ? `${getGenderLabel(currentRoom.customer.gender)}/${formatHeaderBirthDate(currentRoom.customer.birthDate)}`
-                : "인적정보 미연동"}
-            </span>
-            <span className="rounded-lg bg-[#f7f8fa] px-2.5 py-1 font-mono">
-              {formatPhoneWithCountryCode(
-                getConversationPhone(currentRoom),
-                currentRoom.customer?.phoneCountryCode,
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] font-semibold text-[#737b8e]">
+              <span className="rounded-lg bg-[#f7f8fa] px-2.5 py-1">
+                {currentRoom.customer
+                  ? `${getGenderLabel(currentRoom.customer.gender)}/${formatHeaderBirthDate(currentRoom.customer.birthDate)}`
+                  : "인적정보 미연동"}
+              </span>
+              <span className="rounded-lg bg-[#f7f8fa] px-2.5 py-1 font-mono">
+                {formatPhoneWithCountryCode(
+                  getConversationPhone(currentRoom),
+                  currentRoom.customer?.phoneCountryCode,
+                )}
+              </span>
+              <span className="rounded-lg bg-[#f7f8fa] px-2.5 py-1">
+                {currentRoom.customer?.nationality?.trim() || "-"}
+              </span>
+            </div>
+            <button
+              type="button"
+              disabled={pendingStatusRoomId === currentRoom.id}
+              onClick={() => void toggleConversationStatus(currentRoom.id)}
+              className={`flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition disabled:cursor-wait disabled:opacity-60 ${
+                currentRoom.status === "OPEN"
+                  ? "border-[#c8d4fa] bg-[#f7f9ff] text-[#3157f6] hover:border-[#9baff6] hover:bg-[#eef2ff]"
+                  : "border-[#d8dde7] bg-white text-[#687085] hover:border-[#bfc7d6] hover:bg-[#f7f8fb]"
+              }`}
+            >
+              {pendingStatusRoomId === currentRoom.id ? (
+                <LoaderCircle className="size-3.5 animate-spin" />
+              ) : currentRoom.status === "OPEN" ? (
+                <CheckCircle2 className="size-3.5" />
+              ) : (
+                <RotateCcw className="size-3.5" />
               )}
-            </span>
-            <span className="rounded-lg bg-[#f7f8fa] px-2.5 py-1">
-              {currentRoom.customer?.nationality?.trim() || "-"}
-            </span>
+              {currentRoom.status === "OPEN" ? "상담 완료" : "상담 다시 열기"}
+            </button>
           </div>
         </header>
 
@@ -3372,7 +3399,11 @@ export function ChattingClient({
               role="menuitem"
               disabled={pendingStatusRoomId === contextRoom.id}
               onClick={() => void toggleConversationStatus(contextRoom.id)}
-              className="flex h-10 w-full items-center gap-2.5 rounded-lg px-3 text-left text-sm font-semibold text-[#d8465b] hover:bg-[#fff2f4] disabled:opacity-60"
+              className={`flex h-10 w-full items-center gap-2.5 rounded-lg px-3 text-left text-sm font-semibold disabled:opacity-60 ${
+                contextRoom.status === "OPEN"
+                  ? "text-[#3157f6] hover:bg-[#eef2ff]"
+                  : "text-[#596176] hover:bg-[#f5f7fb]"
+              }`}
             >
               {pendingStatusRoomId === contextRoom.id ? (
                 <LoaderCircle className="size-4 animate-spin" />
@@ -3383,7 +3414,7 @@ export function ChattingClient({
                   }`}
                 />
               )}
-              {contextRoom.status === "OPEN" ? "채팅 나가기" : "채팅 다시 열기"}
+              {contextRoom.status === "OPEN" ? "상담 완료" : "상담 다시 열기"}
             </button>
           </div>
         </>

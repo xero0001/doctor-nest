@@ -30,7 +30,7 @@ import {
   Search,
   Save,
   Send,
-  Settings2,
+  Settings,
   Smile,
   Sparkles,
   Star,
@@ -64,7 +64,8 @@ import type {
   StaffMember,
 } from "./chat-types";
 
-type ChatTab = "OPEN" | "CLOSED" | "IMPORTANT";
+type ChatStatusFilter = "ALL" | "OPEN" | "CLOSED" | "IMPORTANT";
+type ChatSortOrder = "LATEST" | "OLDEST";
 type RightPanelTab = "AUTOMATION" | "BOOKMARKS";
 type ChatSearchField =
   "CUSTOMER_NAME" | "PHONE" | "CHART_NUMBER" | "ASSIGNEE" | "CONTENT";
@@ -101,6 +102,54 @@ const chatSearchOptions: Array<{
   { value: "ASSIGNEE", label: "담당자명", placeholder: "담당자명 검색" },
   { value: "CONTENT", label: "내용 검색", placeholder: "대화 내용 검색" },
 ];
+
+const chatSortOptions = [
+  { value: "LATEST", label: "최신 대화 순" },
+  { value: "OLDEST", label: "오래된 대화 순" },
+] as const;
+
+const chatStatusOptions = [
+  { value: "ALL", label: "전체" },
+  { value: "OPEN", label: "진행 중" },
+  { value: "CLOSED", label: "완료" },
+  { value: "IMPORTANT", label: "중요" },
+] as const;
+
+function ChatListSelect<T extends string>({
+  value,
+  options,
+  ariaLabel,
+  onValueChange,
+}: {
+  value: T;
+  options: ReadonlyArray<{ value: T; label: string }>;
+  ariaLabel: string;
+  onValueChange: (value: T) => void;
+}) {
+  const activeOption =
+    options.find((option) => option.value === value) ?? options[0];
+
+  return (
+    <label className="relative flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-lg px-1.5 text-xs font-semibold text-[#737a8d] transition-colors hover:bg-[#f5f6f9] hover:text-[#41485d] focus-within:bg-[#f5f6f9] focus-within:ring-2 focus-within:ring-[#3157f6]/15">
+      <span className="pointer-events-none whitespace-nowrap">
+        {activeOption.label}
+      </span>
+      <ChevronDown className="pointer-events-none size-3.5 shrink-0 text-[#a0a6b4]" />
+      <select
+        value={value}
+        onChange={(event) => onValueChange(event.target.value as T)}
+        aria-label={ariaLabel}
+        className="absolute inset-0 size-full cursor-pointer appearance-none opacity-0"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 const channelMeta: Record<
   ChatChannel,
@@ -156,6 +205,17 @@ const channelMeta: Record<
     dotClass: "bg-[#d946ef]",
   },
 };
+
+const chatChannelOptions: ReadonlyArray<{
+  value: ChatChannel | "ALL";
+  label: string;
+}> = [
+  { value: "ALL", label: "전체 채널" },
+  ...(Object.keys(channelMeta) as ChatChannel[]).map((channel) => ({
+    value: channel,
+    label: channelMeta[channel].label,
+  })),
+];
 
 function getConversationDisplayName(conversation: ConversationItem) {
   return (
@@ -1198,7 +1258,8 @@ export function ChattingClient({
   staffMembers: StaffMember[];
   contentEvents: ContentEventRecord[];
 }) {
-  const [chatTab, setChatTab] = useState<ChatTab>("OPEN");
+  const [statusFilter, setStatusFilter] = useState<ChatStatusFilter>("ALL");
+  const [sortOrder, setSortOrder] = useState<ChatSortOrder>("LATEST");
   const [selectedRoomId, setSelectedRoomId] = useState(
     conversations[0]?.id ?? "",
   );
@@ -1308,11 +1369,13 @@ export function ChattingClient({
     const normalizedQuery = query.trim().toLowerCase();
     const normalizedPhoneQuery = query.replace(/\D/g, "");
 
-    return rooms.filter((conversation) => {
+    const filteredRooms = rooms.filter((conversation) => {
       const matchesTab =
-        chatTab === "IMPORTANT"
-          ? conversation.important
-          : conversation.status === chatTab;
+        statusFilter === "ALL"
+          ? true
+          : statusFilter === "IMPORTANT"
+            ? conversation.important
+            : conversation.status === statusFilter;
       const matchesChannel =
         channelFilter === "ALL" || conversation.channel === channelFilter;
       let matchesQuery = !normalizedQuery;
@@ -1357,7 +1420,14 @@ export function ChattingClient({
 
       return matchesTab && matchesChannel && matchesQuery;
     });
-  }, [chatTab, channelFilter, query, rooms, searchField]);
+
+    return filteredRooms.sort((left, right) => {
+      const difference =
+        new Date(right.lastMessageAt).getTime() -
+        new Date(left.lastMessageAt).getTime();
+      return sortOrder === "LATEST" ? difference : -difference;
+    });
+  }, [channelFilter, query, rooms, searchField, sortOrder, statusFilter]);
 
   const activeSearchOption =
     chatSearchOptions.find((option) => option.value === searchField) ??
@@ -1479,36 +1549,6 @@ export function ChattingClient({
           : "loading";
   const coachError =
     coachFailure?.key === coachSuggestionKey ? coachFailure.message : "";
-  const chatTabs = useMemo(() => {
-    let openCount = 0;
-    let closedCount = 0;
-    let importantCount = 0;
-
-    for (const room of rooms) {
-      if (room.status === "OPEN") openCount += 1;
-      if (room.status === "CLOSED") closedCount += 1;
-      if (room.important) importantCount += 1;
-    }
-
-    return [
-      {
-        value: "OPEN",
-        label: "진행 중",
-        count: openCount,
-      },
-      {
-        value: "CLOSED",
-        label: "완료",
-        count: closedCount,
-      },
-      {
-        value: "IMPORTANT",
-        label: "중요",
-        count: importantCount,
-      },
-    ] as const;
-  }, [rooms]);
-
   function toggleManualFolder(id: string) {
     setOpenManualFolderIds((current) => {
       const next = new Set(current);
@@ -1743,7 +1783,7 @@ export function ChattingClient({
         if (nextRoom) {
           void selectConversation(nextRoom.id);
         } else {
-          setChatTab(nextStatus);
+          setStatusFilter(nextStatus);
         }
       }
 
@@ -2351,35 +2391,38 @@ export function ChattingClient({
   return (
     <div className="grid h-full max-h-full min-h-0 min-w-[1500px] grid-cols-[360px_360px_minmax(420px,1fr)_360px] overflow-x-auto overflow-y-hidden bg-white">
       <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-r border-[#e7eaf1] bg-white">
-        <header className="h-[72px] shrink-0 border-b border-[#e8eaf1] px-4 pt-4">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold tracking-[-0.03em]">
-                  고객채팅
-                </h1>
-                <span className="flex items-center gap-1 rounded-full bg-[#eef2ff] px-2 py-1 text-[9px] font-bold text-[#3157f6]">
-                  <span className="size-1.5 rounded-full bg-[#3157f6]" />
-                  통합 상담
-                </span>
-              </div>
-            </div>
+        <header className="flex h-[72px] shrink-0 items-center justify-between gap-2 border-b border-[#e8eaf1] px-4">
+          <div className="flex shrink-0 items-center gap-1">
+            <h1 className="text-base font-bold tracking-[-0.03em]">고객채팅</h1>
             <button
               type="button"
               aria-label="채팅 설정"
-              className="flex size-8 items-center justify-center rounded-lg border border-[#e1e5ed] text-[#848b9e] hover:bg-[#f7f8fb]"
+              className="flex size-8 items-center justify-center rounded-lg text-[#848b9e] hover:bg-[#f7f8fb] hover:text-[#596176]"
             >
-              <Settings2 className="size-4" />
+              <Settings className="size-[18px]" />
             </button>
           </div>
+          <div className="flex min-w-0 items-center justify-end gap-0.5">
+            <ChatListSelect
+              value={sortOrder}
+              options={chatSortOptions}
+              ariaLabel="채팅 정렬"
+              onValueChange={setSortOrder}
+            />
+            <ChatListSelect
+              value={statusFilter}
+              options={chatStatusOptions}
+              ariaLabel="채팅 상태 필터"
+              onValueChange={setStatusFilter}
+            />
+            <ChatListSelect
+              value={channelFilter}
+              options={chatChannelOptions}
+              ariaLabel="채널 필터"
+              onValueChange={setChannelFilter}
+            />
+          </div>
         </header>
-
-        <SectionTabs
-          ariaLabel="채팅 상태"
-          options={chatTabs}
-          value={chatTab}
-          onValueChange={setChatTab}
-        />
 
         <div className="border-b border-[#eceef4] px-3 py-2.5">
           <div className="flex h-9 items-center overflow-hidden rounded-xl border border-[#e1e5ed] bg-[#f9fafc] focus-within:border-[#7187f6] focus-within:bg-white focus-within:ring-3 focus-within:ring-[#3157f6]/10">
@@ -2416,36 +2459,10 @@ export function ChattingClient({
           </div>
         </div>
 
-        <div className="border-b border-[#eceef4] px-3 py-2.5">
-          <label className="relative flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-[#e2e5ed] px-2.5 text-xs font-medium text-[#747b8e] focus-within:border-[#7187f6] focus-within:ring-3 focus-within:ring-[#3157f6]/10">
-            <span
-              className={`pointer-events-none size-2 rounded-full ${channelFilter === "ALL" ? "bg-[#3157f6]" : channelMeta[channelFilter].dotClass}`}
-            />
-            <span className="pointer-events-none min-w-0 flex-1 truncate">
-              {channelFilter === "ALL"
-                ? "모든 채널"
-                : channelMeta[channelFilter].label}
-            </span>
-            <select
-              value={channelFilter}
-              onChange={(event) =>
-                setChannelFilter(event.target.value as ChatChannel | "ALL")
-              }
-              className="absolute inset-0 z-10 h-full w-full cursor-pointer appearance-none opacity-0"
-              aria-label="채널 필터"
-            >
-              <option value="ALL">모든 채널</option>
-              {(Object.keys(channelMeta) as ChatChannel[]).map((channel) => (
-                <option key={channel} value={channel}>
-                  {channelMeta[channel].label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none size-3.5" />
-          </label>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div
+          data-testid="conversation-list"
+          className="min-h-0 flex-1 overflow-y-auto"
+        >
           {visibleRooms.map((room) => {
             const latestMessage = room.messages.at(-1);
             const latestMessageContent = latestMessage

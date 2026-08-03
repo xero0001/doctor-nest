@@ -2511,7 +2511,7 @@ export function ChattingClient({
                         {latestMessageContent}
                       </p>
                     </div>
-                    <span className="shrink-0 text-[9px] text-[#a8adba]">
+                    <span className="shrink-0 text-xs text-[#a8adba]">
                       {formatListTime(room.lastMessageAt)}
                     </span>
                   </div>
@@ -2815,7 +2815,7 @@ export function ChattingClient({
         ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-          <div className="mx-auto mb-6 w-fit rounded-full bg-[#e4e8f1] px-3 py-1 text-[9px] font-medium text-[#7f8698]">
+          <div className="mx-auto mb-6 w-fit rounded-full bg-[#e4e8f1] px-3 py-1 text-xs font-medium text-[#7f8698]">
             {formatDate(
               currentRoom.messages[0]?.sentAt ?? currentRoom.lastMessageAt,
             )}
@@ -2838,7 +2838,7 @@ export function ChattingClient({
               if (message.sender === "SYSTEM") {
                 return (
                   <div key={message.id} className="my-4 flex justify-center">
-                    <span className="rounded-full bg-[#e7edff] px-3 py-1.5 text-[9px] font-semibold text-[#4765dc]">
+                    <span className="rounded-full bg-[#e7edff] px-3 py-1.5 text-xs font-semibold text-[#4765dc]">
                       {message.content}
                     </span>
                   </div>
@@ -2858,8 +2858,8 @@ export function ChattingClient({
                       </p>
                     ) : null}
                     {message.sender === "AI" ? (
-                      <p className="mb-1 flex items-center justify-end gap-1 text-[8px] font-semibold text-[#6657e9]">
-                        <Sparkles className="size-2.5" /> AI 답변
+                      <p className="mb-1 flex items-center justify-end gap-1 text-xs font-semibold text-[#6657e9]">
+                        <Sparkles className="size-3.5" /> AI 답변
                       </p>
                     ) : null}
                     <div
@@ -2896,12 +2896,12 @@ export function ChattingClient({
                       ) : null}
                     </div>
                     <div
-                      className={`mt-1 flex items-center gap-1.5 text-[10px] text-[#a0a6b4] ${inbound ? "justify-start" : "justify-end"}`}
+                      className={`mt-1 flex items-center gap-1.5 text-xs text-[#a0a6b4] ${inbound ? "justify-start" : "justify-end"}`}
                     >
                       <span>
                         {formatMessageTime(message.sentAt)}
                         {!inbound ? (
-                          <Check className="ml-1 inline size-2.5 text-[#3157f6]" />
+                          <Check className="ml-1 inline size-3.5 text-[#3157f6]" />
                         ) : null}
                       </span>
                       {inbound ? (
@@ -2910,14 +2910,14 @@ export function ChattingClient({
                           onClick={() => void toggleMessageBookmark(message.id)}
                           aria-pressed={Boolean(message.bookmarkedAt)}
                           aria-label={`메시지 북마크 ${message.bookmarkedAt ? "해제" : "추가"}`}
-                          className={`rounded p-0.5 transition hover:bg-white/80 ${
+                          className={`rounded p-1 transition hover:bg-white/80 ${
                             message.bookmarkedAt
                               ? "text-[#6657e9]"
                               : "text-[#a0a6b4] hover:text-[#6657e9]"
                           }`}
                         >
                           <Bookmark
-                            className={`size-3 ${message.bookmarkedAt ? "fill-current" : ""}`}
+                            className={`size-4 ${message.bookmarkedAt ? "fill-current" : ""}`}
                           />
                         </button>
                       ) : null}
@@ -3149,7 +3149,7 @@ export function ChattingClient({
                             {getPrimaryMessageContent(message)}
                           </p>
                         </button>
-                        <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-[#9298aa]">
+                        <div className="mt-2 flex items-center justify-between gap-2 text-xs text-[#9298aa]">
                           <span>
                             {formatMessageTime(message.sentAt)} · {senderLabel}
                           </span>
@@ -3173,7 +3173,7 @@ export function ChattingClient({
                   <p className="mt-3 text-xs font-semibold">
                     북마크한 채팅이 없습니다.
                   </p>
-                  <p className="mt-1 text-[10px]">
+                  <p className="mt-1 text-xs">
                     메시지 아래의 북마크 아이콘을 눌러 추가하세요.
                   </p>
                 </div>

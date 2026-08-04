@@ -50,7 +50,6 @@ import { NaverTalkChannelIcon } from "@/features/channels/components/naver-talk-
 import { WeChatChannelIcon } from "@/features/channels/components/wechat-channel-icon";
 import { WhatsAppChannelIcon } from "@/features/channels/components/whatsapp-channel-icon";
 import { SectionTabs } from "@/components/section-tabs";
-import { UnsavedChangesDialog } from "@/components/unsaved-changes-dialog";
 import {
   TreatmentTagEditorDialog,
   type TreatmentTagOption,
@@ -1428,10 +1427,6 @@ export function ChattingClient({
   >(null);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [isTreatmentTagModalOpen, setIsTreatmentTagModalOpen] = useState(false);
-  const [pendingTreatmentTagRemoval, setPendingTreatmentTagRemoval] = useState<{
-    name: string;
-    color: string;
-  } | null>(null);
   const [isSavingTreatmentTags, setIsSavingTreatmentTags] = useState(false);
   const [treatmentTagError, setTreatmentTagError] = useState("");
   const [showScrollToLatest, setShowScrollToLatest] = useState(false);
@@ -1729,18 +1724,6 @@ export function ChattingClient({
     } finally {
       setIsSavingTreatmentTags(false);
     }
-  }
-
-  async function confirmTreatmentTagRemoval() {
-    if (!pendingTreatmentTagRemoval || !currentRoom?.customer) return;
-
-    const saved = await saveTreatmentTags(
-      currentRoom.customer.tags
-        .filter((tag) => tag.name !== pendingTreatmentTagRemoval.name)
-        .map((tag) => tag.name),
-    );
-    setPendingTreatmentTagRemoval(null);
-    if (saved) setTreatmentTagError("");
   }
 
   const autoTranslate = currentRoom?.autoTranslateEnabled ?? true;
@@ -3067,18 +3050,10 @@ export function ChattingClient({
             {(currentRoom.customer?.tags ?? []).map((tag) => (
               <span
                 key={tag.name}
-                className="inline-flex items-center gap-1 rounded-full py-1 pl-2.5 pr-1.5 text-xs font-bold text-white shadow-sm"
+                className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold text-white shadow-sm"
                 style={{ backgroundColor: tag.color }}
               >
-                <span>{tag.name}</span>
-                <button
-                  type="button"
-                  aria-label={`${tag.name} 치료태그 제거`}
-                  onClick={() => setPendingTreatmentTagRemoval(tag)}
-                  className="flex size-5 items-center justify-center rounded-full transition hover:bg-black/15 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
-                >
-                  <X className="size-3" />
-                </button>
+                {tag.name}
               </span>
             ))}
             {currentRoom.customer && currentRoom.customer.tags.length === 0 ? (
@@ -3779,22 +3754,6 @@ export function ChattingClient({
           }}
         />
       ) : null}
-
-      <UnsavedChangesDialog
-        open={Boolean(pendingTreatmentTagRemoval)}
-        title="치료태그를 제거할까요?"
-        description={
-          pendingTreatmentTagRemoval
-            ? `‘${pendingTreatmentTagRemoval.name}’ 태그를 이 고객에게서 제거합니다.`
-            : "선택한 치료태그를 이 고객에게서 제거합니다."
-        }
-        confirmLabel="제거"
-        cancelLabel="취소"
-        onCancel={() => {
-          if (!isSavingTreatmentTags) setPendingTreatmentTagRemoval(null);
-        }}
-        onConfirm={() => void confirmTreatmentTagRemoval()}
-      />
 
       {isCustomerModalOpen ? (
         <CustomerLinkModal

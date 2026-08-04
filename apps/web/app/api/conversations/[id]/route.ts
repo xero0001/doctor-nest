@@ -410,10 +410,15 @@ export async function POST(request: Request, { params }: RouteContext) {
   const { id } = await params;
   const body = (await request.json().catch(() => null)) as {
     content?: string;
+    contentEventId?: unknown;
     autoTranslate?: boolean;
     targetLanguage?: unknown;
   } | null;
   const content = body?.content?.trim();
+  const contentEventId =
+    typeof body?.contentEventId === "string"
+      ? body.contentEventId.trim() || null
+      : null;
   const autoTranslate = body?.autoTranslate !== false;
   const requestedTargetLanguage = normalizeTranslationTargetLanguage(
     body?.targetLanguage,
@@ -426,6 +431,13 @@ export async function POST(request: Request, { params }: RouteContext) {
   ) {
     return Response.json(
       { error: "번역 대상 언어가 올바르지 않습니다." },
+      { status: 400 },
+    );
+  }
+
+  if (body && Object.hasOwn(body, "contentEventId") && !contentEventId) {
+    return Response.json(
+      { error: "발송할 콘텐츠 정보가 올바르지 않습니다." },
       { status: 400 },
     );
   }
@@ -469,6 +481,24 @@ export async function POST(request: Request, { params }: RouteContext) {
       { error: "채팅을 찾을 수 없습니다." },
       { status: 404 },
     );
+  }
+
+  if (contentEventId) {
+    const contentEvent = await database.contentEvent.findFirst({
+      where: {
+        id: contentEventId,
+        hospitalId: user.hospitalId,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+
+    if (!contentEvent) {
+      return Response.json(
+        { error: "발송할 활성 콘텐츠를 찾을 수 없습니다." },
+        { status: 404 },
+      );
+    }
   }
 
   let translation = {
@@ -717,6 +747,13 @@ export async function POST(request: Request, { params }: RouteContext) {
       where: { id: conversation.id },
       data: { lastMessageAt: sentAt },
     });
+
+    if (contentEventId) {
+      await transaction.contentEvent.updateMany({
+        where: { id: contentEventId, hospitalId: user.hospitalId },
+        data: { consultationCount: { increment: 1 } },
+      });
+    }
 
     return storedMessage;
   });

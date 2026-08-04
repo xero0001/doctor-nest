@@ -89,6 +89,7 @@ type ConversationContextMenu = {
 
 const CHAT_POLL_INTERVAL_MS = 5_000;
 const CHAT_BOTTOM_THRESHOLD_PX = 100;
+const MAX_CONTENT_MESSAGE_LENGTH = 4_000;
 const MAX_PATIENT_NOTES_LENGTH = 5_000;
 
 type CustomerNotesSaveStatus = "idle" | "saving" | "saved" | "error";
@@ -601,11 +602,17 @@ function ManualFolderBranch({
 function ContentEventCard({
   event,
   selected,
+  sending,
+  disabled,
   onToggle,
+  onSend,
 }: {
   event: ContentEventRecord;
   selected: boolean;
+  sending: boolean;
+  disabled: boolean;
   onToggle: () => void;
+  onSend: () => void;
 }) {
   const finalPrice = Math.max(0, event.originalPrice - event.discountAmount);
 
@@ -619,7 +626,7 @@ function ContentEventCard({
           selected ? "bg-[#f0ebff]" : "hover:bg-[#f8f9fc]"
         }`}
       >
-        <div className="relative aspect-[4/3] w-20 shrink-0 overflow-hidden rounded-lg bg-[#f2f3f6]">
+        <div className="relative size-20 shrink-0 overflow-hidden rounded-lg bg-[#f2f3f6]">
           {event.thumbnail ? (
             <Image
               src={event.thumbnail.publicUrl}
@@ -696,10 +703,62 @@ function ContentEventCard({
               등록된 상세 내용이 없습니다.
             </p>
           )}
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={onSend}
+            className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#3157f6] px-4 text-sm font-bold text-white transition hover:bg-[#2448d8] disabled:cursor-not-allowed disabled:bg-[#b7c0dd]"
+          >
+            {sending ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <Send className="size-4" />
+            )}
+            {sending ? "발송 중" : "채팅으로 발송"}
+          </button>
         </div>
       ) : null}
     </article>
   );
+}
+
+function buildContentEventMessage(event: ContentEventRecord) {
+  const finalPrice = Math.max(0, event.originalPrice - event.discountAmount);
+  const priceLine =
+    event.discountAmount > 0
+      ? `가격: ${finalPrice.toLocaleString("ko-KR")}원 (정가 ${event.originalPrice.toLocaleString("ko-KR")}원)`
+      : `가격: ${finalPrice.toLocaleString("ko-KR")}원`;
+  const headerLines = [
+    `[이벤트] ${event.title}`,
+    event.summary,
+    priceLine,
+    event.exposureEndAt
+      ? `이벤트 기간: ~${event.exposureEndAt.slice(0, 10)}`
+      : "",
+  ].filter(Boolean);
+  const imageUrls = [
+    event.thumbnail?.publicUrl,
+    ...event.detailImages.map((image) => image.publicUrl),
+  ].filter((url): url is string => Boolean(url));
+  const imageSection =
+    imageUrls.length > 0 ? `이미지\n${imageUrls.join("\n")}` : "";
+  const fixedSections = [headerLines.join("\n"), imageSection].filter(Boolean);
+  const fixedLength = fixedSections.join("\n\n").length;
+  const detailBudget = Math.max(
+    0,
+    MAX_CONTENT_MESSAGE_LENGTH - fixedLength - (fixedLength > 0 ? 2 : 0),
+  );
+  const detailText =
+    event.detailType === "TEXT" && event.detailText
+      ? event.detailText.length > detailBudget
+        ? `${event.detailText.slice(0, Math.max(0, detailBudget - 1)).trimEnd()}…`
+        : event.detailText
+      : "";
+
+  return [headerLines.join("\n"), detailText, imageSection]
+    .filter(Boolean)
+    .join("\n\n")
+    .slice(0, MAX_CONTENT_MESSAGE_LENGTH);
 }
 
 function ChannelBadge({
@@ -1364,6 +1423,9 @@ export function ChattingClient({
   const [loadingRoomId, setLoadingRoomId] = useState<string | null>(null);
   const [detailError, setDetailError] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [sendingContentEventId, setSendingContentEventId] = useState<
+    string | null
+  >(null);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [isTreatmentTagModalOpen, setIsTreatmentTagModalOpen] = useState(false);
   const [pendingTreatmentTagRemoval, setPendingTreatmentTagRemoval] = useState<{
@@ -2545,8 +2607,12 @@ export function ChattingClient({
     }
   }
 
-  async function sendMessage() {
-    const message = draft.trim();
+  async function sendMessage(options?: {
+    content?: string;
+    contentEventId?: string;
+  }) {
+    const contentOverride = options?.content;
+    const message = (contentOverride ?? draft).trim();
     if (!message || !currentRoom || isSending) return;
 
     setIsSending(true);
@@ -2558,6 +2624,7 @@ export function ChattingClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           content: message,
+          contentEventId: options?.contentEventId,
           autoTranslate,
           targetLanguage: translationTargetLanguage,
         }),
@@ -2582,7 +2649,7 @@ export function ChattingClient({
             : room,
         ),
       );
-      setDraft("");
+      if (contentOverride === undefined) setDraft("");
     } catch (error) {
       setDetailError(
         error instanceof Error
@@ -2591,6 +2658,20 @@ export function ChattingClient({
       );
     } finally {
       setIsSending(false);
+    }
+  }
+
+  async function sendContentEvent(event: ContentEventRecord) {
+    if (isSending) return;
+
+    setSendingContentEventId(event.id);
+    try {
+      await sendMessage({
+        content: buildContentEventMessage(event),
+        contentEventId: event.id,
+      });
+    } finally {
+      setSendingContentEventId(null);
     }
   }
 
@@ -2848,11 +2929,14 @@ export function ChattingClient({
                 key={event.id}
                 event={event}
                 selected={selectedContentId === event.id}
+                sending={sendingContentEventId === event.id}
+                disabled={isSending}
                 onToggle={() =>
                   setSelectedContentId((current) =>
                     current === event.id ? "" : event.id,
                   )
                 }
+                onSend={() => void sendContentEvent(event)}
               />
             ))
           ) : (

@@ -497,21 +497,21 @@ function ManualFolderBranch({
         onClick={() => onToggleFolder(folder.id)}
         aria-expanded={expanded}
         aria-controls={contentId}
-        className="flex w-full items-center gap-2 py-2.5 pr-4 text-left text-[11px] font-bold text-[#51586d] hover:bg-[#f8f9fc]"
+        className="flex min-h-11 w-full items-center gap-2 py-3 pr-4 text-left text-sm font-bold text-[#51586d] hover:bg-[#f8f9fc]"
         style={{ paddingLeft: 16 + depth * 14 }}
       >
         <ChevronRight
-          className={`size-3 shrink-0 transition-transform ${
+          className={`size-4 shrink-0 transition-transform ${
             expanded ? "rotate-90" : ""
           }`}
         />
         <Folder
-          className={`size-3.5 shrink-0 ${
+          className={`size-4 shrink-0 ${
             expanded ? "fill-[#f3f0ff] text-[#8066ec]" : "text-[#8d93a5]"
           }`}
         />
         <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-        <span className="text-[9px] font-medium text-[#a0a5b3]">
+        <span className="text-xs font-medium text-[#a0a5b3]">
           {countManualDocuments(folder)}
         </span>
       </button>
@@ -541,7 +541,7 @@ function ManualFolderBranch({
             return (
               <div key={document.id}>
                 <div
-                  className={`flex w-full items-center py-2.5 pr-4 text-xs font-semibold ${
+                  className={`flex min-h-11 w-full items-center py-2.5 pr-4 text-sm font-semibold ${
                     selected
                       ? "bg-[#f0ebff] text-[#6657e9]"
                       : "text-[#646b7f] hover:bg-[#f8f9fc]"
@@ -554,10 +554,10 @@ function ManualFolderBranch({
                     aria-expanded={selected}
                     aria-controls={documentContentId}
                     aria-label={`${document.title} ${selected ? "접기" : "펼치기"}`}
-                    className="flex size-6 shrink-0 items-center justify-center rounded-md hover:bg-white/70"
+                    className="flex size-7 shrink-0 items-center justify-center rounded-md hover:bg-white/70"
                   >
                     <ChevronRight
-                      className={`size-3 transition-transform ${
+                      className={`size-4 transition-transform ${
                         selected ? "rotate-90" : ""
                       }`}
                     />
@@ -567,10 +567,10 @@ function ManualFolderBranch({
                     onClick={() => onToggleBookmark(document.id)}
                     aria-pressed={bookmarked}
                     aria-label={`${document.title} 북마크 ${bookmarked ? "해제" : "추가"}`}
-                    className="flex size-6 shrink-0 items-center justify-center rounded-md hover:bg-white/70"
+                    className="flex size-7 shrink-0 items-center justify-center rounded-md hover:bg-white/70"
                   >
                     <Bookmark
-                      className={`size-3.5 ${
+                      className={`size-4 ${
                         bookmarked
                           ? "fill-[#8066ec] text-[#8066ec]"
                           : "text-[#a5aaba]"

@@ -27,7 +27,13 @@ export type SectionSidebarGroup = {
   defaultExpanded?: boolean;
 };
 
-function SidebarItem({ item }: { item: SectionSidebarItem }) {
+function SidebarItem({
+  item,
+  indented = false,
+}: {
+  item: SectionSidebarItem;
+  indented?: boolean;
+}) {
   const Icon = item.icon;
   const content = (
     <>
@@ -46,7 +52,7 @@ function SidebarItem({ item }: { item: SectionSidebarItem }) {
       ) : null}
     </>
   );
-  const className = `flex h-11 w-full items-center gap-2 rounded-xl px-4 text-left text-sm font-bold transition-colors ${
+  const className = `flex h-11 w-full items-center gap-2 rounded-xl ${indented ? "pl-6 pr-4" : "px-4"} text-left text-sm font-bold transition-colors ${
     item.active
       ? "bg-[#edf3ff] text-[#3157f6]"
       : item.disabled
@@ -130,7 +136,7 @@ function SidebarGroup({ group }: { group: SectionSidebarGroup }) {
         ) : (
           <h2
             id={`${group.id}-heading`}
-            className="px-3 pb-2 text-xs font-extrabold text-[#7d8599]"
+            className="px-3 pb-2 text-sm font-extrabold text-[#7d8599]"
           >
             {group.label}
           </h2>
@@ -140,7 +146,11 @@ function SidebarGroup({ group }: { group: SectionSidebarGroup }) {
       {showItems ? (
         <div className={`${group.label ? "mt-1" : ""} space-y-1`}>
           {group.items.map((item) => (
-            <SidebarItem key={item.id} item={item} />
+            <SidebarItem
+              key={item.id}
+              item={item}
+              indented={Boolean(group.label) && group.presentation !== "tree"}
+            />
           ))}
         </div>
       ) : null}

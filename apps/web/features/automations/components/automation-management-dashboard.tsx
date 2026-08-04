@@ -437,7 +437,7 @@ export function AutomationManagementDashboardView({
 
             <section className="rounded-2xl border border-[#e3e8f0] bg-white p-7 shadow-[0_4px_16px_rgba(40,50,75,0.08)]">
               <h2 className="text-base font-extrabold text-[#333a4e]">
-                월간 애프터닥 관리 현황
+                월간 닥터네스트 관리 현황
               </h2>
               <p className="mt-1 text-xs text-[#9aa1b1]">
                 자동 응대와 고객 상담 활동을 월 단위로 집계합니다.

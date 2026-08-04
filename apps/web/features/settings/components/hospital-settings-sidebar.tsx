@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Building2,
-  CreditCard,
-  Settings2,
-  TicketCheck,
-  UsersRound,
-} from "lucide-react";
+import { CreditCard, TicketCheck } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import {
@@ -24,9 +18,6 @@ export function HospitalSettingsSidebar() {
     {
       id: "hospital-information",
       label: "병원정보",
-      icon: Building2,
-      presentation: "tree",
-      collapsible: true,
       items: [
         {
           id: "hospital-profile",
@@ -51,9 +42,6 @@ export function HospitalSettingsSidebar() {
     {
       id: "service-settings",
       label: "서비스설정",
-      icon: Settings2,
-      presentation: "tree",
-      collapsible: true,
       items: [
         {
           id: "basic-settings",
@@ -78,9 +66,6 @@ export function HospitalSettingsSidebar() {
     {
       id: "account-management",
       label: "계정관리",
-      icon: UsersRound,
-      presentation: "tree",
-      collapsible: true,
       items: [
         {
           id: "accounts",
@@ -102,6 +87,7 @@ export function HospitalSettingsSidebar() {
     },
     {
       id: "billing",
+      label: "결제관리",
       items: [
         {
           id: "card-payments",

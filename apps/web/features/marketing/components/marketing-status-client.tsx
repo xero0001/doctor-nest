@@ -77,7 +77,7 @@ function CampaignRankCard({
           아직 등록된 메시지가 없습니다.
         </h3>
         <p className="mt-2 text-xs leading-5 text-[#9aa2b2]">
-          애프터닥을 통한 카카오톡 발송으로
+          닥터네스트를 통한 카카오톡 발송으로
           <br />
           비용을 절약해 보세요.
         </p>
@@ -92,7 +92,9 @@ function CampaignRankCard({
           {rank}
         </span>
         <span className="rounded-full bg-[#edf4ff] px-3 py-1 text-xs font-bold text-[#3157f6]">
-          {campaign.readRate === null ? "읽음 집계 전" : `읽음 ${campaign.readRate}%`}
+          {campaign.readRate === null
+            ? "읽음 집계 전"
+            : `읽음 ${campaign.readRate}%`}
         </span>
       </div>
       <h3 className="mt-7 line-clamp-2 text-lg font-extrabold text-[#333a4f]">
@@ -137,9 +139,9 @@ export function MarketingStatusClient({
 
   return (
     <>
-      <main className="min-h-0 flex-1 overflow-y-auto bg-[#f3f7ff] px-8 py-10">
+      <main className="min-h-0 flex-1 overflow-y-auto bg-[#fbfbfc] px-8 py-10">
         <div className="mx-auto w-full max-w-[1120px] space-y-6">
-          <section className="rounded-[24px] border border-[#e8ecf3] bg-white p-6 shadow-[0_8px_30px_rgba(72,91,126,0.04)]">
+          <section className="rounded-2xl border border-[#e1e5ed] bg-white p-6">
             <h2 className="text-lg font-extrabold tracking-[-0.03em] text-[#353c50]">
               마케팅 이용권 현황
             </h2>
@@ -151,7 +153,7 @@ export function MarketingStatusClient({
                     <dt className="text-sm font-bold text-[#4a5266]">
                       보유 이용권
                     </dt>
-                    <dd className="mt-2 text-lg font-extrabold text-[#168ff0]">
+                    <dd className="mt-2 text-lg font-extrabold text-[#3157f6]">
                       {formatNumber(dashboard.entitlement.totalCredits)}장
                     </dd>
                   </div>
@@ -168,15 +170,17 @@ export function MarketingStatusClient({
                 <button
                   type="button"
                   onClick={() => setChargeOpen(true)}
-                  className="h-11 shrink-0 rounded-xl bg-[#168ff0] px-6 text-sm font-extrabold text-white shadow-sm transition hover:bg-[#087ed7]"
+                  className="h-11 shrink-0 rounded-xl bg-[#3157f6] px-6 text-sm font-extrabold text-white transition hover:bg-[#2448d8]"
                 >
                   이용권 충전
                 </button>
               </div>
-              <div className="mt-5 rounded-lg bg-[#eaf4ff] px-4 py-2.5 text-xs font-semibold text-[#607089]">
-                이미지형 이용권 {formatNumber(dashboard.entitlement.imageMessageCredits)}장
+              <div className="mt-5 rounded-lg bg-[#f2f4fb] px-4 py-2.5 text-xs font-semibold text-[#657087]">
+                이미지형 이용권{" "}
+                {formatNumber(dashboard.entitlement.imageMessageCredits)}장
                 <span className="mx-2 text-[#b2bdca]">|</span>
-                와이드 이미지·캐러셀 피드형 이용권 {formatNumber(dashboard.entitlement.carouselFeedCredits)}장
+                와이드 이미지·캐러셀 피드형 이용권{" "}
+                {formatNumber(dashboard.entitlement.carouselFeedCredits)}장
               </div>
             </div>
 
@@ -236,11 +240,11 @@ export function MarketingStatusClient({
                     아직 등록된 메시지가 없습니다.
                   </h3>
                   <p className="mt-2 text-sm text-[#969eae]">
-                    애프터닥을 통한 카카오톡 발송으로 비용을 절약해 보세요.
+                    닥터네스트를 통한 카카오톡 발송으로 비용을 절약해 보세요.
                   </p>
                   <Link
                     href="/service/marketing"
-                    className="mt-5 inline-flex h-10 min-w-[320px] items-center justify-center rounded-xl bg-[#168ff0] px-6 text-sm font-extrabold text-white"
+                    className="mt-5 inline-flex h-10 min-w-[320px] items-center justify-center rounded-xl bg-[#3157f6] px-6 text-sm font-extrabold text-white transition hover:bg-[#2448d8]"
                   >
                     등록하기
                   </Link>
@@ -249,17 +253,17 @@ export function MarketingStatusClient({
             </div>
           </section>
 
-          <section className="rounded-[24px] border border-[#e8ecf3] bg-white p-6 shadow-[0_8px_30px_rgba(72,91,126,0.04)]">
+          <section className="rounded-2xl border border-[#e1e5ed] bg-white p-6">
             <h2 className="text-lg font-extrabold tracking-[-0.03em] text-[#353c50]">
               마케팅 비용 예상 절감액
             </h2>
             <div className="mt-5 grid grid-cols-2 divide-x divide-[#e3e6ec] rounded-2xl border border-[#dfe4ec] px-5 py-5">
               <div className="pr-6">
                 <p className="flex items-center gap-2 text-sm font-bold text-[#4a5266]">
-                  <MessageSquareText className="size-4 text-[#168ff0]" />
+                  <MessageSquareText className="size-4 text-[#3157f6]" />
                   브랜드 메시지 누적 발송 건수
                 </p>
-                <strong className="mt-2 block text-xl text-[#168ff0]">
+                <strong className="mt-2 block text-xl text-[#3157f6]">
                   {formatNumber(dashboard.totals.sentCount)}건
                 </strong>
               </div>
@@ -278,7 +282,8 @@ export function MarketingStatusClient({
             </div>
             <div className="mt-3 rounded-2xl border border-[#a8ce5b] px-5 py-5">
               <p className="flex items-center gap-2 text-sm font-bold text-[#4a5266]">
-                <TrendingUp className="size-4 text-[#67a61f]" />총 마케팅 비용 절감액
+                <TrendingUp className="size-4 text-[#67a61f]" />총 마케팅 비용
+                절감액
               </p>
               <strong className="mt-2 block text-xl text-[#67a61f]">
                 {formatCurrency(dashboard.totals.estimatedSavings)}
@@ -289,11 +294,11 @@ export function MarketingStatusClient({
             </div>
           </section>
 
-          <section className="rounded-[24px] border border-[#e8ecf3] bg-white p-6 shadow-[0_8px_30px_rgba(72,91,126,0.04)]">
+          <section className="rounded-2xl border border-[#e1e5ed] bg-white p-6">
             <h2 className="text-lg font-extrabold tracking-[-0.03em] text-[#353c50]">
               고객 반응이 좋았던 마케팅 TOP 3
             </h2>
-            <p className="mt-5 flex items-center gap-2 rounded-xl bg-[#eaf4ff] px-4 py-3 text-sm font-bold text-[#4385cf]">
+            <p className="mt-5 flex items-center gap-2 rounded-xl bg-[#f2f5ff] px-4 py-3 text-sm font-bold text-[#3157f6]">
               <Info className="size-4" />
               발송 이후 D+3일까지의 유효 데이터만 집계됩니다.
             </p>
@@ -326,7 +331,7 @@ export function MarketingStatusClient({
           >
             <div className="flex items-start justify-between gap-5">
               <div>
-                <div className="flex size-11 items-center justify-center rounded-2xl bg-[#eaf4ff] text-[#168ff0]">
+                <div className="flex size-11 items-center justify-center rounded-2xl bg-[#f2f5ff] text-[#3157f6]">
                   <Ticket className="size-5" />
                 </div>
                 <h2
@@ -352,14 +357,18 @@ export function MarketingStatusClient({
             <dl className="mt-6 grid grid-cols-2 gap-3">
               <div className="rounded-2xl border border-[#e3e7ee] p-4">
                 <dt className="text-sm font-bold text-[#4a5266]">이미지형</dt>
-                <dd className="mt-2 text-lg font-extrabold text-[#168ff0]">
-                  {formatNumber(dashboard.entitlement.imageMessageCredits)}장 보유
+                <dd className="mt-2 text-lg font-extrabold text-[#3157f6]">
+                  {formatNumber(dashboard.entitlement.imageMessageCredits)}장
+                  보유
                 </dd>
               </div>
               <div className="rounded-2xl border border-[#e3e7ee] p-4">
-                <dt className="text-sm font-bold text-[#4a5266]">캐러셀 피드형</dt>
-                <dd className="mt-2 text-lg font-extrabold text-[#168ff0]">
-                  {formatNumber(dashboard.entitlement.carouselFeedCredits)}장 보유
+                <dt className="text-sm font-bold text-[#4a5266]">
+                  캐러셀 피드형
+                </dt>
+                <dd className="mt-2 text-lg font-extrabold text-[#3157f6]">
+                  {formatNumber(dashboard.entitlement.carouselFeedCredits)}장
+                  보유
                 </dd>
               </div>
             </dl>
@@ -378,7 +387,7 @@ export function MarketingStatusClient({
               </button>
               <Link
                 href="/service/chatting#support"
-                className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#168ff0] px-5 text-sm font-extrabold text-white"
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#3157f6] px-5 text-sm font-extrabold text-white transition hover:bg-[#2448d8]"
               >
                 고객센터 문의 <ArrowRight className="size-4" />
               </Link>

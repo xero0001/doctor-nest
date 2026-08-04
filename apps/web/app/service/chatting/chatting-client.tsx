@@ -66,7 +66,7 @@ import type {
   StaffMember,
 } from "./chat-types";
 
-type ChatStatusFilter = "ALL" | "OPEN" | "CLOSED" | "IMPORTANT";
+type ChatStatusFilter = "ALL" | "OPEN" | "IMPORTANT";
 type ChatSortOrder = "LATEST" | "OLDEST";
 type RightPanelTab = "AUTOMATION" | "BOOKMARKS";
 type ChatSearchField =
@@ -108,13 +108,6 @@ const chatSearchOptions: Array<{
 const chatSortOptions = [
   { value: "LATEST", label: "최신 대화 순" },
   { value: "OLDEST", label: "오래된 대화 순" },
-] as const;
-
-const chatStatusOptions = [
-  { value: "ALL", label: "전체" },
-  { value: "OPEN", label: "진행 중" },
-  { value: "CLOSED", label: "완료" },
-  { value: "IMPORTANT", label: "중요" },
 ] as const;
 
 function ChatListSelect<T extends string>({
@@ -1367,6 +1360,22 @@ export function ChattingClient({
     };
   }, [contextMenu]);
 
+  const chatStatusTabs = useMemo(() => {
+    let openCount = 0;
+    let importantCount = 0;
+
+    for (const room of rooms) {
+      if (room.status === "OPEN") openCount += 1;
+      if (room.important) importantCount += 1;
+    }
+
+    return [
+      { value: "ALL", label: "전체", count: rooms.length },
+      { value: "IMPORTANT", label: "중요", count: importantCount },
+      { value: "OPEN", label: "진행 중", count: openCount },
+    ] as const;
+  }, [rooms]);
+
   const visibleRooms = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     const normalizedPhoneQuery = query.replace(/\D/g, "");
@@ -1789,7 +1798,7 @@ export function ChattingClient({
         if (nextRoom) {
           void selectConversation(nextRoom.id);
         } else {
-          setStatusFilter(nextStatus);
+          setStatusFilter("ALL");
         }
       }
 
@@ -2416,12 +2425,6 @@ export function ChattingClient({
               onValueChange={setSortOrder}
             />
             <ChatListSelect
-              value={statusFilter}
-              options={chatStatusOptions}
-              ariaLabel="채팅 상태 필터"
-              onValueChange={setStatusFilter}
-            />
-            <ChatListSelect
               value={channelFilter}
               options={chatChannelOptions}
               ariaLabel="채널 필터"
@@ -2429,6 +2432,13 @@ export function ChattingClient({
             />
           </div>
         </header>
+
+        <SectionTabs
+          ariaLabel="채팅 상태"
+          options={chatStatusTabs}
+          value={statusFilter}
+          onValueChange={setStatusFilter}
+        />
 
         <div className="border-b border-[#eceef4] px-3 py-2.5">
           <div className="flex h-9 items-center overflow-hidden rounded-xl border border-[#e1e5ed] bg-[#f9fafc] focus-within:border-[#7187f6] focus-within:bg-white focus-within:ring-3 focus-within:ring-[#3157f6]/10">

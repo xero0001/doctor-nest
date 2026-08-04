@@ -145,7 +145,6 @@ function ContentSidebar() {
       title="콘텐츠"
       ariaLabel="콘텐츠 메뉴"
       groups={groups}
-      widthClassName="w-[260px]"
     />
   );
 }

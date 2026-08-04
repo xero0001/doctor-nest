@@ -27,6 +27,8 @@ export type SectionSidebarGroup = {
   defaultExpanded?: boolean;
 };
 
+export const SECTION_SIDEBAR_WIDTH_PX = 300;
+
 function SidebarItem({
   item,
   indented = false,
@@ -162,18 +164,17 @@ export function SectionSidebar({
   title,
   ariaLabel,
   groups,
-  widthClassName = "w-[300px]",
   afterNavigation,
 }: {
   title: string;
   ariaLabel: string;
   groups: SectionSidebarGroup[];
-  widthClassName?: string;
   afterNavigation?: ReactNode;
 }) {
   return (
     <aside
-      className={`flex ${widthClassName} shrink-0 flex-col border-r border-[#e4e7ee] bg-white p-5`}
+      className="flex shrink-0 flex-col border-r border-[#e4e7ee] bg-white p-5"
+      style={{ width: SECTION_SIDEBAR_WIDTH_PX }}
     >
       <header className="px-1 pb-2">
         <h1 className="text-lg font-extrabold tracking-[-0.04em] text-[#30364b]">

@@ -10,6 +10,7 @@ import {
   FilePlus2,
   Folder,
   FolderPlus,
+  GripVertical,
   ImagePlus,
   LoaderCircle,
   Pencil,
@@ -21,10 +22,11 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import type { ChangeEvent, FormEvent } from "react";
+import type { ChangeEvent, DragEvent, FormEvent, KeyboardEvent } from "react";
 import { Fragment, useMemo, useState } from "react";
 
 import { SectionTabs } from "@/components/section-tabs";
+import { SECTION_SIDEBAR_WIDTH_PX } from "@/features/navigation/components/section-sidebar";
 import type {
   ManualDocumentRecord,
   ManualDocumentImageRecord,
@@ -54,6 +56,19 @@ type FolderDialog =
       name: string;
       parentId: string;
     };
+
+type DraggedTreeItem = {
+  kind: "folder" | "document";
+  id: string;
+};
+
+type DropPlacement = "before" | "inside" | "after";
+
+type TreeDropTarget = {
+  kind: "root" | "folder" | "document";
+  id?: string;
+  placement: DropPlacement;
+};
 
 const manualAreaTabs = [
   { value: "MANUAL", label: "치료태그 매뉴얼" },
@@ -155,6 +170,19 @@ function collectFolderIds(folderId: string, folders: ManualFolderRecord[]) {
   return ids;
 }
 
+function getDropPlacement(
+  event: DragEvent<HTMLElement>,
+  allowInside: boolean,
+): DropPlacement {
+  const bounds = event.currentTarget.getBoundingClientRect();
+  const offsetRatio = (event.clientY - bounds.top) / bounds.height;
+
+  if (!allowInside) return offsetRatio < 0.5 ? "before" : "after";
+  if (offsetRatio < 0.25) return "before";
+  if (offsetRatio > 0.75) return "after";
+  return "inside";
+}
+
 export function ManualsClient({
   organizationName,
   initialFolders,
@@ -183,6 +211,10 @@ export function ManualsClient({
   const [isWorking, setIsWorking] = useState(false);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [isDraggingImages, setIsDraggingImages] = useState(false);
+  const [draggedTreeItem, setDraggedTreeItem] =
+    useState<DraggedTreeItem | null>(null);
+  const [treeDropTarget, setTreeDropTarget] =
+    useState<TreeDropTarget | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
@@ -591,6 +623,7 @@ export function ManualsClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           kind: "folders",
+          itemId: folder.id,
           parentId: folder.parentId,
           orderedIds: reordered.map((item) => item.id),
         }),
@@ -650,6 +683,7 @@ export function ManualsClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           kind: "documents",
+          itemId: document.id,
           folderId: document.folderId,
           orderedIds: reordered.map((item) => item.id),
         }),
@@ -668,6 +702,438 @@ export function ManualsClient({
       );
     } finally {
       setIsWorking(false);
+    }
+  }
+
+  async function relocateFolder(
+    folderId: string,
+    targetParentId: string | null,
+    targetIndex: number,
+  ) {
+    if (isWorking) return;
+
+    const folder = folders.find((item) => item.id === folderId);
+    if (!folder) return;
+
+    const descendantIds = collectFolderIds(folder.id, folders);
+    if (targetParentId && descendantIds.has(targetParentId)) {
+      setError("폴더를 자기 자신이나 하위 폴더 안으로 옮길 수 없습니다.");
+      return;
+    }
+
+    const previousFolders = folders;
+    const sourceSiblings = folders
+      .filter(
+        (item) => item.parentId === folder.parentId && item.id !== folder.id,
+      )
+      .sort(
+        (left, right) =>
+          left.sortOrder - right.sortOrder ||
+          left.name.localeCompare(right.name, "ko"),
+      );
+    const targetSiblings = folders
+      .filter(
+        (item) => item.parentId === targetParentId && item.id !== folder.id,
+      )
+      .sort(
+        (left, right) =>
+          left.sortOrder - right.sortOrder ||
+          left.name.localeCompare(right.name, "ko"),
+      );
+    const insertionIndex = Math.max(
+      0,
+      Math.min(targetIndex, targetSiblings.length),
+    );
+    const reorderedTarget = [...targetSiblings];
+    reorderedTarget.splice(insertionIndex, 0, {
+      ...folder,
+      parentId: targetParentId,
+    });
+
+    const currentTargetOrder = folders
+      .filter((item) => item.parentId === targetParentId)
+      .sort(
+        (left, right) =>
+          left.sortOrder - right.sortOrder ||
+          left.name.localeCompare(right.name, "ko"),
+      )
+      .map((item) => item.id);
+    const nextTargetOrder = reorderedTarget.map((item) => item.id);
+    if (
+      folder.parentId === targetParentId &&
+      currentTargetOrder.join(":") === nextTargetOrder.join(":")
+    ) {
+      return;
+    }
+
+    const sourceOrderById = new Map(
+      sourceSiblings.map((item, sortOrder) => [item.id, sortOrder]),
+    );
+    const targetOrderById = new Map(
+      reorderedTarget.map((item, sortOrder) => [item.id, sortOrder]),
+    );
+    setFolders((current) =>
+      current.map((item) => {
+        const targetSortOrder = targetOrderById.get(item.id);
+        if (targetSortOrder !== undefined) {
+          return {
+            ...item,
+            parentId: item.id === folder.id ? targetParentId : item.parentId,
+            sortOrder: targetSortOrder,
+          };
+        }
+
+        const sourceSortOrder = sourceOrderById.get(item.id);
+        return sourceSortOrder === undefined
+          ? item
+          : { ...item, sortOrder: sourceSortOrder };
+      }),
+    );
+    setIsWorking(true);
+    resetMessages();
+
+    try {
+      const response = await fetch("/api/manuals/reorder", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "folders",
+          itemId: folder.id,
+          parentId: targetParentId,
+          orderedIds: nextTargetOrder,
+        }),
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(result.error ?? "폴더를 옮기지 못했습니다.");
+      }
+      setNotice("폴더 위치를 저장했습니다.");
+    } catch (caughtError) {
+      setFolders(previousFolders);
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "폴더를 옮기지 못했습니다.",
+      );
+    } finally {
+      setIsWorking(false);
+    }
+  }
+
+  async function relocateDocument(
+    documentId: string,
+    targetFolderId: string,
+    targetIndex: number,
+  ) {
+    if (isWorking) return;
+
+    const document = documents.find((item) => item.id === documentId);
+    if (!document || !folders.some((folder) => folder.id === targetFolderId)) {
+      return;
+    }
+
+    const previousDocuments = documents;
+    const previousDraftFolderId = draft.folderId;
+    const sourceSiblings = documents
+      .filter(
+        (item) =>
+          item.folderId === document.folderId && item.id !== document.id,
+      )
+      .sort(
+        (left, right) =>
+          left.sortOrder - right.sortOrder ||
+          left.title.localeCompare(right.title, "ko"),
+      );
+    const targetSiblings = documents
+      .filter(
+        (item) =>
+          item.folderId === targetFolderId && item.id !== document.id,
+      )
+      .sort(
+        (left, right) =>
+          left.sortOrder - right.sortOrder ||
+          left.title.localeCompare(right.title, "ko"),
+      );
+    const insertionIndex = Math.max(
+      0,
+      Math.min(targetIndex, targetSiblings.length),
+    );
+    const reorderedTarget = [...targetSiblings];
+    reorderedTarget.splice(insertionIndex, 0, {
+      ...document,
+      folderId: targetFolderId,
+    });
+
+    const currentTargetOrder = documents
+      .filter((item) => item.folderId === targetFolderId)
+      .sort(
+        (left, right) =>
+          left.sortOrder - right.sortOrder ||
+          left.title.localeCompare(right.title, "ko"),
+      )
+      .map((item) => item.id);
+    const nextTargetOrder = reorderedTarget.map((item) => item.id);
+    if (
+      document.folderId === targetFolderId &&
+      currentTargetOrder.join(":") === nextTargetOrder.join(":")
+    ) {
+      return;
+    }
+
+    const sourceOrderById = new Map(
+      sourceSiblings.map((item, sortOrder) => [item.id, sortOrder]),
+    );
+    const targetOrderById = new Map(
+      reorderedTarget.map((item, sortOrder) => [item.id, sortOrder]),
+    );
+    setDocuments((current) =>
+      current.map((item) => {
+        const targetSortOrder = targetOrderById.get(item.id);
+        if (targetSortOrder !== undefined) {
+          return {
+            ...item,
+            folderId:
+              item.id === document.id ? targetFolderId : item.folderId,
+            sortOrder: targetSortOrder,
+          };
+        }
+
+        const sourceSortOrder = sourceOrderById.get(item.id);
+        return sourceSortOrder === undefined
+          ? item
+          : { ...item, sortOrder: sourceSortOrder };
+      }),
+    );
+    if (selectedDocumentId === document.id) {
+      setSelectedFolderId(targetFolderId);
+      setDraft((current) => ({ ...current, folderId: targetFolderId }));
+    }
+    setIsWorking(true);
+    resetMessages();
+
+    try {
+      const response = await fetch("/api/manuals/reorder", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "documents",
+          itemId: document.id,
+          folderId: targetFolderId,
+          orderedIds: nextTargetOrder,
+        }),
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(result.error ?? "치료태그를 옮기지 못했습니다.");
+      }
+      setNotice("치료태그 위치를 저장했습니다.");
+    } catch (caughtError) {
+      setDocuments(previousDocuments);
+      if (selectedDocumentId === document.id) {
+        setSelectedFolderId(document.folderId);
+        setDraft((current) => ({
+          ...current,
+          folderId: previousDraftFolderId,
+        }));
+      }
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "치료태그를 옮기지 못했습니다.",
+      );
+    } finally {
+      setIsWorking(false);
+    }
+  }
+
+  function startTreeDrag(
+    event: DragEvent<HTMLButtonElement>,
+    item: DraggedTreeItem,
+  ) {
+    if (isWorking || normalizedQuery) {
+      event.preventDefault();
+      return;
+    }
+
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", `${item.kind}:${item.id}`);
+    setDraggedTreeItem(item);
+    setTreeDropTarget(null);
+  }
+
+  function finishTreeDrag() {
+    setDraggedTreeItem(null);
+    setTreeDropTarget(null);
+  }
+
+  function handleFolderDragOver(
+    event: DragEvent<HTMLDivElement>,
+    folder: ManualFolderRecord,
+  ) {
+    if (!draggedTreeItem || isWorking || normalizedQuery) return;
+
+    if (draggedTreeItem.kind === "folder") {
+      const descendantIds = collectFolderIds(draggedTreeItem.id, folders);
+      if (descendantIds.has(folder.id)) return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setTreeDropTarget({
+      kind: "folder",
+      id: folder.id,
+      placement:
+        draggedTreeItem.kind === "document"
+          ? "inside"
+          : getDropPlacement(event, true),
+    });
+  }
+
+  function dropOnFolder(
+    event: DragEvent<HTMLDivElement>,
+    folder: ManualFolderRecord,
+  ) {
+    event.preventDefault();
+    const draggedItem = draggedTreeItem;
+    const placement =
+      treeDropTarget?.kind === "folder" && treeDropTarget.id === folder.id
+        ? treeDropTarget.placement
+        : "inside";
+    finishTreeDrag();
+    if (!draggedItem) return;
+
+    if (draggedItem.kind === "document") {
+      const targetIndex = documents.filter(
+        (document) =>
+          document.folderId === folder.id && document.id !== draggedItem.id,
+      ).length;
+      void relocateDocument(draggedItem.id, folder.id, targetIndex);
+      return;
+    }
+
+    if (placement === "inside") {
+      const targetIndex = folders.filter(
+        (item) => item.parentId === folder.id && item.id !== draggedItem.id,
+      ).length;
+      void relocateFolder(draggedItem.id, folder.id, targetIndex);
+      return;
+    }
+
+    const targetSiblings = folders
+      .filter(
+        (item) =>
+          item.parentId === folder.parentId && item.id !== draggedItem.id,
+      )
+      .sort(
+        (left, right) =>
+          left.sortOrder - right.sortOrder ||
+          left.name.localeCompare(right.name, "ko"),
+      );
+    const folderIndex = targetSiblings.findIndex(
+      (item) => item.id === folder.id,
+    );
+    void relocateFolder(
+      draggedItem.id,
+      folder.parentId,
+      folderIndex + (placement === "after" ? 1 : 0),
+    );
+  }
+
+  function handleDocumentDragOver(
+    event: DragEvent<HTMLDivElement>,
+    document: ManualDocumentRecord,
+  ) {
+    if (
+      draggedTreeItem?.kind !== "document" ||
+      isWorking ||
+      normalizedQuery ||
+      draggedTreeItem.id === document.id
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setTreeDropTarget({
+      kind: "document",
+      id: document.id,
+      placement: getDropPlacement(event, false),
+    });
+  }
+
+  function dropOnDocument(
+    event: DragEvent<HTMLDivElement>,
+    document: ManualDocumentRecord,
+  ) {
+    event.preventDefault();
+    const draggedItem = draggedTreeItem;
+    const placement =
+      treeDropTarget?.kind === "document" &&
+      treeDropTarget.id === document.id
+        ? treeDropTarget.placement
+        : "before";
+    finishTreeDrag();
+    if (draggedItem?.kind !== "document") return;
+
+    const targetSiblings = (documentsByFolder.get(document.folderId) ?? [])
+      .filter((item) => item.id !== draggedItem.id)
+      .sort(
+        (left, right) =>
+          left.sortOrder - right.sortOrder ||
+          left.title.localeCompare(right.title, "ko"),
+      );
+    const documentIndex = targetSiblings.findIndex(
+      (item) => item.id === document.id,
+    );
+    void relocateDocument(
+      draggedItem.id,
+      document.folderId,
+      documentIndex + (placement === "after" ? 1 : 0),
+    );
+  }
+
+  function handleRootDragOver(event: DragEvent<HTMLDivElement>) {
+    if (
+      draggedTreeItem?.kind !== "folder" ||
+      isWorking ||
+      normalizedQuery
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setTreeDropTarget({ kind: "root", placement: "inside" });
+  }
+
+  function dropOnRoot(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const draggedItem = draggedTreeItem;
+    finishTreeDrag();
+    if (draggedItem?.kind !== "folder") return;
+
+    const targetIndex = folders.filter(
+      (folder) => folder.parentId === null && folder.id !== draggedItem.id,
+    ).length;
+    void relocateFolder(draggedItem.id, null, targetIndex);
+  }
+
+  function handleTreeHandleKeyDown(
+    event: KeyboardEvent<HTMLButtonElement>,
+    item: DraggedTreeItem,
+  ) {
+    if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) {
+      return;
+    }
+
+    event.preventDefault();
+    const direction = event.key === "ArrowUp" ? -1 : 1;
+    if (item.kind === "folder") {
+      const folder = folders.find((candidate) => candidate.id === item.id);
+      if (folder) void moveFolder(folder, direction);
+    } else {
+      const document = documents.find((candidate) => candidate.id === item.id);
+      if (document) void moveDocument(document, direction);
     }
   }
 
@@ -887,7 +1353,12 @@ export function ManualsClient({
 
   return (
     <div className="relative h-full min-h-0 min-w-[1120px]">
-      <div className="grid h-full min-h-0 grid-cols-[360px_minmax(760px,1fr)] bg-[#f6f7fb]">
+      <div
+        className="grid h-full min-h-0 bg-[#f6f7fb]"
+        style={{
+          gridTemplateColumns: `${SECTION_SIDEBAR_WIDTH_PX}px minmax(760px, 1fr)`,
+        }}
+      >
         <aside className="flex min-h-0 flex-col border-r border-[#e3e6ee] bg-white">
           <SectionTabs
             ariaLabel="원내매뉴얼 구분"
@@ -928,13 +1399,25 @@ export function ManualsClient({
               </button>
             </div>
           </div>
-          <div className="flex h-12 shrink-0 items-center justify-between px-4">
-            <span className="text-xs font-bold text-[#50586e]">
-              폴더 · 치료태그
+          <div
+            onDragOver={handleRootDragOver}
+            onDrop={dropOnRoot}
+            className={`flex h-12 shrink-0 items-center justify-between border-b px-4 transition-colors ${
+              treeDropTarget?.kind === "root"
+                ? "border-[#3157f6] bg-[#eef3ff]"
+                : "border-transparent"
+            }`}
+          >
+            <span className="text-sm font-bold text-[#50586e]">
+              <span className="font-extrabold text-[#303748]">전체 폴더</span>
+              <span className="mx-1.5 text-[#a0a6b5]">·</span>
+              치료태그 {documents.length}
             </span>
-            <span className="text-xs font-semibold text-[#a0a6b5]">
-              {folders.length + documents.length}
-            </span>
+            {draggedTreeItem?.kind === "folder" ? (
+              <span className="text-[11px] font-bold text-[#3157f6]">
+                여기에 놓으면 최상위로 이동
+              </span>
+            ) : null}
           </div>
           <div className="shrink-0 border-b border-[#eceef4] px-3 pb-3">
             <label className="flex h-9 items-center gap-2 rounded-xl border border-[#e0e4ed] bg-[#fafbfc] px-3 text-[#9ba1b1] focus-within:border-[#7187f6] focus-within:bg-white">
@@ -976,65 +1459,63 @@ export function ManualsClient({
                 return null;
               }
 
-              const siblings = folders
-                .filter((item) => item.parentId === folder.parentId)
-                .sort(
-                  (left, right) =>
-                    left.sortOrder - right.sortOrder ||
-                    left.name.localeCompare(right.name, "ko"),
-                );
-              const folderIndex = siblings.findIndex(
-                (item) => item.id === folder.id,
-              );
+              const folderDropPlacement =
+                treeDropTarget?.kind === "folder" &&
+                treeDropTarget.id === folder.id
+                  ? treeDropTarget.placement
+                  : null;
 
               return (
                 <Fragment key={folder.id}>
                   <div
-                    className={`group flex h-10 items-center pr-2 text-xs ${
+                    data-manual-folder-id={folder.id}
+                    onDragOver={(event) => handleFolderDragOver(event, folder)}
+                    onDrop={(event) => dropOnFolder(event, folder)}
+                    className={`group flex h-12 items-center border-y-2 border-transparent pr-2 text-[15px] transition-colors ${
                       selected
-                        ? "bg-[#eef2ff] font-bold text-[#3157f6]"
+                        ? "bg-[#eef2ff] font-extrabold text-[#3157f6]"
                         : "text-[#60687d] hover:bg-[#f8f9fc]"
-                    } ${folder.isActive ? "" : "opacity-50"}`}
+                    } ${folder.isActive ? "" : "opacity-50"} ${
+                      folderDropPlacement === "before"
+                        ? "border-t-[#3157f6]"
+                        : folderDropPlacement === "after"
+                          ? "border-b-[#3157f6]"
+                          : folderDropPlacement === "inside"
+                            ? "border-[#8ca0fa] bg-[#e8efff]"
+                            : ""
+                    }`}
                     style={{ paddingLeft: 10 + depth * 16 }}
                   >
-                    <div className="flex shrink-0 items-center">
-                      <button
-                        type="button"
-                        onClick={() => void moveFolder(folder, -1)}
-                        disabled={
-                          isWorking ||
-                          Boolean(normalizedQuery) ||
-                          folderIndex <= 0
-                        }
-                        aria-label={`${folder.name} 폴더 위로 이동`}
-                        className="flex size-5 items-center justify-center rounded text-[#a2a8b6] hover:bg-white disabled:opacity-20"
-                      >
-                        <ArrowUp className="size-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void moveFolder(folder, 1)}
-                        disabled={
-                          isWorking ||
-                          Boolean(normalizedQuery) ||
-                          folderIndex >= siblings.length - 1
-                        }
-                        aria-label={`${folder.name} 폴더 아래로 이동`}
-                        className="flex size-5 items-center justify-center rounded text-[#a2a8b6] hover:bg-white disabled:opacity-20"
-                      >
-                        <ArrowDown className="size-3" />
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      draggable={!isWorking && !normalizedQuery}
+                      onDragStart={(event) =>
+                        startTreeDrag(event, { kind: "folder", id: folder.id })
+                      }
+                      onDragEnd={finishTreeDrag}
+                      onKeyDown={(event) =>
+                        handleTreeHandleKeyDown(event, {
+                          kind: "folder",
+                          id: folder.id,
+                        })
+                      }
+                      disabled={isWorking || Boolean(normalizedQuery)}
+                      aria-label={`${folder.name} 폴더 드래그하여 이동`}
+                      title="드래그하여 이동 · Alt+↑/↓로 순서 변경"
+                      className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded-md text-[#b0b6c3] hover:bg-white hover:text-[#687187] active:cursor-grabbing disabled:cursor-default disabled:opacity-30"
+                    >
+                      <GripVertical className="size-4" />
+                    </button>
                     <button
                       type="button"
                       onClick={() => selectFolder(folder.id)}
-                      className="flex min-w-0 flex-1 items-center gap-1.5 px-1.5 text-left"
+                      className="flex min-w-0 flex-1 items-center gap-2 px-1.5 text-left"
                     >
                       {depth > 0 ? (
-                        <ChevronRight className="size-3 text-[#b1b6c3]" />
+                        <ChevronRight className="size-3.5 text-[#b1b6c3]" />
                       ) : null}
                       <Folder
-                        className={`size-4 shrink-0 ${
+                        className={`size-[18px] shrink-0 ${
                           selected ? "fill-[#dfe6ff]" : "text-[#9ba2b4]"
                         }`}
                       />
@@ -1067,53 +1548,64 @@ export function ManualsClient({
                   {(normalizedQuery
                     ? folderDocuments
                     : (documentsByFolder.get(folder.id) ?? [])
-                  ).map((document, documentIndex, siblingDocuments) => {
+                  ).map((document) => {
                     const documentSelected = document.id === selectedDocumentId;
+                    const documentDropPlacement =
+                      treeDropTarget?.kind === "document" &&
+                      treeDropTarget.id === document.id
+                        ? treeDropTarget.placement
+                        : null;
 
                     return (
                       <div
                         key={document.id}
-                        className={`flex min-h-10 items-center pr-2 text-xs ${
+                        data-manual-document-id={document.id}
+                        onDragOver={(event) =>
+                          handleDocumentDragOver(event, document)
+                        }
+                        onDrop={(event) => dropOnDocument(event, document)}
+                        className={`flex min-h-11 items-center border-y-2 border-transparent pr-2 text-sm transition-colors ${
                           documentSelected
                             ? "bg-[#f3f6ff] font-bold text-[#3157f6]"
-                            : "text-[#687084] hover:bg-[#fafbfc]"
-                        } ${document.isActive ? "" : "opacity-50"}`}
-                        style={{ paddingLeft: 36 + depth * 16 }}
+                            : "font-semibold text-[#687084] hover:bg-[#fafbfc]"
+                        } ${document.isActive ? "" : "opacity-50"} ${
+                          documentDropPlacement === "before"
+                            ? "border-t-[#3157f6]"
+                            : documentDropPlacement === "after"
+                              ? "border-b-[#3157f6]"
+                              : ""
+                        }`}
+                        style={{ paddingLeft: 30 + depth * 16 }}
                       >
-                        <div className="flex shrink-0 items-center">
-                          <button
-                            type="button"
-                            onClick={() => void moveDocument(document, -1)}
-                            disabled={
-                              isWorking ||
-                              Boolean(normalizedQuery) ||
-                              documentIndex <= 0
-                            }
-                            aria-label={`${document.title} 위로 이동`}
-                            className="flex size-5 items-center justify-center rounded text-[#a2a8b6] hover:bg-white disabled:opacity-20"
-                          >
-                            <ArrowUp className="size-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void moveDocument(document, 1)}
-                            disabled={
-                              isWorking ||
-                              Boolean(normalizedQuery) ||
-                              documentIndex >= siblingDocuments.length - 1
-                            }
-                            aria-label={`${document.title} 아래로 이동`}
-                            className="flex size-5 items-center justify-center rounded text-[#a2a8b6] hover:bg-white disabled:opacity-20"
-                          >
-                            <ArrowDown className="size-3" />
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          draggable={!isWorking && !normalizedQuery}
+                          onDragStart={(event) =>
+                            startTreeDrag(event, {
+                              kind: "document",
+                              id: document.id,
+                            })
+                          }
+                          onDragEnd={finishTreeDrag}
+                          onKeyDown={(event) =>
+                            handleTreeHandleKeyDown(event, {
+                              kind: "document",
+                              id: document.id,
+                            })
+                          }
+                          disabled={isWorking || Boolean(normalizedQuery)}
+                          aria-label={`${document.title} 치료태그 드래그하여 이동`}
+                          title="드래그하여 이동 · Alt+↑/↓로 순서 변경"
+                          className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded-md text-[#c0c5cf] hover:bg-white hover:text-[#687187] active:cursor-grabbing disabled:cursor-default disabled:opacity-30"
+                        >
+                          <GripVertical className="size-4" />
+                        </button>
                         <button
                           type="button"
                           onClick={() => selectDocument(document)}
-                          className="flex min-w-0 flex-1 items-center gap-2 px-1.5 py-2 text-left"
+                          className="flex min-w-0 flex-1 items-center gap-2.5 px-1.5 py-2 text-left"
                         >
-                          <Tags className="size-3.5 shrink-0 text-[#ed5b6c]" />
+                          <Tags className="size-4 shrink-0 text-[#ed5b6c]" />
                           <span className="truncate">{document.title}</span>
                         </button>
                         <button

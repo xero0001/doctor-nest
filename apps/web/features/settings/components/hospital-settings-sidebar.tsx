@@ -112,7 +112,6 @@ export function HospitalSettingsSidebar() {
       title="병원 설정"
       ariaLabel="병원 설정 메뉴"
       groups={groups}
-      widthClassName="w-[280px]"
     />
   );
 }

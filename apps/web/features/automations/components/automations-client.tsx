@@ -788,7 +788,6 @@ export function AutomationsClient({
             title="자동화"
             ariaLabel="자동화 메뉴"
             groups={sidebarGroups}
-            widthClassName="w-[280px]"
           />
 
           <section className="flex min-w-0 flex-1 flex-col">

@@ -124,6 +124,7 @@ function findConversationForHospital(id: string, hospitalId: string) {
             orderBy: { createdAt: "asc" },
           },
           tagAssignments: {
+            where: { tag: { category: "TREATMENT" } },
             include: { tag: true },
             orderBy: { createdAt: "asc" },
           },

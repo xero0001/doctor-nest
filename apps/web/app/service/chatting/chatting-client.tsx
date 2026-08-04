@@ -28,6 +28,7 @@ import {
   LogOut,
   MessageCircleMore,
   Paperclip,
+  Pencil,
   Search,
   Save,
   Send,
@@ -49,6 +50,11 @@ import { NaverTalkChannelIcon } from "@/features/channels/components/naver-talk-
 import { WeChatChannelIcon } from "@/features/channels/components/wechat-channel-icon";
 import { WhatsAppChannelIcon } from "@/features/channels/components/whatsapp-channel-icon";
 import { SectionTabs } from "@/components/section-tabs";
+import { UnsavedChangesDialog } from "@/components/unsaved-changes-dialog";
+import {
+  TreatmentTagEditorDialog,
+  type TreatmentTagOption,
+} from "@/features/chatting/components/treatment-tag-editor-dialog";
 import {
   inferConversationTargetLanguage,
   translationLanguageOptions,
@@ -80,6 +86,7 @@ type ConversationContextMenu = {
 };
 
 const CHAT_POLL_INTERVAL_MS = 5_000;
+const CHAT_BOTTOM_THRESHOLD_PX = 100;
 const MAX_PATIENT_NOTES_LENGTH = 5_000;
 
 type CustomerNotesSaveStatus = "idle" | "saving" | "saved" | "error";
@@ -1247,11 +1254,13 @@ export function ChattingClient({
   manualFolders,
   staffMembers,
   contentEvents,
+  treatmentTags,
 }: {
   conversations: ConversationItem[];
   manualFolders: ManualFolderItem[];
   staffMembers: StaffMember[];
   contentEvents: ContentEventRecord[];
+  treatmentTags: TreatmentTagOption[];
 }) {
   const [statusFilter, setStatusFilter] = useState<ChatStatusFilter>("ALL");
   const [sortOrder, setSortOrder] = useState<ChatSortOrder>("LATEST");
@@ -1288,6 +1297,14 @@ export function ChattingClient({
   const [detailError, setDetailError] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [isTreatmentTagModalOpen, setIsTreatmentTagModalOpen] = useState(false);
+  const [pendingTreatmentTagRemoval, setPendingTreatmentTagRemoval] = useState<{
+    name: string;
+    color: string;
+  } | null>(null);
+  const [isSavingTreatmentTags, setIsSavingTreatmentTags] = useState(false);
+  const [treatmentTagError, setTreatmentTagError] = useState("");
+  const [showScrollToLatest, setShowScrollToLatest] = useState(false);
   const [contextMenu, setContextMenu] =
     useState<ConversationContextMenu | null>(null);
   const [isAssigneeMenuOpen, setIsAssigneeMenuOpen] = useState(false);
@@ -1311,6 +1328,13 @@ export function ChattingClient({
   const detailRequestId = useRef(0);
   const coachRequestId = useRef(0);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const messageViewportRef = useRef<HTMLDivElement>(null);
+  const followLatestMessageRef = useRef(true);
+  const previousMessageSnapshotRef = useRef({
+    roomId: "",
+    lastMessageId: "",
+    messageCount: 0,
+  });
   const chartNumberCopyTimeoutRef = useRef<number | null>(null);
   const importantRequestIds = useRef(new Set<string>());
   const conversationSettingRequestIds = useRef(new Map<string, number>());
@@ -1452,6 +1476,54 @@ export function ChattingClient({
     : undefined;
   const autoRespond = currentRoom?.autoRespondEnabled ?? false;
 
+  const scrollToLatestMessage = useCallback(() => {
+    const viewport = messageViewportRef.current;
+    if (!viewport) return;
+
+    followLatestMessageRef.current = true;
+    setShowScrollToLatest(false);
+    viewport.scrollTo({ top: viewport.scrollHeight, behavior: "auto" });
+  }, []);
+
+  const handleMessageViewportScroll = useCallback(() => {
+    const viewport = messageViewportRef.current;
+    if (!viewport) return;
+
+    const distanceFromBottom =
+      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+    const isAwayFromBottom = distanceFromBottom > CHAT_BOTTOM_THRESHOLD_PX;
+
+    followLatestMessageRef.current = !isAwayFromBottom;
+    setShowScrollToLatest(isAwayFromBottom);
+  }, []);
+
+  const latestMessageId = currentRoom?.messages.at(-1)?.id ?? "";
+
+  useEffect(() => {
+    if (!currentRoom) return;
+
+    const previous = previousMessageSnapshotRef.current;
+    const roomChanged = previous.roomId !== currentRoom.id;
+    const messagesChanged =
+      previous.lastMessageId !== latestMessageId ||
+      previous.messageCount !== currentRoom.messages.length;
+
+    previousMessageSnapshotRef.current = {
+      roomId: currentRoom.id,
+      lastMessageId: latestMessageId,
+      messageCount: currentRoom.messages.length,
+    };
+
+    if (!roomChanged && !messagesChanged) return;
+
+    if (roomChanged || followLatestMessageRef.current) {
+      const frameId = window.requestAnimationFrame(scrollToLatestMessage);
+      return () => window.cancelAnimationFrame(frameId);
+    }
+
+    setShowScrollToLatest(true);
+  }, [currentRoom, latestMessageId, scrollToLatestMessage]);
+
   const handleCustomerNotesSaved = useCallback(
     (
       patientId: string,
@@ -1475,6 +1547,72 @@ export function ChattingClient({
     },
     [],
   );
+
+  async function saveTreatmentTags(names: string[]) {
+    const patientId = currentRoom?.customer?.id;
+    if (!patientId || isSavingTreatmentTags) return false;
+
+    setIsSavingTreatmentTags(true);
+    setTreatmentTagError("");
+    setDetailError("");
+
+    try {
+      const response = await fetch(
+        `/api/patients/${patientId}/treatment-tags`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ treatmentTags: names }),
+        },
+      );
+      const result = (await response.json().catch(() => null)) as {
+        tags?: Array<{ name: string; color: string }>;
+        error?: string;
+      } | null;
+
+      if (!response.ok || !result?.tags) {
+        throw new Error(result?.error ?? "치료태그를 저장하지 못했습니다.");
+      }
+
+      setRooms((current) =>
+        current.map((room) =>
+          room.customer?.id === patientId
+            ? {
+                ...room,
+                customer: {
+                  ...room.customer,
+                  tags: result.tags!,
+                },
+              }
+            : room,
+        ),
+      );
+      return true;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "치료태그를 저장하지 못했습니다.";
+      setTreatmentTagError(message);
+      setDetailError(message);
+      return false;
+    } finally {
+      setIsSavingTreatmentTags(false);
+    }
+  }
+
+  async function confirmTreatmentTagRemoval() {
+    if (!pendingTreatmentTagRemoval || !currentRoom?.customer) return;
+
+    const saved = await saveTreatmentTags(
+      currentRoom.customer.tags
+        .filter((tag) => tag.name !== pendingTreatmentTagRemoval.name)
+        .map((tag) => tag.name),
+    );
+    setPendingTreatmentTagRemoval(null);
+    if (saved) setTreatmentTagError("");
+  }
+
   const autoTranslate = currentRoom?.autoTranslateEnabled ?? true;
   const translationTargetLanguage = currentRoom
     ? (currentRoom.translationTargetLanguage ??
@@ -2777,14 +2915,35 @@ export function ChattingClient({
             {(currentRoom.customer?.tags ?? []).map((tag) => (
               <span
                 key={tag.name}
-                className="rounded-full px-2.5 py-1 text-[11px] font-bold text-white shadow-sm"
+                className="inline-flex items-center gap-1 rounded-full py-1 pl-2.5 pr-1.5 text-xs font-bold text-white shadow-sm"
                 style={{ backgroundColor: tag.color }}
               >
-                {tag.name}
+                <span>{tag.name}</span>
+                <button
+                  type="button"
+                  aria-label={`${tag.name} 치료태그 제거`}
+                  onClick={() => setPendingTreatmentTagRemoval(tag)}
+                  className="flex size-5 items-center justify-center rounded-full transition hover:bg-black/15 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+                >
+                  <X className="size-3" />
+                </button>
               </span>
             ))}
             {currentRoom.customer && currentRoom.customer.tags.length === 0 ? (
-              <span className="text-[11px] text-[#a0a6b4]">-</span>
+              <span className="text-xs text-[#a0a6b4]">-</span>
+            ) : null}
+            {currentRoom.customer ? (
+              <button
+                type="button"
+                aria-label="치료태그 편집"
+                onClick={() => {
+                  setTreatmentTagError("");
+                  setIsTreatmentTagModalOpen(true);
+                }}
+                className="ml-0.5 flex size-7 items-center justify-center rounded-lg border border-[#d9deea] bg-white text-[#737b8e] transition hover:border-[#aebcf5] hover:bg-[#f7f9ff] hover:text-[#3157f6]"
+              >
+                <Pencil className="size-3.5" />
+              </button>
             ) : null}
           </div>
           <label className="flex items-center gap-1 text-xs text-[#858c9e]">
@@ -2824,119 +2983,140 @@ export function ChattingClient({
           </div>
         ) : null}
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-          <div className="mx-auto mb-6 w-fit rounded-full bg-[#e4e8f1] px-3 py-1 text-xs font-medium text-[#7f8698]">
-            {formatDate(
-              currentRoom.messages[0]?.sentAt ?? currentRoom.lastMessageAt,
-            )}
-          </div>
+        <div className="relative min-h-0 flex-1">
+          <div
+            ref={messageViewportRef}
+            onScroll={handleMessageViewportScroll}
+            className="h-full overflow-y-auto px-5 py-5"
+          >
+            <div className="mx-auto mb-6 w-fit rounded-full bg-[#e4e8f1] px-3 py-1 text-xs font-medium text-[#7f8698]">
+              {formatDate(
+                currentRoom.messages[0]?.sentAt ?? currentRoom.lastMessageAt,
+              )}
+            </div>
 
-          <div className="mx-auto max-w-[720px]">
-            {currentRoom.messages.map((message) => {
-              const inbound = message.direction === "INBOUND";
-              const hasTranslation =
-                Boolean(message.translatedContent) &&
-                message.translatedContent !== message.content;
-              const primaryContent = getPrimaryMessageContent(message);
-              const secondaryContent = inbound
-                ? message.content
-                : message.translatedContent;
-              const translationLabel = inbound
-                ? `원문 · ${message.sourceLanguageName || message.sourceLanguage}`
-                : `발송 · ${message.translatedLanguageName || message.translatedLanguage}`;
+            <div className="mx-auto max-w-[720px]">
+              {currentRoom.messages.map((message) => {
+                const inbound = message.direction === "INBOUND";
+                const hasTranslation =
+                  Boolean(message.translatedContent) &&
+                  message.translatedContent !== message.content;
+                const primaryContent = getPrimaryMessageContent(message);
+                const secondaryContent = inbound
+                  ? message.content
+                  : message.translatedContent;
+                const translationLabel = inbound
+                  ? `원문 · ${message.sourceLanguageName || message.sourceLanguage}`
+                  : `발송 · ${message.translatedLanguageName || message.translatedLanguage}`;
 
-              if (message.sender === "SYSTEM") {
+                if (message.sender === "SYSTEM") {
+                  return (
+                    <div key={message.id} className="my-4 flex justify-center">
+                      <span className="rounded-full bg-[#e7edff] px-3 py-1.5 text-xs font-semibold text-[#4765dc]">
+                        {message.content}
+                      </span>
+                    </div>
+                  );
+                }
+
                 return (
-                  <div key={message.id} className="my-4 flex justify-center">
-                    <span className="rounded-full bg-[#e7edff] px-3 py-1.5 text-xs font-semibold text-[#4765dc]">
-                      {message.content}
-                    </span>
-                  </div>
-                );
-              }
-
-              return (
-                <div
-                  key={message.id}
-                  id={`chat-message-${message.id}`}
-                  className={`mb-5 flex ${inbound ? "justify-start" : "justify-end"}`}
-                >
-                  <div className={`max-w-[72%] ${inbound ? "" : "text-right"}`}>
-                    {inbound ? (
-                      <p className="mb-1.5 pl-1 text-base font-semibold text-[#596176]">
-                        {getConversationDisplayName(currentRoom)}
-                      </p>
-                    ) : null}
-                    {message.sender === "AI" ? (
-                      <p className="mb-1 flex items-center justify-end gap-1 text-xs font-semibold text-[#6657e9]">
-                        <Sparkles className="size-3.5" /> AI 답변
-                      </p>
-                    ) : null}
+                  <div
+                    key={message.id}
+                    id={`chat-message-${message.id}`}
+                    className={`mb-5 flex ${inbound ? "justify-start" : "justify-end"}`}
+                  >
                     <div
-                      className={`rounded-2xl px-4 py-3 text-left text-base leading-[1.7] shadow-sm ${
-                        inbound
-                          ? "rounded-tl-[5px] border border-[#dfe3ec] bg-white text-[#454b5e]"
-                          : "rounded-br-[5px] bg-gradient-to-br from-[#3157f6] to-[#6657e9] text-white"
-                      }`}
+                      className={`max-w-[72%] ${inbound ? "" : "text-right"}`}
                     >
-                      <p className="whitespace-pre-wrap break-words">
-                        {primaryContent}
-                      </p>
-                      {hasTranslation ? (
-                        <div
-                          className={`mt-3 border-t pt-2.5 text-sm leading-relaxed ${
-                            inbound
-                              ? "border-[#e4e7ef] text-[#737b8f]"
-                              : "border-white/20 text-white/85"
-                          }`}
-                        >
-                          <span
-                            className={`mb-1 inline-flex rounded px-1.5 py-0.5 text-xs font-semibold ${
+                      {inbound ? (
+                        <p className="mb-1.5 pl-1 text-base font-semibold text-[#596176]">
+                          {getConversationDisplayName(currentRoom)}
+                        </p>
+                      ) : null}
+                      {message.sender === "AI" ? (
+                        <p className="mb-1 flex items-center justify-end gap-1 text-xs font-semibold text-[#6657e9]">
+                          <Sparkles className="size-3.5" /> AI 답변
+                        </p>
+                      ) : null}
+                      <div
+                        className={`rounded-2xl px-4 py-3 text-left text-base leading-[1.7] shadow-sm ${
+                          inbound
+                            ? "rounded-tl-[5px] border border-[#dfe3ec] bg-white text-[#454b5e]"
+                            : "rounded-br-[5px] bg-gradient-to-br from-[#3157f6] to-[#6657e9] text-white"
+                        }`}
+                      >
+                        <p className="whitespace-pre-wrap break-words">
+                          {primaryContent}
+                        </p>
+                        {hasTranslation ? (
+                          <div
+                            className={`mt-3 border-t pt-2.5 text-sm leading-relaxed ${
                               inbound
-                                ? "bg-[#eef2ff] text-[#526be0]"
-                                : "bg-white/15 text-white"
+                                ? "border-[#e4e7ef] text-[#737b8f]"
+                                : "border-white/20 text-white/85"
                             }`}
                           >
-                            {translationLabel}
-                          </span>
-                          <p className="whitespace-pre-wrap break-words">
-                            {secondaryContent}
-                          </p>
-                        </div>
-                      ) : null}
-                    </div>
-                    <div
-                      className={`mt-1 flex items-center gap-1.5 text-xs text-[#a0a6b4] ${inbound ? "justify-start" : "justify-end"}`}
-                    >
-                      <span>
-                        {formatMessageTime(message.sentAt)}
-                        {!inbound ? (
-                          <Check className="ml-1 inline size-3.5 text-[#3157f6]" />
+                            <span
+                              className={`mb-1 inline-flex rounded px-1.5 py-0.5 text-xs font-semibold ${
+                                inbound
+                                  ? "bg-[#eef2ff] text-[#526be0]"
+                                  : "bg-white/15 text-white"
+                              }`}
+                            >
+                              {translationLabel}
+                            </span>
+                            <p className="whitespace-pre-wrap break-words">
+                              {secondaryContent}
+                            </p>
+                          </div>
                         ) : null}
-                      </span>
-                      {inbound ? (
-                        <button
-                          type="button"
-                          onClick={() => void toggleMessageBookmark(message.id)}
-                          aria-pressed={Boolean(message.bookmarkedAt)}
-                          aria-label={`메시지 북마크 ${message.bookmarkedAt ? "해제" : "추가"}`}
-                          className={`rounded p-1 transition hover:bg-white/80 ${
-                            message.bookmarkedAt
-                              ? "text-[#6657e9]"
-                              : "text-[#a0a6b4] hover:text-[#6657e9]"
-                          }`}
-                        >
-                          <Bookmark
-                            className={`size-4 ${message.bookmarkedAt ? "fill-current" : ""}`}
-                          />
-                        </button>
-                      ) : null}
+                      </div>
+                      <div
+                        className={`mt-1 flex items-center gap-1.5 text-xs text-[#a0a6b4] ${inbound ? "justify-start" : "justify-end"}`}
+                      >
+                        <span>
+                          {formatMessageTime(message.sentAt)}
+                          {!inbound ? (
+                            <Check className="ml-1 inline size-3.5 text-[#3157f6]" />
+                          ) : null}
+                        </span>
+                        {inbound ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void toggleMessageBookmark(message.id)
+                            }
+                            aria-pressed={Boolean(message.bookmarkedAt)}
+                            aria-label={`메시지 북마크 ${message.bookmarkedAt ? "해제" : "추가"}`}
+                            className={`rounded p-1 transition hover:bg-white/80 ${
+                              message.bookmarkedAt
+                                ? "text-[#6657e9]"
+                                : "text-[#a0a6b4] hover:text-[#6657e9]"
+                            }`}
+                          >
+                            <Bookmark
+                              className={`size-4 ${message.bookmarkedAt ? "fill-current" : ""}`}
+                            />
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
+
+          {showScrollToLatest ? (
+            <button
+              type="button"
+              onClick={scrollToLatestMessage}
+              aria-label="최신 메시지로 이동"
+              className="absolute bottom-4 right-5 z-10 flex size-10 items-center justify-center rounded-full border border-[#d8deeb] bg-white text-[#596176] shadow-[0_6px_20px_rgba(42,54,102,0.18)] transition hover:border-[#aebcf5] hover:bg-[#f8faff] hover:text-[#3157f6]"
+            >
+              <ChevronDown className="size-5" />
+            </button>
+          ) : null}
         </div>
 
         <div className="shrink-0 border-t border-[#dfe3ec] bg-white p-3">
@@ -3429,6 +3609,40 @@ export function ChattingClient({
           </div>
         </>
       ) : null}
+
+      {isTreatmentTagModalOpen && currentRoom.customer ? (
+        <TreatmentTagEditorDialog
+          options={treatmentTags}
+          selectedNames={currentRoom.customer.tags.map((tag) => tag.name)}
+          saving={isSavingTreatmentTags}
+          error={treatmentTagError}
+          onClose={() => {
+            if (isSavingTreatmentTags) return;
+            setIsTreatmentTagModalOpen(false);
+            setTreatmentTagError("");
+          }}
+          onSave={async (names) => {
+            const saved = await saveTreatmentTags(names);
+            if (saved) setIsTreatmentTagModalOpen(false);
+          }}
+        />
+      ) : null}
+
+      <UnsavedChangesDialog
+        open={Boolean(pendingTreatmentTagRemoval)}
+        title="치료태그를 제거할까요?"
+        description={
+          pendingTreatmentTagRemoval
+            ? `‘${pendingTreatmentTagRemoval.name}’ 태그를 이 고객에게서 제거합니다.`
+            : "선택한 치료태그를 이 고객에게서 제거합니다."
+        }
+        confirmLabel="제거"
+        cancelLabel="취소"
+        onCancel={() => {
+          if (!isSavingTreatmentTags) setPendingTreatmentTagRemoval(null);
+        }}
+        onConfirm={() => void confirmTreatmentTagRemoval()}
+      />
 
       {isCustomerModalOpen ? (
         <CustomerLinkModal

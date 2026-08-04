@@ -55,6 +55,7 @@ import {
   type TreatmentTagOption,
 } from "@/features/chatting/components/treatment-tag-editor-dialog";
 import { QuickCustomerCreateDialog } from "@/features/chatting/components/quick-customer-create-dialog";
+import { MessageAttachmentGallery } from "@/features/chatting/components/message-attachment-gallery";
 import type { BasicServiceSettings } from "@/features/settings/service-settings-types";
 import {
   inferConversationTargetLanguage,
@@ -735,14 +736,7 @@ function buildContentEventMessage(event: ContentEventRecord) {
       ? `이벤트 기간: ~${event.exposureEndAt.slice(0, 10)}`
       : "",
   ].filter(Boolean);
-  const imageUrls = [
-    event.thumbnail?.publicUrl,
-    ...event.detailImages.map((image) => image.publicUrl),
-  ].filter((url): url is string => Boolean(url));
-  const imageSection =
-    imageUrls.length > 0 ? `이미지\n${imageUrls.join("\n")}` : "";
-  const fixedSections = [headerLines.join("\n"), imageSection].filter(Boolean);
-  const fixedLength = fixedSections.join("\n\n").length;
+  const fixedLength = headerLines.join("\n").length;
   const detailBudget = Math.max(
     0,
     MAX_CONTENT_MESSAGE_LENGTH - fixedLength - (fixedLength > 0 ? 2 : 0),
@@ -754,7 +748,7 @@ function buildContentEventMessage(event: ContentEventRecord) {
         : event.detailText
       : "";
 
-  return [headerLines.join("\n"), detailText, imageSection]
+  return [headerLines.join("\n"), detailText]
     .filter(Boolean)
     .join("\n\n")
     .slice(0, MAX_CONTENT_MESSAGE_LENGTH);
@@ -3172,6 +3166,10 @@ export function ChattingClient({
                             : "rounded-br-[5px] bg-gradient-to-br from-[#3157f6] to-[#6657e9] text-white"
                         }`}
                       >
+                        <MessageAttachmentGallery
+                          attachments={message.attachments}
+                          inbound={inbound}
+                        />
                         <p className="whitespace-pre-wrap break-words">
                           {primaryContent}
                         </p>

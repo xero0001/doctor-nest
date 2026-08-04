@@ -15,9 +15,17 @@ import { sendInstagramTextMessage } from "@/lib/instagram-api";
 import { sendNaverTalkTextMessage } from "@/lib/naver-talk-api";
 import { getTranslationContext } from "@/lib/translation-context";
 import {
+  ChannelMessageDeliveryError,
+  sendChannelContentMessage,
+} from "@/lib/send-channel-message";
+import {
   inferConversationTargetLanguage,
   normalizeTranslationTargetLanguage,
 } from "@/lib/conversation-language";
+import {
+  parseMessageAttachments,
+  type MessageAttachment,
+} from "@/features/chatting/message-attachments";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -102,6 +110,7 @@ function serializeConversation(
       translatedContent: message.translatedContent,
       translatedLanguage: message.translatedLanguage,
       translatedLanguageName: message.translatedLanguageName,
+      attachments: parseMessageAttachments(message.attachments),
       bookmarkedAt: message.bookmarkedAt?.toISOString() ?? null,
       sentAt: message.sentAt.toISOString(),
     })),
@@ -483,6 +492,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     );
   }
 
+  let contentEventAttachments: MessageAttachment[] = [];
   if (contentEventId) {
     const contentEvent = await database.contentEvent.findFirst({
       where: {
@@ -490,7 +500,20 @@ export async function POST(request: Request, { params }: RouteContext) {
         hospitalId: user.hospitalId,
         isActive: true,
       },
-      select: { id: true },
+      select: {
+        id: true,
+        title: true,
+        detailType: true,
+        images: {
+          select: {
+            role: true,
+            publicUrl: true,
+            altText: true,
+            sortOrder: true,
+          },
+          orderBy: [{ role: "asc" }, { sortOrder: "asc" }],
+        },
+      },
     });
 
     if (!contentEvent) {
@@ -499,6 +522,21 @@ export async function POST(request: Request, { params }: RouteContext) {
         { status: 404 },
       );
     }
+
+    const thumbnail = contentEvent.images.find(
+      (image) => image.role === "THUMBNAIL",
+    );
+    const detailImages =
+      contentEvent.detailType === "IMAGE"
+        ? contentEvent.images.filter((image) => image.role === "DETAIL")
+        : [];
+    contentEventAttachments = [thumbnail, ...detailImages]
+      .filter((image) => Boolean(image))
+      .map((image) => ({
+        type: "IMAGE" as const,
+        url: image!.publicUrl,
+        altText: image!.altText || contentEvent.title,
+      }));
   }
 
   let translation = {
@@ -557,8 +595,39 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const deliveredContent = translation.translatedContent || content;
   let externalMessageId: string | null = null;
+  let deliveredAsContentMessage = false;
 
-  if (conversation.channel === "LINE") {
+  if (contentEventAttachments.length > 0) {
+    if (!conversation.patientChannel?.externalCustomerId) {
+      return Response.json(
+        { error: "연동된 채팅 계정 정보를 찾을 수 없습니다." },
+        { status: 409 },
+      );
+    }
+
+    try {
+      externalMessageId = await sendChannelContentMessage({
+        hospitalId: user.hospitalId,
+        channel: conversation.channel,
+        externalCustomerId: conversation.patientChannel.externalCustomerId,
+        text: deliveredContent,
+        imageUrls: contentEventAttachments.map((attachment) => attachment.url),
+      });
+      deliveredAsContentMessage = true;
+    } catch (error) {
+      return Response.json(
+        {
+          error:
+            error instanceof ChannelMessageDeliveryError
+              ? error.message
+              : "콘텐츠를 채널로 발송하지 못했습니다.",
+        },
+        { status: error instanceof ChannelMessageDeliveryError ? 409 : 502 },
+      );
+    }
+  }
+
+  if (!deliveredAsContentMessage && conversation.channel === "LINE") {
     const connection = await database.channelConnection.findUnique({
       where: {
         hospitalId_channel: {
@@ -617,7 +686,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
   }
 
-  if (conversation.channel === "NAVER_TALK") {
+  if (!deliveredAsContentMessage && conversation.channel === "NAVER_TALK") {
     const connection = await database.channelConnection.findUnique({
       where: {
         hospitalId_channel: {
@@ -669,7 +738,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
   }
 
-  if (conversation.channel === "INSTAGRAM") {
+  if (!deliveredAsContentMessage && conversation.channel === "INSTAGRAM") {
     const connection = await database.channelConnection.findUnique({
       where: {
         hospitalId_channel: {
@@ -739,6 +808,7 @@ export async function POST(request: Request, { params }: RouteContext) {
         translatedContent: translation.translatedContent,
         translatedLanguage: translation.translatedLanguage,
         translatedLanguageName: translation.translatedLanguageName,
+        attachments: contentEventAttachments,
         sentAt,
       },
     });
@@ -770,6 +840,7 @@ export async function POST(request: Request, { params }: RouteContext) {
         translatedContent: message.translatedContent,
         translatedLanguage: message.translatedLanguage,
         translatedLanguageName: message.translatedLanguageName,
+        attachments: parseMessageAttachments(message.attachments),
         bookmarkedAt: message.bookmarkedAt?.toISOString() ?? null,
         sentAt: message.sentAt.toISOString(),
       },

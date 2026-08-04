@@ -63,3 +63,50 @@ export async function sendNaverTalkTextMessage({
 
   return result;
 }
+
+export async function sendNaverTalkImageMessage({
+  authorization,
+  userId,
+  imageUrl,
+}: {
+  authorization: string;
+  userId: string;
+  imageUrl: string;
+}) {
+  const response = await fetch(NAVER_TALK_EVENT_URL, {
+    method: "POST",
+    headers: {
+      Authorization: authorization,
+      "Content-Type": "application/json;charset=UTF-8",
+    },
+    body: JSON.stringify({
+      event: "send",
+      user: userId,
+      imageContent: { imageUrl },
+    }),
+    cache: "no-store",
+  }).catch(() => null);
+
+  if (!response) {
+    throw new NaverTalkApiError(
+      "네이버 톡톡 보내기 API에 연결하지 못했습니다.",
+    );
+  }
+
+  const result = (await response.json().catch(() => null)) as
+    | NaverTalkApiResponse
+    | null;
+
+  if (
+    !response.ok ||
+    result?.success !== true ||
+    result.resultCode !== "00"
+  ) {
+    throw new NaverTalkApiError(
+      result?.resultMessage || "네이버 톡톡 이미지를 발송하지 못했습니다.",
+      result?.resultCode,
+    );
+  }
+
+  return result;
+}

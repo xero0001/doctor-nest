@@ -1,6 +1,7 @@
 import { getDatabase } from "@doctornest/database";
 
 import { getCurrentUser } from "@/lib/auth";
+import { parseMessageAttachments } from "@/features/chatting/message-attachments";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -124,6 +125,7 @@ export async function GET() {
             translatedContent: message.translatedContent,
             translatedLanguage: message.translatedLanguage,
             translatedLanguageName: message.translatedLanguageName,
+            attachments: parseMessageAttachments(message.attachments),
             bookmarkedAt: message.bookmarkedAt?.toISOString() ?? null,
             sentAt: message.sentAt.toISOString(),
           })),

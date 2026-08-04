@@ -11,6 +11,11 @@ export type ConversationMessage = {
   translatedContent: string;
   translatedLanguage: string;
   translatedLanguageName: string;
+  attachments: Array<{
+    type: "IMAGE";
+    url: string;
+    altText: string;
+  }>;
   bookmarkedAt: string | null;
   sentAt: string;
 };

@@ -550,6 +550,7 @@ model Message {
   translatedContent       String                   @default("")
   translatedLanguage      String                   @default("")
   translatedLanguageName  String                   @default("")
+  attachments             Json?
   bookmarkedAt            DateTime?
   sentAt                  DateTime                 @default(now())
   conversation            Conversation             @relation(fields: [conversationId], references: [id], onDelete: Cascade)

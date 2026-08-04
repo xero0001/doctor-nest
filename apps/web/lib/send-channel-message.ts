@@ -5,8 +5,14 @@ import {
   decryptLineCredentials,
   decryptNaverTalkCredentials,
 } from "@/lib/channel-credentials";
-import { sendInstagramTextMessage } from "@/lib/instagram-api";
-import { sendNaverTalkTextMessage } from "@/lib/naver-talk-api";
+import {
+  sendInstagramImageMessage,
+  sendInstagramTextMessage,
+} from "@/lib/instagram-api";
+import {
+  sendNaverTalkImageMessage,
+  sendNaverTalkTextMessage,
+} from "@/lib/naver-talk-api";
 
 type SendableChannel = "LINE" | "NAVER_TALK" | "INSTAGRAM";
 type ChatChannel =
@@ -114,6 +120,127 @@ export async function sendChannelTextMessage({
   const credentials = decryptInstagramCredentials(
     connection.credentialsEncrypted,
   );
+  const result = await sendInstagramTextMessage({
+    instagramUserId: credentials.instagramUserId,
+    recipientId: externalCustomerId,
+    accessToken: credentials.accessToken,
+    text,
+  });
+  return result?.message_id ?? null;
+}
+
+export async function sendChannelContentMessage({
+  hospitalId,
+  channel,
+  externalCustomerId,
+  text,
+  imageUrls,
+}: {
+  hospitalId: string;
+  channel: ChatChannel;
+  externalCustomerId: string;
+  text: string;
+  imageUrls: string[];
+}) {
+  const sendableChannel = assertSendableChannel(channel);
+  const connection = await getDatabase().channelConnection.findUnique({
+    where: {
+      hospitalId_channel: {
+        hospitalId,
+        channel: sendableChannel,
+      },
+    },
+    select: {
+      status: true,
+      credentialsEncrypted: true,
+    },
+  });
+
+  if (!connection?.credentialsEncrypted) {
+    throw new ChannelMessageDeliveryError(
+      `${sendableChannel} 채널 자격증명이 없습니다.`,
+    );
+  }
+
+  if (sendableChannel === "LINE") {
+    const { channelAccessToken } = decryptLineCredentials(
+      connection.credentialsEncrypted,
+    );
+    const messages: Array<Record<string, string>> = [
+      ...imageUrls.map((imageUrl) => ({
+        type: "image",
+        originalContentUrl: imageUrl,
+        previewImageUrl: imageUrl,
+      })),
+      { type: "text", text },
+    ];
+    let lastMessageId: string | null = null;
+
+    for (let index = 0; index < messages.length; index += 5) {
+      const response = await fetch("https://api.line.me/v2/bot/message/push", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${channelAccessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to: externalCustomerId,
+          messages: messages.slice(index, index + 5),
+        }),
+        cache: "no-store",
+      }).catch(() => null);
+
+      if (!response?.ok) {
+        throw new ChannelMessageDeliveryError(
+          "LINE 콘텐츠를 발송하지 못했습니다.",
+        );
+      }
+
+      const result = (await response.json().catch(() => null)) as {
+        sentMessages?: Array<{ id?: string }>;
+      } | null;
+      lastMessageId = result?.sentMessages?.at(-1)?.id ?? lastMessageId;
+    }
+
+    return lastMessageId;
+  }
+
+  if (sendableChannel === "NAVER_TALK") {
+    const { authorization } = decryptNaverTalkCredentials(
+      connection.credentialsEncrypted,
+    );
+    for (const imageUrl of imageUrls) {
+      await sendNaverTalkImageMessage({
+        authorization,
+        userId: externalCustomerId,
+        imageUrl,
+      });
+    }
+    await sendNaverTalkTextMessage({
+      authorization,
+      userId: externalCustomerId,
+      text,
+    });
+    return null;
+  }
+
+  if (connection.status !== "CONNECTED") {
+    throw new ChannelMessageDeliveryError(
+      "Instagram 채널 연결이 완료되지 않았습니다.",
+    );
+  }
+
+  const credentials = decryptInstagramCredentials(
+    connection.credentialsEncrypted,
+  );
+  for (const imageUrl of imageUrls) {
+    await sendInstagramImageMessage({
+      instagramUserId: credentials.instagramUserId,
+      recipientId: externalCustomerId,
+      accessToken: credentials.accessToken,
+      imageUrl,
+    });
+  }
   const result = await sendInstagramTextMessage({
     instagramUserId: credentials.instagramUserId,
     recipientId: externalCustomerId,

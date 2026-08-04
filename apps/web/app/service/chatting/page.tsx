@@ -3,6 +3,7 @@ import { getDatabase } from "@doctornest/database";
 import { requireUser } from "@/lib/auth";
 import { serializeChatCoachGeneration } from "@/lib/chat-coach-generation";
 import { serializeContentEvent } from "@/lib/content-events";
+import { parseMessageAttachments } from "@/features/chatting/message-attachments";
 
 import { ChattingClient } from "./chatting-client";
 import type {
@@ -247,6 +248,7 @@ export default async function ChattingPage() {
         translatedContent: message.translatedContent,
         translatedLanguage: message.translatedLanguage,
         translatedLanguageName: message.translatedLanguageName,
+        attachments: parseMessageAttachments(message.attachments),
         bookmarkedAt: message.bookmarkedAt?.toISOString() ?? null,
         sentAt: message.sentAt.toISOString(),
       })),

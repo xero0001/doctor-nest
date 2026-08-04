@@ -281,3 +281,49 @@ export async function sendInstagramTextMessage({
     recipient_id?: string;
   } | null;
 }
+
+export async function sendInstagramImageMessage({
+  instagramUserId,
+  recipientId,
+  accessToken,
+  imageUrl,
+}: {
+  instagramUserId: string;
+  recipientId: string;
+  accessToken: string;
+  imageUrl: string;
+}) {
+  const response = await fetch(
+    `https://graph.instagram.com/${getGraphApiVersion()}/${encodeURIComponent(instagramUserId)}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        recipient: { id: recipientId },
+        message: {
+          attachment: {
+            type: "image",
+            payload: { url: imageUrl },
+          },
+        },
+      }),
+      cache: "no-store",
+    },
+  ).catch(() => null);
+
+  if (!response?.ok) {
+    throw new Error(
+      response
+        ? await getInstagramError(response)
+        : "Instagram API에 연결하지 못했습니다.",
+    );
+  }
+
+  return (await response.json().catch(() => null)) as {
+    message_id?: string;
+    recipient_id?: string;
+  } | null;
+}

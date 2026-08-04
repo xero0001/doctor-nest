@@ -33,6 +33,26 @@ type RouteContext = {
 
 const MAX_PATIENT_NOTES_LENGTH = 5_000;
 
+function formatKoreanDateTime(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  })
+    .formatToParts(value)
+    .reduce<Record<string, string>>((result, part) => {
+      result[part.type] = part.value;
+      return result;
+    }, {});
+
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
 function serializeConversation(
   conversation: NonNullable<
     Awaited<ReturnType<typeof findConversationForHospital>>
@@ -252,6 +272,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     },
     select: {
       id: true,
+      status: true,
       patientId: true,
       patientChannelId: true,
     },
@@ -282,6 +303,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     typeof body?.notes === "string" && body.notes.trim().length > 0
       ? body.notes
       : null;
+  const closedAt = new Date();
+  const shouldLogConversationClose =
+    body?.status === "CLOSED" && existingConversation.status === "OPEN";
+  const closeLogContent = `${user.name || "담당"} 상담사가 상담을 종료하였습니다. 종료일시 ${formatKoreanDateTime(closedAt)}`;
 
   if (requestedPatientId) {
     const targetPatient = await database.patient.findFirst({
@@ -378,10 +403,28 @@ export async function PATCH(request: Request, { params }: RouteContext) {
                       }
                     : {}),
                   ...(body?.status === "OPEN" || body?.status === "CLOSED"
-                    ? { status: body.status }
+                    ? {
+                        status: body.status,
+                        ...(shouldLogConversationClose
+                          ? { lastMessageAt: closedAt }
+                          : {}),
+                      }
                     : {}),
                 }
               : { unreadCount: 0 },
+          }),
+        ]
+      : []),
+    ...(shouldLogConversationClose
+      ? [
+          database.message.create({
+            data: {
+              conversationId: existingConversation.id,
+              direction: "OUTBOUND",
+              sender: "SYSTEM",
+              content: closeLogContent,
+              sentAt: closedAt,
+            },
           }),
         ]
       : []),

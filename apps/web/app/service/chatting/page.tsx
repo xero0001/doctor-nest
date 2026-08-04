@@ -66,6 +66,7 @@ export default async function ChattingPage() {
     staffMembers,
     contentEvents,
     treatmentTags,
+    hospital,
   ] = await Promise.all([
     getDatabase().conversation.findMany({
       where: {
@@ -156,6 +157,19 @@ export default async function ChattingPage() {
       },
       select: { id: true, name: true, color: true },
       orderBy: { name: "asc" },
+    }),
+    getDatabase().hospital.findUniqueOrThrow({
+      where: { id: user.hospitalId },
+      select: {
+        customerInputChartNumberEnabled: true,
+        customerInputVisitTypeEnabled: true,
+        customerInputCountryCodeEnabled: true,
+        customerInputBirthDateEnabled: true,
+        customerInputGenderEnabled: true,
+        customerInputTreatmentTagEnabled: true,
+        customerInputNationalityEnabled: true,
+        customerInputMarketingEnabled: true,
+      },
     }),
   ]);
 
@@ -248,6 +262,16 @@ export default async function ChattingPage() {
       staffMembers={staffMembers satisfies StaffMember[]}
       contentEvents={contentEvents.map(serializeContentEvent)}
       treatmentTags={treatmentTags}
+      inputFields={{
+        chartNumber: hospital.customerInputChartNumberEnabled,
+        visitType: hospital.customerInputVisitTypeEnabled,
+        countryCode: hospital.customerInputCountryCodeEnabled,
+        birthDate: hospital.customerInputBirthDateEnabled,
+        gender: hospital.customerInputGenderEnabled,
+        treatmentTag: hospital.customerInputTreatmentTagEnabled,
+        nationality: hospital.customerInputNationalityEnabled,
+        marketingConsent: hospital.customerInputMarketingEnabled,
+      }}
       manualFolders={buildManualFolderTree(
         manualFolders.map((folder) => ({
           id: folder.id,

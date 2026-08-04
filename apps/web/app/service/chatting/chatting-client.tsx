@@ -55,6 +55,8 @@ import {
   TreatmentTagEditorDialog,
   type TreatmentTagOption,
 } from "@/features/chatting/components/treatment-tag-editor-dialog";
+import { QuickCustomerCreateDialog } from "@/features/chatting/components/quick-customer-create-dialog";
+import type { BasicServiceSettings } from "@/features/settings/service-settings-types";
 import {
   inferConversationTargetLanguage,
   translationLanguageOptions,
@@ -899,17 +901,27 @@ function CustomerNotesEditor({
 
 function CustomerLinkModal({
   conversation,
+  inputFields,
+  treatmentTags,
   onClose,
   onLinked,
 }: {
   conversation: ConversationItem;
+  inputFields: BasicServiceSettings["inputFields"];
+  treatmentTags: TreatmentTagOption[];
   onClose: () => void;
   onLinked: (conversation: ConversationItem) => void;
 }) {
   const [searchField, setSearchField] = useState<CustomerSearchField>("name");
   const [query, setQuery] = useState("");
   const [patients, setPatients] = useState<PatientSearchResult[]>([]);
-  const [selectedPatientId, setSelectedPatientId] = useState("");
+  const [createdPatients, setCreatedPatients] = useState<PatientSearchResult[]>(
+    [],
+  );
+  const [selectedPatientId, setSelectedPatientId] = useState(
+    conversation.customer?.id ?? "",
+  );
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
   const [error, setError] = useState("");
@@ -963,16 +975,42 @@ function CustomerLinkModal({
 
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape" && !isLinking) onClose();
+      if (event.key === "Escape" && !isLinking && !isCreateModalOpen) {
+        onClose();
+      }
     }
 
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [isLinking, onClose]);
+  }, [isCreateModalOpen, isLinking, onClose]);
 
-  const selectedPatient = patients.find(
+  const displayedPatients = useMemo(
+    () => [
+      ...createdPatients,
+      ...patients.filter(
+        (patient) =>
+          !createdPatients.some(
+            (createdPatient) => createdPatient.id === patient.id,
+          ),
+      ),
+    ],
+    [createdPatients, patients],
+  );
+  const selectedPatient = displayedPatients.find(
     (patient) => patient.id === selectedPatientId,
   );
+  const linkedPatient: PatientSearchResult | undefined = conversation.customer
+    ? {
+        id: conversation.customer.id,
+        chartNumber: conversation.customer.chartNumber,
+        name: conversation.customer.name,
+        phone: conversation.customer.phone,
+        email: conversation.customer.email,
+        gender: conversation.customer.gender,
+        birthDate: conversation.customer.birthDate,
+      }
+    : undefined;
+  const displayedLinkedPatient = selectedPatient ?? linkedPatient;
 
   async function updatePatientLink(patientId: string | null) {
     if ((patientId && !selectedPatient) || isLinking) return;
@@ -1046,9 +1084,18 @@ function CustomerLinkModal({
 
         <div className="grid min-h-0 flex-1 gap-5 overflow-y-auto p-7 md:grid-cols-[1.05fr_0.95fr]">
           <div className="min-h-0 rounded-2xl bg-[#f7f8fb] p-5">
-            <h3 className="text-sm font-bold text-[#555d72]">
-              연결할 고객 선택
-            </h3>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-bold text-[#555d72]">
+                연결할 고객 선택
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsCreateModalOpen(true)}
+                className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[#cfd7fb] bg-white px-3 text-xs font-bold text-[#3157f6] transition hover:bg-[#eef2ff]"
+              >
+                <UserPlus className="size-3.5" />새 고객입력
+              </button>
+            </div>
             <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-white p-1.5 shadow-sm">
               {(
                 [
@@ -1091,7 +1138,7 @@ function CustomerLinkModal({
             </label>
 
             <div className="mt-3 max-h-[350px] space-y-2 overflow-y-auto pr-1">
-              {patients.map((patient) => {
+              {displayedPatients.map((patient) => {
                 const selected = selectedPatientId === patient.id;
                 const current = conversation.customer?.id === patient.id;
 
@@ -1126,7 +1173,7 @@ function CustomerLinkModal({
                 );
               })}
 
-              {!isSearching && patients.length === 0 ? (
+              {!isSearching && displayedPatients.length === 0 ? (
                 <div className="flex min-h-40 flex-col items-center justify-center text-center text-[#9aa0af]">
                   <UserRound className="size-7" />
                   <p className="mt-3 text-xs font-semibold">
@@ -1169,25 +1216,24 @@ function CustomerLinkModal({
 
             <div className="rounded-2xl bg-[#f7f8fb] p-5">
               <h3 className="text-sm font-bold text-[#555d72]">
-                연결 후 고객 정보
+                연결된 고객정보
               </h3>
-              {selectedPatient ? (
+              {displayedLinkedPatient ? (
                 <div className="mt-4 rounded-xl border border-[#bfc9f6] bg-white p-4 shadow-[0_4px_14px_rgba(49,87,246,0.08)]">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-bold text-[#30364b]">
-                        {selectedPatient.name}
-                      </p>
-                      <p className="mt-1 font-mono text-xs text-[#3157f6]">
-                        {selectedPatient.chartNumber ?? "차트번호 미등록"}
-                      </p>
-                    </div>
-                    <Check className="size-5 text-[#3157f6]" />
+                  <div>
+                    <p className="text-sm font-bold text-[#30364b]">
+                      {displayedLinkedPatient.name}
+                    </p>
+                    <p className="mt-1 font-mono text-xs text-[#3157f6]">
+                      {displayedLinkedPatient.chartNumber ?? "차트번호 미등록"}
+                    </p>
                   </div>
                   <div className="mt-4 space-y-1.5 text-xs text-[#747b8f]">
-                    <p>{selectedPatient.phone ?? "전화번호 미등록"}</p>
-                    <p>{formatCompactBirthDate(selectedPatient.birthDate)}</p>
-                    <p>{selectedPatient.email ?? "이메일 미등록"}</p>
+                    <p>{displayedLinkedPatient.phone ?? "전화번호 미등록"}</p>
+                    <p>
+                      {formatCompactBirthDate(displayedLinkedPatient.birthDate)}
+                    </p>
+                    <p>{displayedLinkedPatient.email ?? "이메일 미등록"}</p>
                   </div>
                 </div>
               ) : (
@@ -1233,7 +1279,11 @@ function CustomerLinkModal({
           <button
             type="button"
             onClick={() => void updatePatientLink(selectedPatient?.id ?? null)}
-            disabled={!selectedPatient || isLinking}
+            disabled={
+              !selectedPatient ||
+              selectedPatient.id === conversation.customer?.id ||
+              isLinking
+            }
             className="flex h-10 items-center gap-2 rounded-xl bg-[#3157f6] px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-[#d9dde6]"
           >
             {isLinking ? (
@@ -1245,6 +1295,22 @@ function CustomerLinkModal({
           </button>
         </footer>
       </section>
+      {isCreateModalOpen ? (
+        <QuickCustomerCreateDialog
+          inputFields={inputFields}
+          treatmentTags={treatmentTags}
+          onClose={() => setIsCreateModalOpen(false)}
+          onCreated={(patient) => {
+            setCreatedPatients((current) => [
+              patient,
+              ...current.filter((item) => item.id !== patient.id),
+            ]);
+            setSelectedPatientId(patient.id);
+            setIsCreateModalOpen(false);
+            setError("");
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1255,12 +1321,14 @@ export function ChattingClient({
   staffMembers,
   contentEvents,
   treatmentTags,
+  inputFields,
 }: {
   conversations: ConversationItem[];
   manualFolders: ManualFolderItem[];
   staffMembers: StaffMember[];
   contentEvents: ContentEventRecord[];
   treatmentTags: TreatmentTagOption[];
+  inputFields: BasicServiceSettings["inputFields"];
 }) {
   const [statusFilter, setStatusFilter] = useState<ChatStatusFilter>("ALL");
   const [sortOrder, setSortOrder] = useState<ChatSortOrder>("LATEST");
@@ -3648,6 +3716,8 @@ export function ChattingClient({
         <CustomerLinkModal
           key={currentRoom.id}
           conversation={currentRoom}
+          inputFields={inputFields}
+          treatmentTags={treatmentTags}
           onClose={() => setIsCustomerModalOpen(false)}
           onLinked={(linkedConversation) => {
             setRooms((current) =>

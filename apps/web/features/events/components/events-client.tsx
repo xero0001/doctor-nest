@@ -6,7 +6,6 @@ import {
   ArrowUp,
   CalendarDays,
   FileText,
-  Folder,
   ImagePlus,
   LoaderCircle,
   Megaphone,
@@ -110,9 +109,6 @@ function ContentSidebar() {
     {
       id: "events",
       label: "이벤트",
-      icon: Folder,
-      presentation: "tree",
-      collapsible: true,
       items: [
         {
           id: "event-list",
@@ -132,10 +128,6 @@ function ContentSidebar() {
     {
       id: "notices",
       label: "공지사항",
-      icon: Folder,
-      presentation: "tree",
-      collapsible: true,
-      defaultExpanded: false,
       items: [
         {
           id: "notice-list",

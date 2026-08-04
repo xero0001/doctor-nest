@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   ArrowUp,
   CalendarDays,
-  ChevronRight,
   FileText,
   Folder,
   ImagePlus,
@@ -14,6 +13,7 @@ import {
   Pin,
   Plus,
   Search,
+  ShoppingBag,
   Trash2,
   X,
 } from "lucide-react";
@@ -21,6 +21,10 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
 import { UnsavedChangesDialog } from "@/components/unsaved-changes-dialog";
+import {
+  SectionSidebar,
+  type SectionSidebarGroup,
+} from "@/features/navigation/components/section-sidebar";
 import type {
   ContentEventDetailType,
   ContentEventImageRecord,
@@ -102,26 +106,55 @@ function Switch({
 }
 
 function ContentSidebar() {
+  const groups: SectionSidebarGroup[] = [
+    {
+      id: "events",
+      label: "이벤트",
+      icon: Folder,
+      presentation: "tree",
+      collapsible: true,
+      items: [
+        {
+          id: "event-list",
+          label: "이벤트",
+          icon: CalendarDays,
+          active: true,
+        },
+        {
+          id: "home-care-products",
+          label: "홈케어 상품",
+          icon: ShoppingBag,
+          disabled: true,
+          title: "준비 중입니다.",
+        },
+      ],
+    },
+    {
+      id: "notices",
+      label: "공지사항",
+      icon: Folder,
+      presentation: "tree",
+      collapsible: true,
+      defaultExpanded: false,
+      items: [
+        {
+          id: "notice-list",
+          label: "공지사항",
+          icon: FileText,
+          disabled: true,
+          title: "준비 중입니다.",
+        },
+      ],
+    },
+  ];
+
   return (
-    <aside className="w-[260px] shrink-0 border-r border-[#e2e6ef] bg-white px-5 py-6">
-      <h1 className="text-lg font-extrabold text-[#353c50]">콘텐츠</h1>
-      <div className="mt-6 space-y-2 text-sm">
-        <div className="flex items-center gap-2 px-2 font-bold text-[#4a5267]">
-          <ChevronRight className="size-3 rotate-90" />
-          <Folder className="size-4 text-[#969dae]" />
-          이벤트
-        </div>
-        <div className="rounded-lg bg-[#eaf3ff] px-10 py-3 font-bold text-[#4c79b8]">
-          이벤트
-        </div>
-        <div className="px-10 py-2 text-[#9ba2b2]">홈케어 상품</div>
-        <div className="mt-4 flex items-center gap-2 px-2 font-bold text-[#4a5267]">
-          <ChevronRight className="size-3" />
-          <Folder className="size-4 text-[#969dae]" />
-          공지사항
-        </div>
-      </div>
-    </aside>
+    <SectionSidebar
+      title="콘텐츠"
+      ariaLabel="콘텐츠 메뉴"
+      groups={groups}
+      widthClassName="w-[260px]"
+    />
   );
 }
 

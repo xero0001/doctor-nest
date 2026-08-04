@@ -3,6 +3,7 @@
 import {
   ArrowLeft,
   ArrowRight,
+  ChartNoAxesCombined,
   CircleAlert,
   LoaderCircle,
   Pencil,
@@ -22,6 +23,10 @@ import {
   TreatmentTagPicker,
   type TreatmentTagOption,
 } from "@/features/customers/components/treatment-tag-picker";
+import {
+  SectionSidebar,
+  type SectionSidebarGroup,
+} from "@/features/navigation/components/section-sidebar";
 
 type ScheduledMessage = {
   id: string;
@@ -147,6 +152,27 @@ export function AutomationsClient({
       { value: "INACTIVE", label: "사용 안 함", count: inactiveCount },
     ] as const;
   }, [automations]);
+  const sidebarGroups: SectionSidebarGroup[] = [
+    {
+      id: "automation-sections",
+      items: [
+        {
+          id: "automations",
+          label: "상담자동화",
+          icon: Workflow,
+          active: automationSection === "AUTOMATIONS",
+          onSelect: () => setAutomationSection("AUTOMATIONS"),
+        },
+        {
+          id: "management",
+          label: "관리현황",
+          icon: ChartNoAxesCombined,
+          active: automationSection === "MANAGEMENT",
+          onSelect: () => setAutomationSection("MANAGEMENT"),
+        },
+      ],
+    },
+  ];
 
   useEffect(() => {
     isDirtyRef.current = isDirty;
@@ -758,32 +784,12 @@ export function AutomationsClient({
         </>
       ) : (
         <div className="flex min-h-0 flex-1">
-          <aside className="w-[280px] shrink-0 border-r border-[#e2e6ef] bg-white px-5 py-6">
-            <h1 className="px-2 text-lg font-extrabold text-[#30374a]">
-              자동화
-            </h1>
-            <nav className="mt-6 space-y-1" aria-label="자동화 메뉴">
-              {(
-                [
-                  ["AUTOMATIONS", "상담자동화"],
-                  ["MANAGEMENT", "관리현황"],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setAutomationSection(value)}
-                  className={`flex h-11 w-full items-center rounded-xl px-4 text-left text-sm font-bold transition ${
-                    automationSection === value
-                      ? "bg-[#eaf3ff] text-[#3157f6]"
-                      : "text-[#4d556a] hover:bg-[#f7f8fb]"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </nav>
-          </aside>
+          <SectionSidebar
+            title="자동화"
+            ariaLabel="자동화 메뉴"
+            groups={sidebarGroups}
+            widthClassName="w-[280px]"
+          />
 
           <section className="flex min-w-0 flex-1 flex-col">
             {automationSection === "AUTOMATIONS" ? (

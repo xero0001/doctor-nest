@@ -18,6 +18,10 @@ import {
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 
+import {
+  SectionSidebar,
+  type SectionSidebarGroup,
+} from "@/features/navigation/components/section-sidebar";
 import type { BasicServiceSettings } from "@/features/settings/service-settings-types";
 import { phoneCountryOptions } from "@/lib/phone-country";
 
@@ -192,6 +196,43 @@ export function CustomerInputClient({
   const dailyTagCount = directoryPatients.filter(
     (patient) => patient.treatmentTags.length > 0,
   ).length;
+  const sidebarGroups: SectionSidebarGroup[] = [
+    {
+      id: "customer-input-views",
+      items: [
+        {
+          id: "input",
+          label: "고객정보 입력",
+          icon: UserRound,
+          active: mode === "INPUT",
+          onSelect: () => switchMode("INPUT"),
+        },
+        {
+          id: "all",
+          label: "전체",
+          icon: UsersRound,
+          badge: totalCount.toLocaleString("ko-KR"),
+          active: mode === "ALL",
+          onSelect: () => switchMode("ALL"),
+        },
+        {
+          id: "missing-tag",
+          label: "치료태그 미입력",
+          icon: Tag,
+          badge: missingTreatmentTagCount.toLocaleString("ko-KR"),
+          active: mode === "MISSING_TAG",
+          onSelect: () => switchMode("MISSING_TAG"),
+        },
+        {
+          id: "daily",
+          label: "일자별 고객정보 입력 내역",
+          icon: CalendarDays,
+          active: mode === "DAILY",
+          onSelect: () => switchMode("DAILY"),
+        },
+      ],
+    },
+  ];
 
   function switchMode(nextMode: CustomerViewMode) {
     setMode(nextMode);
@@ -321,60 +362,22 @@ export function CustomerInputClient({
 
   return (
     <div className="flex h-full min-h-0 min-w-[1180px] bg-white">
-      <aside className="flex w-[300px] shrink-0 flex-col border-r border-[#e4e7ee] bg-white p-5">
-        <div className="border-b border-[#e8eaf0] pb-5">
-          <h1 className="text-lg font-extrabold tracking-[-0.04em] text-[#30364b]">
-            고객입력
-          </h1>
-          <p className="mt-1 text-xs text-[#9aa0af]">
-            신규 고객을 등록하고 입력 내역을 관리합니다.
-          </p>
-        </div>
-
-        <nav className="mt-3 space-y-1" aria-label="고객입력 메뉴">
-          {(
-            [
-              ["INPUT", "고객정보 입력", UserRound],
-              ["ALL", "전체", UsersRound],
-              ["MISSING_TAG", "치료태그 미입력", Tag],
-              ["DAILY", "일자별 고객정보 입력 내역", CalendarDays],
-            ] as const
-          ).map(([value, label, Icon]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => switchMode(value)}
-              className={`flex h-11 w-full items-center gap-2 rounded-xl px-4 text-left text-sm font-bold transition ${
-                mode === value
-                  ? "bg-[#edf3ff] text-[#3157f6]"
-                  : "text-[#4d556a] hover:bg-[#f7f8fb]"
-              }`}
-            >
-              <Icon className="size-4" />
-              <span className="min-w-0 flex-1 truncate">{label}</span>
-              {value === "ALL" ? (
-                <span className="text-xs">
-                  {totalCount.toLocaleString("ko-KR")}
-                </span>
-              ) : value === "MISSING_TAG" ? (
-                <span className="text-xs">
-                  {missingTreatmentTagCount.toLocaleString("ko-KR")}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </nav>
-
-        <div className="mt-7">
-          <h2 className="text-sm font-extrabold text-[#394055]">
-            진행중인 상담자동화
-          </h2>
-          <div className="mt-4 flex min-h-32 flex-col items-center justify-center rounded-2xl border border-dashed border-[#dce0e9] bg-[#fafbfc] text-center text-[#a0a6b4]">
-            <FileSpreadsheet className="size-6" />
-            <p className="mt-2 text-xs">자동화 내역은 추후 표시됩니다.</p>
+      <SectionSidebar
+        title="고객입력"
+        ariaLabel="고객입력 메뉴"
+        groups={sidebarGroups}
+        afterNavigation={
+          <div>
+            <h2 className="text-sm font-extrabold text-[#394055]">
+              진행중인 상담자동화
+            </h2>
+            <div className="mt-4 flex min-h-32 flex-col items-center justify-center rounded-2xl border border-dashed border-[#dce0e9] bg-[#fafbfc] text-center text-[#a0a6b4]">
+              <FileSpreadsheet className="size-6" />
+              <p className="mt-2 text-xs">자동화 내역은 추후 표시됩니다.</p>
+            </div>
           </div>
-        </div>
-      </aside>
+        }
+      />
 
       <main className="flex min-w-0 flex-1 flex-col bg-white">
         {mode === "INPUT" ? (

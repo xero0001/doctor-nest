@@ -1,9 +1,18 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
-import Link from "next/link";
+import {
+  Building2,
+  CreditCard,
+  Settings2,
+  TicketCheck,
+  UsersRound,
+} from "lucide-react";
 import { usePathname } from "next/navigation";
 
+import {
+  SectionSidebar,
+  type SectionSidebarGroup,
+} from "@/features/navigation/components/section-sidebar";
 import { authClient } from "@/lib/auth-client";
 
 export function HospitalSettingsSidebar() {
@@ -11,113 +20,113 @@ export function HospitalSettingsSidebar() {
   const session = authClient.useSession();
   const role = (session.data?.user as { role?: string } | undefined)?.role;
   const canViewPermissions = role === "OWNER" || role === "ADMIN";
+  const groups: SectionSidebarGroup[] = [
+    {
+      id: "hospital-information",
+      label: "병원정보",
+      icon: Building2,
+      presentation: "tree",
+      collapsible: true,
+      items: [
+        {
+          id: "hospital-profile",
+          label: "병원프로필",
+          href: "/service/settings/profile",
+          active: pathname === "/service/settings/profile",
+        },
+        {
+          id: "app-link",
+          label: "앱 가입 링크 설정",
+          disabled: true,
+          title: "준비 중입니다.",
+        },
+        {
+          id: "auto-replies",
+          label: "자동응대 메시지",
+          href: "/service/settings/auto-replies",
+          active: pathname === "/service/settings/auto-replies",
+        },
+      ],
+    },
+    {
+      id: "service-settings",
+      label: "서비스설정",
+      icon: Settings2,
+      presentation: "tree",
+      collapsible: true,
+      items: [
+        {
+          id: "basic-settings",
+          label: "기본설정",
+          href: "/service/settings/basic",
+          active: pathname === "/service/settings/basic",
+        },
+        {
+          id: "channel-connections",
+          label: "채널연동",
+          href: "/service/settings/channels",
+          active: pathname === "/service/settings/channels",
+        },
+        {
+          id: "customer-tags",
+          label: "고객태그",
+          href: "/service/settings/customer-tags",
+          active: pathname === "/service/settings/customer-tags",
+        },
+      ],
+    },
+    {
+      id: "account-management",
+      label: "계정관리",
+      icon: UsersRound,
+      presentation: "tree",
+      collapsible: true,
+      items: [
+        {
+          id: "accounts",
+          label: "전체계정",
+          href: "/service/settings/accounts",
+          active: pathname === "/service/settings/accounts",
+        },
+        ...(canViewPermissions
+          ? [
+              {
+                id: "permissions",
+                label: "권한설정",
+                href: "/service/settings/permissions",
+                active: pathname === "/service/settings/permissions",
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      id: "billing",
+      items: [
+        {
+          id: "card-payments",
+          label: "카드 결제관리",
+          icon: CreditCard,
+          disabled: true,
+          title: "준비 중입니다.",
+        },
+        {
+          id: "passes",
+          label: "이용권 내역",
+          icon: TicketCheck,
+          disabled: true,
+          title: "준비 중입니다.",
+        },
+      ],
+    },
+  ];
 
   return (
-    <aside className="w-[280px] shrink-0 border-r border-[#e2e6ef] bg-white px-5 py-6">
-      <h1 className="px-2 text-lg font-extrabold text-[#30374a]">병원 설정</h1>
-      <nav className="mt-6 space-y-2 text-sm" aria-label="병원 설정 메뉴">
-        <div className="flex items-center justify-between rounded-xl bg-[#eaf3ff] px-4 py-3 font-extrabold text-[#4c6f9c]">
-          병원정보
-          <ChevronDown className="size-4" />
-        </div>
-        <Link
-          href="/service/settings/profile"
-          className={`block rounded-lg px-8 py-2.5 font-bold ${
-            pathname === "/service/settings/profile"
-              ? "text-[#3157f6]"
-              : "text-[#6f7789] hover:bg-[#f6f7fa]"
-          }`}
-        >
-          병원프로필
-        </Link>
-        <span className="block px-8 py-2.5 text-[#a0a6b4]">
-          앱 가입 링크 설정
-        </span>
-        <Link
-          href="/service/settings/auto-replies"
-          className={`block rounded-lg px-8 py-2.5 font-bold ${
-            pathname === "/service/settings/auto-replies"
-              ? "bg-[#f2f5ff] text-[#3157f6]"
-              : "text-[#6f7789] hover:bg-[#f6f7fa]"
-          }`}
-        >
-          자동응대 메시지
-        </Link>
-
-        <div className="mt-4 flex items-center justify-between px-4 py-3 font-extrabold text-[#4d5569]">
-          서비스설정
-          <ChevronDown className="size-4 text-[#9ca2af]" />
-        </div>
-        <Link
-          href="/service/settings/basic"
-          className={`block rounded-lg px-8 py-2.5 font-bold ${
-            pathname === "/service/settings/basic"
-              ? "bg-[#f2f5ff] text-[#3157f6]"
-              : "text-[#6f7789] hover:bg-[#f6f7fa]"
-          }`}
-        >
-          기본설정
-        </Link>
-        <Link
-          href="/service/settings/channels"
-          className={`block rounded-lg px-8 py-2.5 font-bold ${
-            pathname === "/service/settings/channels"
-              ? "bg-[#f2f5ff] text-[#3157f6]"
-              : "text-[#6f7789] hover:bg-[#f6f7fa]"
-          }`}
-        >
-          채널연동
-        </Link>
-        <Link
-          href="/service/settings/customer-tags"
-          className={`block rounded-lg px-8 py-2.5 font-bold ${
-            pathname === "/service/settings/customer-tags"
-              ? "bg-[#f2f5ff] text-[#3157f6]"
-              : "text-[#6f7789] hover:bg-[#f6f7fa]"
-          }`}
-        >
-          고객태그
-        </Link>
-
-        <div
-          className={`mt-4 flex items-center justify-between rounded-xl px-4 py-3 font-extrabold ${
-            pathname.startsWith("/service/settings/accounts")
-              ? "bg-[#eaf3ff] text-[#4c6f9c]"
-              : "text-[#4d5569]"
-          }`}
-        >
-          계정관리
-          <ChevronDown className="size-4 text-[#9ca2af]" />
-        </div>
-        <Link
-          href="/service/settings/accounts"
-          className={`block rounded-lg px-8 py-2.5 font-bold ${
-            pathname === "/service/settings/accounts"
-              ? "bg-[#f2f5ff] text-[#3157f6]"
-              : "text-[#6f7789] hover:bg-[#f6f7fa]"
-          }`}
-        >
-          전체계정
-        </Link>
-        {canViewPermissions ? (
-          <Link
-            href="/service/settings/permissions"
-            className={`block rounded-lg px-8 py-2.5 font-bold ${
-              pathname === "/service/settings/permissions"
-                ? "bg-[#f2f5ff] text-[#3157f6]"
-                : "text-[#6f7789] hover:bg-[#f6f7fa]"
-            }`}
-          >
-            권한설정
-          </Link>
-        ) : null}
-        <div className="mt-4 px-4 py-3 font-extrabold text-[#4d5569]">
-          카드 결제관리
-        </div>
-        <div className="px-4 py-3 font-extrabold text-[#4d5569]">
-          이용권 내역
-        </div>
-      </nav>
-    </aside>
+    <SectionSidebar
+      title="병원 설정"
+      ariaLabel="병원 설정 메뉴"
+      groups={groups}
+      widthClassName="w-[280px]"
+    />
   );
 }

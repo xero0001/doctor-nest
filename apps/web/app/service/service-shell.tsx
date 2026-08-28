@@ -62,7 +62,7 @@ const navigation = [
     available: true,
   },
   {
-    label: "원내매뉴얼",
+    label: "시술설명서",
     icon: NotebookTabs,
     href: "/service/manuals",
     available: true,

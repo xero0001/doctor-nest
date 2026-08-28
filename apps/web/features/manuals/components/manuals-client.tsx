@@ -25,7 +25,6 @@ import Image from "next/image";
 import type { ChangeEvent, DragEvent, FormEvent, KeyboardEvent } from "react";
 import { Fragment, useMemo, useState } from "react";
 
-import { SectionTabs } from "@/components/section-tabs";
 import { SECTION_SIDEBAR_WIDTH_PX } from "@/features/navigation/components/section-sidebar";
 import type {
   ManualDocumentRecord,
@@ -69,16 +68,6 @@ type TreeDropTarget = {
   id?: string;
   placement: DropPlacement;
 };
-
-const manualAreaTabs = [
-  { value: "MANUAL", label: "치료태그 매뉴얼" },
-  {
-    value: "GLOSSARY",
-    label: "용어 사전",
-    disabled: true,
-    title: "용어 사전은 준비 중입니다.",
-  },
-] as const;
 
 const manualImageAccept =
   "image/jpeg,image/png,image/webp,image/gif,image/avif";
@@ -205,7 +194,6 @@ export function ManualsClient({
     createDraft(initialDocument),
   );
   const [query, setQuery] = useState("");
-  const [manualArea, setManualArea] = useState<"MANUAL" | "GLOSSARY">("MANUAL");
   const [folderDialog, setFolderDialog] = useState<FolderDialog | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
@@ -213,8 +201,9 @@ export function ManualsClient({
   const [isDraggingImages, setIsDraggingImages] = useState(false);
   const [draggedTreeItem, setDraggedTreeItem] =
     useState<DraggedTreeItem | null>(null);
-  const [treeDropTarget, setTreeDropTarget] =
-    useState<TreeDropTarget | null>(null);
+  const [treeDropTarget, setTreeDropTarget] = useState<TreeDropTarget | null>(
+    null,
+  );
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
@@ -846,8 +835,7 @@ export function ManualsClient({
       );
     const targetSiblings = documents
       .filter(
-        (item) =>
-          item.folderId === targetFolderId && item.id !== document.id,
+        (item) => item.folderId === targetFolderId && item.id !== document.id,
       )
       .sort(
         (left, right) =>
@@ -892,8 +880,7 @@ export function ManualsClient({
         if (targetSortOrder !== undefined) {
           return {
             ...item,
-            folderId:
-              item.id === document.id ? targetFolderId : item.folderId,
+            folderId: item.id === document.id ? targetFolderId : item.folderId,
             sortOrder: targetSortOrder,
           };
         }
@@ -1068,8 +1055,7 @@ export function ManualsClient({
     event.preventDefault();
     const draggedItem = draggedTreeItem;
     const placement =
-      treeDropTarget?.kind === "document" &&
-      treeDropTarget.id === document.id
+      treeDropTarget?.kind === "document" && treeDropTarget.id === document.id
         ? treeDropTarget.placement
         : "before";
     finishTreeDrag();
@@ -1093,11 +1079,7 @@ export function ManualsClient({
   }
 
   function handleRootDragOver(event: DragEvent<HTMLDivElement>) {
-    if (
-      draggedTreeItem?.kind !== "folder" ||
-      isWorking ||
-      normalizedQuery
-    ) {
+    if (draggedTreeItem?.kind !== "folder" || isWorking || normalizedQuery) {
       return;
     }
 
@@ -1122,7 +1104,10 @@ export function ManualsClient({
     event: KeyboardEvent<HTMLButtonElement>,
     item: DraggedTreeItem,
   ) {
-    if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) {
+    if (
+      !event.altKey ||
+      (event.key !== "ArrowUp" && event.key !== "ArrowDown")
+    ) {
       return;
     }
 
@@ -1360,12 +1345,6 @@ export function ManualsClient({
         }}
       >
         <aside className="flex min-h-0 flex-col border-r border-[#e3e6ee] bg-white">
-          <SectionTabs
-            ariaLabel="원내매뉴얼 구분"
-            options={manualAreaTabs}
-            value={manualArea}
-            onValueChange={setManualArea}
-          />
           <div className="shrink-0 border-b border-[#eceef4] px-4 py-4">
             <p className="text-xs leading-5 text-[#8c93a5]">
               {organizationName}의 상담 기준과 시술 정보를 관리합니다.

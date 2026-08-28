@@ -107,7 +107,7 @@ export const permissionGroups = [
   },
   {
     key: "MEDIPAL_AI",
-    label: "medipal AI",
+    label: "AI",
     permissions: [
       {
         key: "AI_USAGE_ACCESS",

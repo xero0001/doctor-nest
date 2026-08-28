@@ -12,7 +12,6 @@ import ReactMarkdown from "react-markdown";
 import Image from "next/image";
 import {
   BadgeCheck,
-  BookOpenText,
   Bot,
   Bookmark,
   Check,
@@ -63,7 +62,6 @@ import {
   type TranslationTargetLanguage,
 } from "@/lib/conversation-language";
 import { formatPhoneWithCountryCode } from "@/lib/phone-country";
-import type { ContentEventRecord } from "@/features/events/types";
 
 import type {
   ChatCoachSuggestion,
@@ -89,15 +87,9 @@ type ConversationContextMenu = {
 
 const CHAT_POLL_INTERVAL_MS = 5_000;
 const CHAT_BOTTOM_THRESHOLD_PX = 100;
-const MAX_CONTENT_MESSAGE_LENGTH = 4_000;
 const MAX_PATIENT_NOTES_LENGTH = 5_000;
 
 type CustomerNotesSaveStatus = "idle" | "saving" | "saved" | "error";
-
-const knowledgeTabs = [
-  { value: "원내매뉴얼", label: "치료태그 매뉴얼" },
-  { value: "콘텐츠", label: "콘텐츠" },
-] as const;
 
 const chatSearchOptions: Array<{
   value: ChatSearchField;
@@ -597,161 +589,6 @@ function ManualFolderBranch({
       ) : null}
     </div>
   );
-}
-
-function ContentEventCard({
-  event,
-  selected,
-  sending,
-  disabled,
-  onToggle,
-  onSend,
-}: {
-  event: ContentEventRecord;
-  selected: boolean;
-  sending: boolean;
-  disabled: boolean;
-  onToggle: () => void;
-  onSend: () => void;
-}) {
-  const finalPrice = Math.max(0, event.originalPrice - event.discountAmount);
-
-  return (
-    <article className="border-b border-[#edf0f5] bg-white">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={selected}
-        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
-          selected ? "bg-[#f0ebff]" : "hover:bg-[#f8f9fc]"
-        }`}
-      >
-        <div className="relative size-20 shrink-0 overflow-hidden rounded-lg bg-[#f2f3f6]">
-          {event.thumbnail ? (
-            <Image
-              src={event.thumbnail.publicUrl}
-              alt={event.thumbnail.altText || event.title}
-              fill
-              sizes="80px"
-              className="object-cover"
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center text-[#a6acba]">
-              <BookOpenText className="size-5" />
-            </div>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            {event.isPinned ? (
-              <Star className="size-3 shrink-0 fill-[#ffcf34] text-[#ffbe19]" />
-            ) : null}
-            <h3 className="truncate text-sm font-bold text-[#3f475a]">
-              {event.title}
-            </h3>
-          </div>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#8b92a3]">
-            {event.summary || "등록된 소개글이 없습니다."}
-          </p>
-          <p className="mt-1 text-xs font-extrabold text-[#3157f6]">
-            {finalPrice.toLocaleString("ko-KR")}원
-          </p>
-        </div>
-        <ChevronRight
-          className={`size-4 shrink-0 text-[#9ca2b1] transition-transform ${
-            selected ? "rotate-90" : ""
-          }`}
-        />
-      </button>
-
-      {selected ? (
-        <div className="border-t border-[#e7e3f7] bg-[#faf9ff] px-4 py-4">
-          {event.exposureEndAt ? (
-            <p className="mb-3 text-xs font-medium text-[#858c9d]">
-              노출 종료 {event.exposureEndAt.slice(0, 10)}
-            </p>
-          ) : null}
-          {event.detailType === "IMAGE" ? (
-            event.detailImages.length > 0 ? (
-              <div className="space-y-2">
-                {event.detailImages.map((image) => (
-                  <div
-                    key={image.id}
-                    className="relative aspect-[4/5] overflow-hidden rounded-lg bg-white"
-                  >
-                    <Image
-                      src={image.publicUrl}
-                      alt={image.altText || event.title}
-                      fill
-                      sizes="320px"
-                      className="object-contain"
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="py-5 text-center text-xs text-[#989eae]">
-                등록된 상세 이미지가 없습니다.
-              </p>
-            )
-          ) : event.detailText ? (
-            <div className="whitespace-pre-wrap rounded-lg bg-white px-3 py-3 text-xs leading-6 text-[#596176]">
-              {event.detailText}
-            </div>
-          ) : (
-            <p className="py-5 text-center text-xs text-[#989eae]">
-              등록된 상세 내용이 없습니다.
-            </p>
-          )}
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={onSend}
-            className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#3157f6] px-4 text-sm font-bold text-white transition hover:bg-[#2448d8] disabled:cursor-not-allowed disabled:bg-[#b7c0dd]"
-          >
-            {sending ? (
-              <LoaderCircle className="size-4 animate-spin" />
-            ) : (
-              <Send className="size-4" />
-            )}
-            {sending ? "발송 중" : "채팅으로 발송"}
-          </button>
-        </div>
-      ) : null}
-    </article>
-  );
-}
-
-function buildContentEventMessage(event: ContentEventRecord) {
-  const finalPrice = Math.max(0, event.originalPrice - event.discountAmount);
-  const priceLine =
-    event.discountAmount > 0
-      ? `가격: ${finalPrice.toLocaleString("ko-KR")}원 (정가 ${event.originalPrice.toLocaleString("ko-KR")}원)`
-      : `가격: ${finalPrice.toLocaleString("ko-KR")}원`;
-  const headerLines = [
-    `[이벤트] ${event.title}`,
-    event.summary,
-    priceLine,
-    event.exposureEndAt
-      ? `이벤트 기간: ~${event.exposureEndAt.slice(0, 10)}`
-      : "",
-  ].filter(Boolean);
-  const fixedLength = headerLines.join("\n").length;
-  const detailBudget = Math.max(
-    0,
-    MAX_CONTENT_MESSAGE_LENGTH - fixedLength - (fixedLength > 0 ? 2 : 0),
-  );
-  const detailText =
-    event.detailType === "TEXT" && event.detailText
-      ? event.detailText.length > detailBudget
-        ? `${event.detailText.slice(0, Math.max(0, detailBudget - 1)).trimEnd()}…`
-        : event.detailText
-      : "";
-
-  return [headerLines.join("\n"), detailText]
-    .filter(Boolean)
-    .join("\n\n")
-    .slice(0, MAX_CONTENT_MESSAGE_LENGTH);
 }
 
 function ChannelBadge({
@@ -1371,14 +1208,12 @@ export function ChattingClient({
   conversations,
   manualFolders,
   staffMembers,
-  contentEvents,
   treatmentTags,
   inputFields,
 }: {
   conversations: ConversationItem[];
   manualFolders: ManualFolderItem[];
   staffMembers: StaffMember[];
-  contentEvents: ContentEventRecord[];
   treatmentTags: TreatmentTagOption[];
   inputFields: BasicServiceSettings["inputFields"];
 }) {
@@ -1396,9 +1231,6 @@ export function ChattingClient({
   const [draft, setDraft] = useState("");
   const [rightPanelTab, setRightPanelTab] =
     useState<RightPanelTab>("AUTOMATION");
-  const [knowledgeTab, setKnowledgeTab] = useState<"원내매뉴얼" | "콘텐츠">(
-    "원내매뉴얼",
-  );
   const [manualQuery, setManualQuery] = useState("");
   const [bookmarkedManualIds, setBookmarkedManualIds] = useState<Set<string>>(
     () => new Set(),
@@ -1409,16 +1241,10 @@ export function ChattingClient({
   const [selectedManualId, setSelectedManualId] = useState(
     () => flattenManualDocuments(manualFolders)[0]?.id ?? "",
   );
-  const [selectedContentId, setSelectedContentId] = useState(
-    contentEvents[0]?.id ?? "",
-  );
   const [rooms, setRooms] = useState(conversations);
   const [loadingRoomId, setLoadingRoomId] = useState<string | null>(null);
   const [detailError, setDetailError] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [sendingContentEventId, setSendingContentEventId] = useState<
-    string | null
-  >(null);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [isTreatmentTagModalOpen, setIsTreatmentTagModalOpen] = useState(false);
   const [isSavingTreatmentTags, setIsSavingTreatmentTags] = useState(false);
@@ -1760,14 +1586,6 @@ export function ChattingClient({
     () => filterManualFolderTree(manualFolders, normalizedManualQuery),
     [manualFolders, normalizedManualQuery],
   );
-  const filteredContentEvents = useMemo(() => {
-    if (!normalizedManualQuery) return contentEvents;
-    return contentEvents.filter((event) =>
-      `${event.title} ${event.summary} ${event.detailText}`
-        .toLowerCase()
-        .includes(normalizedManualQuery),
-    );
-  }, [contentEvents, normalizedManualQuery]);
   const manualDocuments = useMemo(
     () => flattenManualDocuments(manualFolders),
     [manualFolders],
@@ -2638,20 +2456,6 @@ export function ChattingClient({
     }
   }
 
-  async function sendContentEvent(event: ContentEventRecord) {
-    if (isSending) return;
-
-    setSendingContentEventId(event.id);
-    try {
-      await sendMessage({
-        content: buildContentEventMessage(event),
-        contentEventId: event.id,
-      });
-    } finally {
-      setSendingContentEventId(null);
-    }
-  }
-
   if (!currentRoom) {
     return (
       <div className="flex h-full items-center justify-center bg-white">
@@ -2848,84 +2652,42 @@ export function ChattingClient({
           </h2>
         </header>
 
-        <SectionTabs
-          ariaLabel="상담 백과사전 구분"
-          options={knowledgeTabs}
-          value={knowledgeTab}
-          onValueChange={setKnowledgeTab}
-        />
-
         <div className="shrink-0 border-b border-[#edf0f5] p-3">
           <label className="flex h-8 items-center gap-2 rounded-lg border border-[#e2e5ed] px-3 text-[#9ba1b1] focus-within:border-[#8676ef]">
             <Search className="size-3.5" />
             <input
               value={manualQuery}
               onChange={(event) => setManualQuery(event.target.value)}
-              placeholder={
-                knowledgeTab === "원내매뉴얼"
-                  ? "폴더, 문서, 태그 검색"
-                  : "콘텐츠 제목, 소개 검색"
-              }
+              placeholder="폴더, 문서, 태그 검색"
               className="min-w-0 flex-1 bg-transparent text-[11px] outline-none placeholder:text-[#aeb3c0]"
             />
           </label>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {knowledgeTab === "원내매뉴얼" ? (
-            <>
-              <div className="border-b border-[#e8eaf1] py-2">
-                {filteredManualFolders.map((folder) => (
-                  <ManualFolderBranch
-                    key={folder.id}
-                    folder={folder}
-                    depth={0}
-                    forceExpanded={Boolean(normalizedManualQuery)}
-                    openFolderIds={openManualFolderIds}
-                    selectedManualId={selectedManual?.id ?? ""}
-                    bookmarkedManualIds={bookmarkedManualIds}
-                    onToggleFolder={toggleManualFolder}
-                    onSelectManual={(id) =>
-                      setSelectedManualId((current) =>
-                        current === id ? "" : id,
-                      )
-                    }
-                    onToggleBookmark={toggleManualBookmark}
-                  />
-                ))}
-                {filteredManualFolders.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-[10px] text-[#989eae]">
-                    검색 조건에 맞는 치료태그 매뉴얼이 없습니다.
-                  </div>
-                ) : null}
-              </div>
-            </>
-          ) : filteredContentEvents.length > 0 ? (
-            filteredContentEvents.map((event) => (
-              <ContentEventCard
-                key={event.id}
-                event={event}
-                selected={selectedContentId === event.id}
-                sending={sendingContentEventId === event.id}
-                disabled={isSending}
-                onToggle={() =>
-                  setSelectedContentId((current) =>
-                    current === event.id ? "" : event.id,
-                  )
+          <div className="border-b border-[#e8eaf1] py-2">
+            {filteredManualFolders.map((folder) => (
+              <ManualFolderBranch
+                key={folder.id}
+                folder={folder}
+                depth={0}
+                forceExpanded={Boolean(normalizedManualQuery)}
+                openFolderIds={openManualFolderIds}
+                selectedManualId={selectedManual?.id ?? ""}
+                bookmarkedManualIds={bookmarkedManualIds}
+                onToggleFolder={toggleManualFolder}
+                onSelectManual={(id) =>
+                  setSelectedManualId((current) => (current === id ? "" : id))
                 }
-                onSend={() => void sendContentEvent(event)}
+                onToggleBookmark={toggleManualBookmark}
               />
-            ))
-          ) : (
-            <div className="flex h-48 flex-col items-center justify-center px-6 text-center text-[#9aa0b0]">
-              <BookOpenText className="mb-2 size-6" />
-              <p className="text-xs font-bold">
-                {normalizedManualQuery
-                  ? "검색 조건에 맞는 콘텐츠가 없습니다."
-                  : "등록된 활성 콘텐츠가 없습니다."}
-              </p>
-            </div>
-          )}
+            ))}
+            {filteredManualFolders.length === 0 ? (
+              <div className="px-4 py-8 text-center text-[10px] text-[#989eae]">
+                검색 조건에 맞는 치료태그 매뉴얼이 없습니다.
+              </div>
+            ) : null}
+          </div>
         </div>
       </section>
 
